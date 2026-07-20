@@ -1,0 +1,111 @@
+package com.tczerwien.lifts.export
+
+import com.tczerwien.lifts.data.BodyweightEntity
+import java.time.LocalDate
+import kotlin.test.Test
+import kotlin.test.assertContains
+import kotlin.test.assertTrue
+
+class MarkdownExportTest {
+
+    private val markdown = MarkdownExport.render(ExportFixtures.snapshot())
+    private val lines = markdown.split("\n")
+
+    @Test
+    fun frontMatterIsFirstAndComplete() {
+        assertTrue(markdown.startsWith("---\n"), "front matter must open the file")
+        assertContains(lines, "schema_version: \"1.1\"")
+        assertContains(lines, "exported_at: ${ExportFixtures.EXPORTED_AT}")
+        assertContains(lines, "units:")
+        assertContains(lines, "  weight: kg")
+        assertContains(lines, "athlete:")
+        assertContains(lines, "  goals: ${ExportFixtures.GOALS}")
+        assertContains(lines, "  injuries:")
+        assertContains(lines, "    - left knee")
+        assertContains(lines, "---")
+    }
+
+    @Test
+    fun titleSpansDateRangeAndCount() {
+        assertContains(lines, "# Training Log — 2026-07-06 to 2026-07-13 (2 workouts)")
+    }
+
+    @Test
+    fun summaryHasPrsAndWeeklyVolume() {
+        assertContains(lines, "## Summary")
+        // 102.5 * (1 + 5/30) = 119.583… -> rounded to 119.6.
+        assertContains(lines, "- Bench Press (Barbell): e1RM 119.6 kg (2026-07-13) — best set 102.5x5")
+        assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
+        assertContains(lines, "- triceps: 0, 0, 0, 0, 0, 0, 1, 1")
+    }
+
+    @Test
+    fun bodyweightSubsectionIsExact() {
+        assertContains(lines, "### Bodyweight")
+        assertContains(lines, "- Current: 80.5 kg (2026-07-13)")
+        // Least-squares over the five entries of 2026-06-17..07-14: -0.3034 kg/week.
+        assertContains(lines, "- Rate: -0.30 kg/week over last 4 weeks")
+        // Em-dash for the three empty leading weeks and the 2026-06-29 gap week.
+        assertContains(lines, "- 8-week avg: —, —, —, 81.9, 81.6, —, 81.1, 80.5")
+    }
+
+    @Test
+    fun bodyweightRateIsSignedWhenPositive() {
+        val gaining = ExportFixtures.snapshot(
+            bodyweight = listOf(
+                BodyweightEntity(id = 1, epochDay = LocalDate.parse("2026-07-06").toEpochDay(), weightKg = 80.0),
+                BodyweightEntity(id = 2, epochDay = LocalDate.parse("2026-07-13").toEpochDay(), weightKg = 80.25),
+            ),
+        )
+
+        assertContains(MarkdownExport.render(gaining).split("\n"), "- Rate: +0.25 kg/week over last 4 weeks")
+    }
+
+    @Test
+    fun bodyweightRateLineOmittedWithSingleEntry() {
+        val single = ExportFixtures.snapshot(
+            bodyweight = listOf(
+                BodyweightEntity(id = 1, epochDay = LocalDate.parse("2026-07-13").toEpochDay(), weightKg = 80.5),
+            ),
+        )
+
+        val singleLines = MarkdownExport.render(single).split("\n")
+        assertContains(singleLines, "- Current: 80.5 kg (2026-07-13)")
+        assertTrue(singleLines.none { it.startsWith("- Rate:") }, "one entry cannot have a slope")
+    }
+
+    @Test
+    fun bodyweightSubsectionOmittedWithoutData() {
+        val markdown = MarkdownExport.render(ExportFixtures.snapshot(bodyweight = emptyList()))
+        assertTrue("### Bodyweight" !in markdown, "no bodyweight data -> no subsection")
+    }
+
+    @Test
+    fun workoutsAreNewestFirstWithHeadingsAndNotes() {
+        val newer = markdown.indexOf("### 2026-07-13 — Push Day (98m, BW 80.5 kg)")
+        val older = markdown.indexOf("### 2026-07-06 — Push Day (44m)")
+        assertTrue(newer >= 0, "newest workout heading missing")
+        assertTrue(older >= 0, "oldest workout heading missing")
+        assertTrue(newer < older, "workouts must be newest-first")
+        assertContains(lines, "Notes: Felt strong")
+        assertContains(lines, "  Notes: ${ExportFixtures.INSTANCE_NOTES}")
+    }
+
+    @Test
+    fun exerciseLineListsMuscles() {
+        assertContains(lines, "- **Bench Press (Barbell)** [chest; triceps, shoulders]")
+    }
+
+    @Test
+    fun setNotationLineIsExact() {
+        // Warmup prefixed "w", RPE "@8", rest "r180", PR marker, joined with "; ".
+        assertContains(lines, "  w60x8; 102.5x5 @8 r180 — **PR**; 95x5")
+        // First working set ever is a PR too.
+        assertContains(lines, "  w60x8; 100x5 @8 r180 — **PR**; 100x5")
+    }
+
+    @Test
+    fun unreferencedExercisesDoNotAppear() {
+        assertTrue("Squat" !in markdown, "squat was never performed and must not appear")
+    }
+}
