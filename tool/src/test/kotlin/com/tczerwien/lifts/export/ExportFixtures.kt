@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.SetEntity
@@ -23,6 +24,8 @@ import java.time.LocalDate
  *   8-week averages, oldest first: —, —, —, 81.9, 81.6, —, 81.1, 80.5. The last-28-days
  *   window (2026-06-17..07-14) holds five entries (06-15 falls outside); least-squares
  *   slope ≈ -0.3034 kg/week.
+ * - Two named bars (Olympic Bar 20.4117 kg, Leg Press Sled 53.5239 kg), exported under
+ *   profile.equipment in the JSON export only.
  */
 object ExportFixtures {
 
@@ -115,12 +118,21 @@ object ExportFixtures {
         BodyweightEntity(id = 6, epochDay = LocalDate.parse("2026-07-13").toEpochDay(), weightKg = 80.5),
     )
 
-    fun snapshot(bodyweight: List<BodyweightEntity> = ExportFixtures.bodyweight): ExportSnapshot = buildSnapshot(
+    val bars = listOf(
+        BarEntity(id = 1, name = "Olympic Bar", weightKg = 20.4117, position = 0),
+        BarEntity(id = 2, name = "Leg Press Sled", weightKg = 53.5239, position = 1),
+    )
+
+    fun snapshot(
+        bodyweight: List<BodyweightEntity> = ExportFixtures.bodyweight,
+        bars: List<BarEntity> = ExportFixtures.bars,
+    ): ExportSnapshot = buildSnapshot(
         exercises = listOf(bench, squat),
         workouts = listOf(workout1, workout2),
         workoutExercises = listOf(workoutExercise1, workoutExercise2),
         sets = sets,
         bodyweight = bodyweight,
+        bars = bars,
         exportedAtIso = EXPORTED_AT,
         goals = GOALS,
         injuries = listOf("left knee"),

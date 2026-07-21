@@ -22,6 +22,9 @@ object JsonExport {
             profile = JsonProfile(
                 goals = snapshot.goals,
                 injuries = snapshot.injuries,
+                equipment = snapshot.bars
+                    .takeIf { it.isNotEmpty() }
+                    ?.let { bars -> JsonEquipment(bars = bars.map { JsonBar(it.name, it.weightKg) }) },
                 bodyweightLog = snapshot.bodyweightLog.map { JsonBodyweightEntry(it.dateIso, it.weightKg) },
             ),
             exercises = snapshot.exercises.map {
@@ -106,8 +109,16 @@ data class JsonUnits(val weight: String)
 data class JsonProfile(
     val goals: String? = null,
     val injuries: List<String>,
+    /** Omitted when the user has no named bars. */
+    val equipment: JsonEquipment? = null,
     @SerialName("bodyweight_log") val bodyweightLog: List<JsonBodyweightEntry>,
 )
+
+@Serializable
+data class JsonEquipment(val bars: List<JsonBar>)
+
+@Serializable
+data class JsonBar(val name: String, @SerialName("weight_kg") val weightKg: Double)
 
 @Serializable
 data class JsonBodyweightEntry(val date: String, val value: Double)

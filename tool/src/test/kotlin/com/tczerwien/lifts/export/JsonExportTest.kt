@@ -25,7 +25,7 @@ class JsonExportTest {
 
     @Test
     fun roundTripsTopLevelFields() {
-        assertEquals("1.1", decoded.schemaVersion)
+        assertEquals("1.2", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals("kg", decoded.units.weight)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)
@@ -33,6 +33,21 @@ class JsonExportTest {
         assertEquals(6, decoded.profile.bodyweightLog.size)
         assertEquals("2026-06-15", decoded.profile.bodyweightLog.first().date)
         assertEquals(82.0, decoded.profile.bodyweightLog.first().value)
+    }
+
+    @Test
+    fun profileCarriesEquipmentBars() {
+        val bars = assertNotNull(decoded.profile.equipment, "fixture has bars -> profile.equipment").bars
+        assertEquals(listOf("Olympic Bar", "Leg Press Sled"), bars.map { it.name })
+        assertEquals(20.4117, bars[0].weightKg)
+        assertEquals(53.5239, bars[1].weightKg)
+    }
+
+    @Test
+    fun equipmentOmittedWithoutBars() {
+        val without = JsonExport.render(ExportFixtures.snapshot(bars = emptyList()))
+        assertTrue("\"bars\"" !in without, "no bars -> no profile.equipment")
+        assertNull(Json.decodeFromString(JsonExportDocument.serializer(), without).profile.equipment)
     }
 
     @Test

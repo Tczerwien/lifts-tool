@@ -13,6 +13,7 @@ import androidx.room.TypeConverters
         TemplateEntity::class,
         TemplateExerciseEntity::class,
         BodyweightEntity::class,
+        BarEntity::class,
     ],
     version = 1,
     exportSchema = false,
@@ -23,4 +24,5 @@ abstract class LiftsDatabase : RoomDatabase() {
     abstract val workoutDao: WorkoutDao
     abstract val templateDao: TemplateDao
     abstract val bodyweightDao: BodyweightDao
+    abstract val barDao: BarDao
 }

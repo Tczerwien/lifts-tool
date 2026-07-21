@@ -4,6 +4,7 @@ import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.analytics.computePrs
 import com.tczerwien.lifts.analytics.isPr
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
+import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.SetEntity
@@ -25,7 +26,7 @@ import kotlin.math.roundToInt
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
-const val EXPORT_SCHEMA_VERSION = "1.1"
+const val EXPORT_SCHEMA_VERSION = "1.2"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -35,6 +36,8 @@ data class ExportSnapshot(
     val exportedAtIso: String,
     val goals: String?,
     val injuries: List<String>,
+    /** User-defined implements, ordered by position. */
+    val bars: List<SnapshotBar>,
     /** Sorted oldest first. */
     val bodyweightLog: List<BodyweightPoint>,
     /** Trend derived from [bodyweightLog]; null when there are no bodyweight entries. */
@@ -50,6 +53,8 @@ data class ExportSnapshot(
 )
 
 data class BodyweightPoint(val dateIso: String, val weightKg: Double)
+
+data class SnapshotBar(val name: String, val weightKg: Double)
 
 data class SnapshotBodyweightTrend(
     val currentKg: Double,
@@ -137,6 +142,7 @@ fun buildSnapshot(
     workoutExercises: List<WorkoutExerciseEntity>,
     sets: List<SetEntity>,
     bodyweight: List<BodyweightEntity>,
+    bars: List<BarEntity>,
     exportedAtIso: String,
     goals: String?,
     injuries: List<String>,
@@ -255,6 +261,7 @@ fun buildSnapshot(
         exportedAtIso = exportedAtIso,
         goals = goals,
         injuries = injuries,
+        bars = bars.sortedBy { it.position }.map { SnapshotBar(it.name, it.weightKg) },
         bodyweightLog = bodyweightLog,
         bodyweightTrend = trend,
         exercises = snapshotExercises,

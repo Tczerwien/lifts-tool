@@ -93,6 +93,16 @@ class LiftsRepository private constructor(
 
     fun listBodyweight(): List<BodyweightEntity> = db.bodyweightDao.listAll()
 
+    // --- Bars ---
+
+    fun addBar(bar: BarEntity): Long = db.barDao.insert(bar)
+
+    fun updateBar(bar: BarEntity): Boolean = db.barDao.update(bar) > 0
+
+    fun deleteBar(id: Long): Boolean = db.barDao.delete(id) > 0
+
+    fun listBars(): List<BarEntity> = db.barDao.listAll()
+
     companion object {
         const val DATABASE_NAME = "lifts.db"
 
