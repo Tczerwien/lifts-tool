@@ -59,6 +59,9 @@ kotlin {
 
 dependencies {
     implementation(project(":sdk:client"))
+    // Wi-Fi share server for the Export screen; io.ktor is allowlisted by prefix.
+    implementation(libs.ktor.server.core)
+    implementation("io.ktor:ktor-server-cio:${libs.versions.ktor.get()}")
     testImplementation(libs.kotlin.test)
     ksp(libs.androidx.room.compiler)
 }

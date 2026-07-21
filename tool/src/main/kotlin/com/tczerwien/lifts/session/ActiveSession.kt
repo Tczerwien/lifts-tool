@@ -1,0 +1,275 @@
+package com.tczerwien.lifts.session
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import com.tczerwien.lifts.analytics.isPr
+import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.WorkoutEntity
+import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.settings.SettingsStore
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+
+/**
+ * Repository-backed manager for the active workout session: creates sessions from
+ * templates, logs sets (PR detection + rest-duration selection), and owns the persisted
+ * rest-timer state.
+ *
+ * All non-suspend methods are blocking — call from Dispatchers.IO. The rest timer is a
+ * wall-clock end timestamp in DataStore ("lifts_"-prefixed keys, shared file with SDK
+ * push keys); remaining time is always derived via [restRemainingSec], never counted.
+ */
+class ActiveSession(
+    private val repository: LiftsRepository,
+    private val settings: SettingsStore,
+    private val dataStore: DataStore<Preferences>,
+) {
+
+    // --- Session lifecycle ---
+
+    /**
+     * Creates a workout from [templateId]: one workout_exercises row per template slot
+     * (copying rest overrides), each prefilled with targetSets pending "normal" sets.
+     * A vanished template degrades to an empty workout.
+     */
+    fun startFromTemplate(templateId: Long, now: Long = System.currentTimeMillis()): Long {
+        val template = repository.templateById(templateId)
+        val workoutId = repository.addWorkout(
+            WorkoutEntity(
+                name = template?.name ?: DEFAULT_WORKOUT_NAME,
+                startedAt = now,
+                templateId = template?.id,
+            ),
+        )
+        template ?: return workoutId
+        repository.exercisesForTemplate(templateId).forEachIndexed { index, templateExercise ->
+            val slotId = repository.addWorkoutExercise(
+                WorkoutExerciseEntity(
+                    workoutId = workoutId,
+                    exerciseId = templateExercise.exerciseId,
+                    position = index,
+                    restSecWork = templateExercise.restSecWork,
+                    restSecWarmup = templateExercise.restSecWarmup,
+                ),
+            )
+            repeat(templateExercise.targetSets) { setIndex ->
+                repository.addSet(
+                    SetEntity(workoutExerciseId = slotId, position = setIndex, type = SET_TYPE_NORMAL),
+                )
+            }
+        }
+        return workoutId
+    }
+
+    fun startEmpty(now: Long = System.currentTimeMillis()): Long =
+        repository.addWorkout(WorkoutEntity(name = DEFAULT_WORKOUT_NAME, startedAt = now))
+
+    /**
+     * Appends an exercise slot. Pending sets are prefilled to mirror the previous
+     * session's completed sets (same count, warm-ups kept as warm-ups) so the
+     * previous-per-index columns line up; with no history, [DEFAULT_NEW_EXERCISE_SETS]
+     * normal sets.
+     */
+    fun addExercise(workoutId: Long, exerciseId: String): Long {
+        val position = repository.exercisesForWorkout(workoutId)
+            .maxOfOrNull { it.position + 1 } ?: 0
+        val slotId = repository.addWorkoutExercise(
+            WorkoutExerciseEntity(workoutId = workoutId, exerciseId = exerciseId, position = position),
+        )
+        val previous = repository.previousPerformance(exerciseId)
+        val prefillTypes = if (previous.isNotEmpty()) {
+            previous.map { if (it.type == SET_TYPE_WARMUP) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
+        } else {
+            List(DEFAULT_NEW_EXERCISE_SETS) { SET_TYPE_NORMAL }
+        }
+        prefillTypes.forEachIndexed { index, type ->
+            repository.addSet(SetEntity(workoutExerciseId = slotId, position = index, type = type))
+        }
+        return slotId
+    }
+
+    /** Appends one pending "normal" set to [workoutExerciseId]; returns the new set id. */
+    fun addSet(workoutId: Long, workoutExerciseId: Long): Long {
+        val position = repository.setsForWorkout(workoutId)
+            .filter { it.workoutExerciseId == workoutExerciseId }
+            .maxOfOrNull { it.position + 1 } ?: 0
+        return repository.addSet(
+            SetEntity(workoutExerciseId = workoutExerciseId, position = position, type = SET_TYPE_NORMAL),
+        )
+    }
+
+    fun updateSet(set: SetEntity): Boolean = repository.updateSet(set)
+
+    fun uncompleteSet(set: SetEntity): Boolean = repository.updateSet(set.copy(completedAt = null))
+
+    /** Result of logging a set. [restEndMillis] is the persisted wall-clock rest end. */
+    data class SetCompletion(
+        val set: SetEntity,
+        val isPr: Boolean,
+        val restDurationSec: Int,
+        val restEndMillis: Long,
+    )
+
+    /**
+     * Marks [set] completed with the given values, decides whether it is a PR (against
+     * every other set of the same exercise, including earlier sets of this workout),
+     * selects the rest duration (exercise override else settings default; warm-up pair
+     * for warm-up sets), and persists the rest end timestamp — the DataStore keys are
+     * written on set completion, as the timer contract requires.
+     */
+    fun completeSet(
+        workoutId: Long,
+        set: SetEntity,
+        weightKg: Double?,
+        reps: Int?,
+        type: String,
+        now: Long = System.currentTimeMillis(),
+    ): SetCompletion {
+        val slots = repository.exercisesForWorkout(workoutId)
+        val slot = slots.firstOrNull { it.id == set.workoutExerciseId }
+        val completed = set.copy(weightKg = weightKg, reps = reps, type = type, completedAt = now)
+        repository.updateSet(completed)
+
+        val pr = slot?.let { owner ->
+            val sameExerciseSlotIds = slots.filter { it.exerciseId == owner.exerciseId }
+                .mapTo(HashSet()) { it.id }
+            val inWorkout = repository.setsForWorkout(workoutId).filter {
+                it.workoutExerciseId in sameExerciseSlotIds && it.id != completed.id
+            }
+            isPr(completed, priorHistoryForExercise(owner.exerciseId, workoutId) + inWorkout)
+        } ?: false
+
+        val snapshot = settings.snapshot()
+        val restSec = restDurationSec(
+            setType = type,
+            restSecWork = slot?.restSecWork,
+            restSecWarmup = slot?.restSecWarmup,
+            defaultRestSec = snapshot.defaultRestSec,
+            warmupRestSec = snapshot.warmupRestSec,
+        )
+        runBlocking { startRest(restSec, now) }
+        return SetCompletion(
+            set = completed,
+            isPr = pr,
+            restDurationSec = restSec,
+            restEndMillis = now + restSec * 1000L,
+        )
+    }
+
+    // --- Lookups ---
+
+    /** Completed sets of the most recent finished workout containing [exerciseId], by position. */
+    fun previousPerformance(exerciseId: String): List<SetEntity> =
+        repository.previousPerformance(exerciseId)
+
+    /**
+     * Every set of [exerciseId] from workouts other than [excludeWorkoutId]. Full scan
+     * over workouts (the DAO has no all-sets-per-exercise query); each step is an indexed
+     * point query, fine at personal-tracker scale.
+     */
+    fun priorHistoryForExercise(exerciseId: String, excludeWorkoutId: Long): List<SetEntity> {
+        val result = mutableListOf<SetEntity>()
+        for (workout in repository.listWorkouts()) {
+            if (workout.id == excludeWorkoutId) continue
+            val slotIds = repository.exercisesForWorkout(workout.id)
+                .filter { it.exerciseId == exerciseId }
+                .mapTo(HashSet()) { it.id }
+            if (slotIds.isEmpty()) continue
+            result += repository.setsForWorkout(workout.id).filter { it.workoutExerciseId in slotIds }
+        }
+        return result
+    }
+
+    // --- Finishing ---
+
+    /** Sets endedAt (idempotent), clears any running rest timer, and returns the summary. */
+    fun finish(workoutId: Long, now: Long = System.currentTimeMillis()): WorkoutSummary? {
+        val workout = repository.workoutById(workoutId) ?: return null
+        if (workout.endedAt == null) {
+            repository.updateWorkout(workout.copy(endedAt = now))
+        }
+        runBlocking { clearRest() }
+        return summarize(workoutId)
+    }
+
+    /**
+     * Summary of [workoutId]: duration, completed-set count (any type), volume
+     * (non-warmup), PR records replayed against prior history, and the bodyweight
+     * passthrough. Works for already-finished workouts (Workout Complete recomputes
+     * from its constructor id).
+     */
+    fun summarize(workoutId: Long): WorkoutSummary? {
+        val workout = repository.workoutById(workoutId) ?: return null
+        val slots = repository.exercisesForWorkout(workoutId)
+        val sets = repository.setsForWorkout(workoutId)
+        val exerciseIds = slots.map { it.exerciseId }.distinct()
+        val priorHistory = exerciseIds.associateWith { priorHistoryForExercise(it, workoutId) }
+        val prIds = prSetIds(slots, sets, priorHistory)
+        val names = exerciseIds.associateWith { repository.exerciseById(it)?.name ?: it }
+        val end = workout.endedAt ?: workout.startedAt
+        return WorkoutSummary(
+            workoutId = workoutId,
+            name = workout.name,
+            durationSec = ((end - workout.startedAt) / 1000L).toInt().coerceAtLeast(0),
+            completedSetCount = completedSetCount(sets),
+            totalVolumeKg = totalVolumeKg(sets),
+            prs = prRecords(slots, sets, prIds, names),
+            bodyweightKg = workout.bodyweightKg,
+        )
+    }
+
+    // --- Rest timer (persisted wall-clock end) ---
+
+    /** Persisted rest-timer state; remaining is derived via [restRemainingSec]. */
+    data class RestTimerState(val endMillis: Long, val totalSec: Int)
+
+    /** Blocking read — call from Dispatchers.IO. Null when no timer was ever started. */
+    fun restStateSnapshot(): RestTimerState? = runBlocking {
+        val prefs = dataStore.data.first()
+        val endMillis = prefs[REST_END_MILLIS] ?: return@runBlocking null
+        RestTimerState(endMillis = endMillis, totalSec = prefs[REST_TOTAL_SEC] ?: 0)
+    }
+
+    suspend fun startRest(totalSec: Int, now: Long = System.currentTimeMillis()) {
+        val clamped = totalSec.coerceAtLeast(0)
+        dataStore.edit { prefs ->
+            prefs[REST_END_MILLIS] = now + clamped * 1000L
+            prefs[REST_TOTAL_SEC] = clamped
+        }
+    }
+
+    /**
+     * Shifts the persisted end by [deltaSec]; the end never moves before [now] (an
+     * over-subtraction just finishes the rest). Returns the new end, null when no timer
+     * is persisted.
+     */
+    suspend fun adjustRest(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? {
+        var newEnd: Long? = null
+        dataStore.edit { prefs ->
+            val endMillis = prefs[REST_END_MILLIS] ?: return@edit
+            val adjusted = (endMillis + deltaSec * 1000L).coerceAtLeast(now)
+            prefs[REST_END_MILLIS] = adjusted
+            newEnd = adjusted
+        }
+        return newEnd
+    }
+
+    suspend fun clearRest() {
+        dataStore.edit { prefs ->
+            prefs.remove(REST_END_MILLIS)
+            prefs.remove(REST_TOTAL_SEC)
+        }
+    }
+
+    companion object {
+        const val DEFAULT_WORKOUT_NAME = "Workout"
+        const val DEFAULT_NEW_EXERCISE_SETS = 3
+
+        private val REST_END_MILLIS = longPreferencesKey("lifts_rest_end_millis")
+        private val REST_TOTAL_SEC = intPreferencesKey("lifts_rest_total_sec")
+    }
+}

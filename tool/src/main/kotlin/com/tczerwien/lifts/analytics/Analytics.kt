@@ -261,6 +261,53 @@ fun isPr(newSet: SetEntity, history: List<SetEntity>): Boolean {
     return e1Rm > bestE1Rm
 }
 
+/**
+ * Finished workouts per ISO week (Monday-based, UTC) over the last [weeks] weeks ending
+ * at [todayEpochDay]'s week — oldest week first, so the current week is the last element.
+ * Only finished workouts ([WorkoutEntity.endedAt] != null) count, bucketed by the UTC
+ * calendar date of their start time.
+ */
+fun workoutsPerWeek(
+    workouts: List<WorkoutEntity>,
+    weeks: Int,
+    todayEpochDay: Long,
+): List<Int> {
+    require(weeks > 0) { "weeks must be positive" }
+    val today = LocalDate.ofEpochDay(todayEpochDay)
+    val currentMonday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    val firstMonday = currentMonday.minusWeeks((weeks - 1).toLong())
+
+    val counts = IntArray(weeks)
+    for (workout in workouts) {
+        if (workout.endedAt == null) continue
+        val date = Instant.ofEpochMilli(workout.startedAt).atZone(ZoneOffset.UTC).toLocalDate()
+        val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
+        val index = ChronoUnit.WEEKS.between(firstMonday, monday).toInt()
+        if (index < 0 || index >= weeks) continue
+        counts[index]++
+    }
+    return counts.toList()
+}
+
+/**
+ * Length of the longest run of consecutive entries in [weeklyCounts] that reach at least
+ * [threshold] — e.g. the longest streak of weeks with 3+ workouts over a
+ * [workoutsPerWeek] series. Returns 0 when no entry reaches the threshold.
+ */
+fun longestStreak(weeklyCounts: List<Int>, threshold: Int): Int {
+    var best = 0
+    var current = 0
+    for (count in weeklyCounts) {
+        if (count >= threshold) {
+            current++
+            if (current > best) best = current
+        } else {
+            current = 0
+        }
+    }
+    return best
+}
+
 /** Compact "102.5x5" notation; weight-only sets render as just the weight. */
 private fun setNotation(set: SetEntity): String {
     val weight = set.weightKg?.let { formatNumber(it) } ?: return "-"

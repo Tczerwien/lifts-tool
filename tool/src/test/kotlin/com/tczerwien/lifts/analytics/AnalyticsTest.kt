@@ -215,6 +215,81 @@ class AnalyticsTest {
         assertTrue(isPr(newSet(weightKg = 40.0, reps = 5), emptyList()))
     }
 
+    // --- workoutsPerWeek ---
+
+    @Test
+    fun workoutsPerWeekBucketsIsoWeeksOldestFirst() {
+        // Tuesday 2026-07-14 -> current ISO week starts Monday 2026-07-13; 4 weeks
+        // reach back to Monday 2026-06-22.
+        val workouts = listOf(
+            // Week 0: Monday start and Sunday start both belong to 2026-06-22's week.
+            finished(id = 1, startIso = "2026-06-22T06:00:00Z"),
+            finished(id = 2, startIso = "2026-06-28T23:00:00Z"),
+            // Week 1 (2026-06-29): none -> gap week stays 0.
+            // Week 2 (2026-07-06): one finished; an in-progress workout never counts.
+            finished(id = 3, startIso = "2026-07-08T10:00:00Z"),
+            WorkoutEntity(id = 4, name = "In progress", startedAt = millis("2026-07-09T10:00:00Z")),
+            // Week 3 (current, 2026-07-13): two.
+            finished(id = 5, startIso = "2026-07-13T05:00:00Z"),
+            finished(id = 6, startIso = "2026-07-14T09:00:00Z"),
+            // Sunday before the window: dropped.
+            finished(id = 7, startIso = "2026-06-21T10:00:00Z"),
+        )
+
+        val counts = workoutsPerWeek(workouts, weeks = 4, todayEpochDay = day("2026-07-14"))
+
+        assertEquals(listOf(2, 0, 1, 2), counts)
+    }
+
+    @Test
+    fun workoutsPerWeekSingleWeekWindow() {
+        val workouts = listOf(
+            finished(id = 1, startIso = "2026-07-13T10:00:00Z"),
+            // Sunday of the previous week: outside a 1-week window.
+            finished(id = 2, startIso = "2026-07-12T10:00:00Z"),
+        )
+
+        val counts = workoutsPerWeek(workouts, weeks = 1, todayEpochDay = day("2026-07-14"))
+
+        assertEquals(listOf(1), counts)
+    }
+
+    @Test
+    fun workoutsPerWeekAllZeroWithoutFinishedWorkouts() {
+        val workouts = listOf(
+            WorkoutEntity(id = 1, name = "In progress", startedAt = millis("2026-07-13T10:00:00Z")),
+        )
+
+        val counts = workoutsPerWeek(workouts, weeks = 3, todayEpochDay = day("2026-07-14"))
+
+        assertEquals(listOf(0, 0, 0), counts)
+    }
+
+    private fun finished(id: Long, startIso: String) = WorkoutEntity(
+        id = id,
+        name = "W$id",
+        startedAt = millis(startIso),
+        endedAt = millis(startIso) + 3_600_000L,
+    )
+
+    // --- longestStreak ---
+
+    @Test
+    fun longestStreakFindsLongestRun() {
+        assertEquals(3, longestStreak(listOf(3, 4, 2, 3, 3, 3, 0, 5), threshold = 3))
+    }
+
+    @Test
+    fun longestStreakCountsRunAtEnd() {
+        assertEquals(2, longestStreak(listOf(0, 1, 3, 3), threshold = 3))
+    }
+
+    @Test
+    fun longestStreakZeroWhenNeverReached() {
+        assertEquals(0, longestStreak(listOf(1, 2, 0), threshold = 3))
+        assertEquals(0, longestStreak(emptyList(), threshold = 3))
+    }
+
     private fun newSet(weightKg: Double, reps: Int, type: String = "normal") = SetEntity(
         id = 99,
         workoutExerciseId = 1,
