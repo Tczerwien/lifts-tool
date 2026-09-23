@@ -27,13 +27,22 @@ class LightSdkPlugin : Plugin<Project> {
             "io.ktor",
             "org.jetbrains.kotlinx:kotlinx-serialization",
             "org.jetbrains.kotlinx:kotlinx-io",
+            "org.jetbrains.kotlinx:kotlinx-datetime",
             "org.unifiedpush.android:connector",
             "androidx.core:core-splashscreen",
             "com.thelightphone.lp3keyboard",
+            "com.thelightphone.toolmanager",
+            "com.github.lightphone:light-keyboard",
             "androidx.room",
             "androidx.work",
             "androidx.startup",
+            "androidx.media3",
             "io.github.david-allison:anki-android-backend",
+            "org.bouncycastle:bcprov-jdk18on",
+            "com.google.zxing:core",
+            "org.sol4k:sol4k",
+            "org.sol4k:tweetnacl",
+            "org.sol4k:utilities",
         )
 
         val ALLOWED_PLUGINS = setOf(
