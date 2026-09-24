@@ -58,10 +58,8 @@ class ActiveSession(
                     restSecWarmup = templateExercise.restSecWarmup,
                 ),
             )
-            repeat(templateExercise.targetSets) { setIndex ->
-                repository.addSet(
-                    SetEntity(workoutExerciseId = slotId, position = setIndex, type = SET_TYPE_NORMAL),
-                )
+            templateSetTypes(templateExercise).forEachIndexed { setIndex, type ->
+                repository.addSet(SetEntity(workoutExerciseId = slotId, position = setIndex, type = type))
             }
         }
         return workoutId

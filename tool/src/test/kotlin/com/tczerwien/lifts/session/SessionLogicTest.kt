@@ -1,9 +1,12 @@
 package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -277,7 +280,164 @@ class SessionLogicTest {
         assertNull(nextPendingSet(slots, sets))
     }
 
+    // --- Workout lifecycle ---
+
+    @Test
+    fun `pending count is the sets not ticked, whatever their values`() {
+        val sets = listOf(
+            set(id = 1, weightKg = 100.0, reps = 5, completedAt = 1L),
+            set(id = 2, weightKg = 100.0, reps = 5),
+            set(id = 3),
+        )
+        assertEquals(2, pendingSetCount(sets))
+    }
+
+    @Test
+    fun `last activity is the latest logged set, else the start`() {
+        assertEquals(1_000L, lastActivityMillis(1_000L, listOf(set(id = 1))))
+        val sets = listOf(set(id = 1, completedAt = 5_000L), set(id = 2, completedAt = 3_000L), set(id = 3))
+        assertEquals(5_000L, lastActivityMillis(1_000L, sets))
+    }
+
+    @Test
+    fun `an empty workout with no exercises is untouched`() {
+        assertTrue(isUntouched(workout(), emptyList(), emptyList(), templateExercises = null))
+    }
+
+    @Test
+    fun `adding an exercise to an empty workout touches it`() {
+        assertFalse(isUntouched(workout(), listOf(slot(id = 1)), listOf(set(id = 1)), templateExercises = null))
+    }
+
+    @Test
+    fun `a template workout exactly as started is untouched`() {
+        val (slots, sets) = startedFrom(benchAndSquat)
+        assertTrue(isUntouched(workout(templateId = 7), slots, sets, benchAndSquat))
+    }
+
+    @Test
+    fun `any value, tick, type change, extra set or note touches a template workout`() {
+        val (slots, sets) = startedFrom(benchAndSquat)
+        val first = sets.first()
+        val changed = listOf(
+            first.copy(weightKg = 60.0),
+            first.copy(reps = 8),
+            first.copy(completedAt = 5L),
+            first.copy(type = SET_TYPE_WARMUP),
+        )
+        for (edit in changed) {
+            val edited = sets.map { if (it.id == first.id) edit else it }
+            assertFalse(isUntouched(workout(templateId = 7), slots, edited, benchAndSquat), "$edit")
+        }
+        val extraSet = sets + set(id = 99, slotId = slots.first().id, position = 3)
+        assertFalse(isUntouched(workout(templateId = 7), slots, extraSet, benchAndSquat))
+        assertFalse(isUntouched(workout(templateId = 7, notes = "felt heavy"), slots, sets, benchAndSquat))
+    }
+
+    @Test
+    fun `a removed exercise or a template edited since the start counts as touched`() {
+        val (slots, sets) = startedFrom(benchAndSquat)
+        val withoutSquat = slots.filter { it.exerciseId != "squat" }
+        assertFalse(isUntouched(workout(templateId = 7), withoutSquat, sets, benchAndSquat))
+        val templateNow = benchAndSquat.map { if (it.exerciseId == "squat") it.copy(targetSets = 5) else it }
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets, templateNow))
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets, emptyList()), "template deleted")
+    }
+
+    @Test
+    fun `a workout used within four hours is kept`() {
+        val hour = 3_600_000L
+        val sets = listOf(set(id = 1, completedAt = 10 * hour))
+        assertEquals(OpenWorkoutAction.Keep, staleAction(startedAt = 0, sets = sets, now = 14 * hour))
+        // Measured from the last logged set, not the start.
+        assertEquals(OpenWorkoutAction.Keep, staleAction(startedAt = 0, sets = sets, now = 13 * hour))
+    }
+
+    @Test
+    fun `a stale workout is closed at its last logged set`() {
+        val hour = 3_600_000L
+        val sets = listOf(
+            set(id = 1, completedAt = 2 * hour),
+            set(id = 2, completedAt = 3 * hour),
+            set(id = 3),
+        )
+        assertEquals(
+            OpenWorkoutAction.CloseAt(3 * hour),
+            staleAction(startedAt = hour, sets = sets, now = 1_500 * hour),
+        )
+    }
+
+    @Test
+    fun `a stale workout with nothing logged is deleted`() {
+        val hour = 3_600_000L
+        val sets = listOf(set(id = 1, weightKg = 100.0, reps = 5))
+        assertEquals(OpenWorkoutAction.Delete, staleAction(startedAt = 0, sets = sets, now = 5 * hour))
+    }
+
+    @Test
+    fun `a clock set back keeps the workout`() {
+        val sets = listOf(set(id = 1, completedAt = 10_000_000L))
+        assertEquals(OpenWorkoutAction.Keep, staleAction(startedAt = 0, sets = sets, now = 1_000L))
+    }
+
+    @Test
+    fun `Home keeps one open workout, deleting untouched ones and closing older ones`() {
+        val hour = 3_600_000L
+        val logged = listOf(set(id = 1, completedAt = 2 * hour))
+        val now = 3 * hour
+        assertEquals(
+            OpenWorkoutAction.Delete,
+            openWorkoutAction(startedAt = now, sets = emptyList(), untouched = true, newest = true, now = now),
+        )
+        assertEquals(
+            OpenWorkoutAction.CloseAt(2 * hour),
+            openWorkoutAction(startedAt = hour, sets = logged, untouched = false, newest = false, now = now),
+        )
+        assertEquals(
+            OpenWorkoutAction.Delete,
+            openWorkoutAction(startedAt = hour, sets = listOf(set(id = 2)), untouched = false, newest = false, now),
+        )
+        assertEquals(
+            OpenWorkoutAction.Keep,
+            openWorkoutAction(startedAt = hour, sets = logged, untouched = false, newest = true, now = now),
+        )
+    }
+
+    @Test
+    fun `a cold start reopens a workout used in the last two hours only`() {
+        val minute = 60_000L
+        assertTrue(shouldAutoResume(lastActivity = 0, now = 119 * minute))
+        assertTrue(shouldAutoResume(lastActivity = 0, now = 120 * minute))
+        assertFalse(shouldAutoResume(lastActivity = 0, now = 121 * minute))
+        assertFalse(shouldAutoResume(lastActivity = 10 * minute, now = 0), "clock set back")
+    }
+
     // --- Fixtures ---
+
+    private val benchAndSquat = listOf(
+        TemplateExerciseEntity(id = 1, templateId = 7, exerciseId = "bench", position = 0, targetSets = 3),
+        TemplateExerciseEntity(id = 2, templateId = 7, exerciseId = "squat", position = 1, targetSets = 2),
+    )
+
+    /** The slots and sets ActiveSession.startFromTemplate would create for [template]. */
+    private fun startedFrom(
+        template: List<TemplateExerciseEntity>,
+    ): Pair<List<WorkoutExerciseEntity>, List<SetEntity>> {
+        var setId = 100L
+        val slots = template.mapIndexed { index, planned ->
+            slot(id = index + 1L, exerciseId = planned.exerciseId, position = index)
+        }
+        val sets = slots.zip(template).flatMap { (slot, planned) ->
+            templateSetTypes(planned).mapIndexed { position, type ->
+                set(id = setId++, slotId = slot.id, position = position, type = type)
+            }
+        }
+        return slots to sets
+    }
+
+    private fun workout(templateId: Long? = null, notes: String? = null) =
+        WorkoutEntity(id = 1, name = "Workout", startedAt = 0, templateId = templateId, notes = notes)
+
 
     private fun slot(id: Long, exerciseId: String = "bench", position: Int = 0) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = exerciseId, position = position)

@@ -2,6 +2,8 @@ package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 
 /**
@@ -187,3 +189,116 @@ fun nextPendingSet(
     }
     return null
 }
+
+// --- Workout lifecycle ---
+
+/** A workout untouched this long after its last logged set (or its start) is closed by Home. */
+const val STALE_AFTER_MILLIS = 4 * 60 * 60 * 1000L
+
+/** On a cold start, Home reopens an open workout straight away if it was used this recently. */
+const val AUTO_RESUME_WITHIN_MILLIS = 2 * 60 * 60 * 1000L
+
+/**
+ * The set types a template exercise starts with, one per set. [ActiveSession.startFromTemplate]
+ * creates exactly these and [isUntouched] compares against them, so the two can't drift apart.
+ */
+fun templateSetTypes(templateExercise: TemplateExerciseEntity): List<String> =
+    List(templateExercise.targetSets.coerceAtLeast(0)) { SET_TYPE_NORMAL }
+
+/** Sets not ticked yet ("3 SETS NOT LOGGED" in the Finish confirmation). */
+fun pendingSetCount(sets: List<SetEntity>): Int = sets.count { it.completedAt == null }
+
+/** When the lifter last did anything: the latest logged set, else the start. */
+fun lastActivityMillis(startedAt: Long, sets: List<SetEntity>): Long =
+    maxOf(startedAt, sets.maxOfOrNull { it.completedAt ?: startedAt } ?: startedAt)
+
+/**
+ * True when nothing has changed since the workout was created, so discarding it loses nothing: no
+ * notes, no set logged or given a value, and the slots and their set types are exactly what the
+ * start made. That is no slots at all for an empty workout, and the template's list for a template
+ * workout. [templateExercises] is the template's current list, null for a workout with no template.
+ * Any doubt (the template was edited or deleted since) counts as touched, so the workout is kept.
+ */
+fun isUntouched(
+    workout: WorkoutEntity,
+    slots: List<WorkoutExerciseEntity>,
+    sets: List<SetEntity>,
+    templateExercises: List<TemplateExerciseEntity>?,
+): Boolean {
+    if (!workout.notes.isNullOrBlank() || slots.any { !it.notes.isNullOrBlank() }) return false
+    val hasValue = sets.any { set ->
+        set.completedAt != null || set.weightKg != null || set.reps != null ||
+            set.durationSec != null || set.rpe != null
+    }
+    if (hasValue) return false
+    val planned = templateExercises.orEmpty().sortedBy { it.position }
+    val actual = slots.sortedBy { it.position }
+    if (actual.size != planned.size) return false
+    val typesBySlot = sets.groupBy { it.workoutExerciseId }
+        .mapValues { (_, slotSets) -> slotSets.sortedBy { it.position }.map { it.type } }
+    return actual.zip(planned).all { (slot, templateExercise) ->
+        slot.exerciseId == templateExercise.exerciseId &&
+            typesBySlot[slot.id].orEmpty() == templateSetTypes(templateExercise)
+    }
+}
+
+/** What Home does with a workout that is still open. */
+sealed interface OpenWorkoutAction {
+    /** Leave it open: it can still be resumed. */
+    data object Keep : OpenWorkoutAction
+
+    /** Close it at its last logged set, so its duration is the time actually spent lifting. */
+    data class CloseAt(val endedAt: Long) : OpenWorkoutAction
+
+    /** Nothing in it is worth keeping. */
+    data object Delete : OpenWorkoutAction
+}
+
+/**
+ * Closes a workout that won't be resumed: at its last logged set, or deleted when nothing was
+ * logged (sets without a tick never count anywhere, so nothing is lost).
+ */
+fun closeAction(startedAt: Long, sets: List<SetEntity>): OpenWorkoutAction {
+    val lastLogged = sets.mapNotNull { it.completedAt }.maxOrNull() ?: return OpenWorkoutAction.Delete
+    return OpenWorkoutAction.CloseAt(maxOf(startedAt, lastLogged))
+}
+
+/**
+ * Keep while the workout was used within [staleAfterMillis]; after that close it ([closeAction]).
+ * This is what stops a forgotten workout finishing weeks later with a 1,500-hour clock. A clock
+ * set back (now before the last activity) keeps it.
+ */
+fun staleAction(
+    startedAt: Long,
+    sets: List<SetEntity>,
+    now: Long,
+    staleAfterMillis: Long = STALE_AFTER_MILLIS,
+): OpenWorkoutAction =
+    if (now - lastActivityMillis(startedAt, sets) <= staleAfterMillis) {
+        OpenWorkoutAction.Keep
+    } else {
+        closeAction(startedAt, sets)
+    }
+
+/**
+ * Home's rule for each open workout, keeping at most one open: an untouched one is deleted; any
+ * but the newest is closed, since only one can be resumed; the newest follows [staleAction].
+ */
+fun openWorkoutAction(
+    startedAt: Long,
+    sets: List<SetEntity>,
+    untouched: Boolean,
+    newest: Boolean,
+    now: Long,
+): OpenWorkoutAction = when {
+    untouched -> OpenWorkoutAction.Delete
+    !newest -> closeAction(startedAt, sets)
+    else -> staleAction(startedAt, sets, now)
+}
+
+/** True when an open workout was used within [windowMillis] of [now], so a cold start reopens it. */
+fun shouldAutoResume(
+    lastActivity: Long,
+    now: Long,
+    windowMillis: Long = AUTO_RESUME_WITHIN_MILLIS,
+): Boolean = now >= lastActivity && now - lastActivity <= windowMillis
