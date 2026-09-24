@@ -17,7 +17,10 @@ import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.ArmedAction
+import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightScreen
@@ -26,6 +29,7 @@ import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
+import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
@@ -44,6 +48,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Suffix appended to PR set tokens (design's inline star, U+2605). */
 private const val PR_STAR = "★"
@@ -77,12 +82,38 @@ class WorkoutDetailViewModel(
         viewModelScope.launch(Dispatchers.IO) { refresh() }
     }
 
+    /** The trash takes two taps; see [tapDelete]. */
+    val deleteArm = ArmedAction(viewModelScope)
+
+    @Volatile
+    private var cleared = false
+
+    override fun onCleared() {
+        cleared = true
+        super.onCleared()
+    }
+
     override fun onBackPressed(): Boolean {
         if (_uiState.value.editingNotes) {
             cancelEditNotes()
             return true
         }
+        if (deleteArm.armed.value) {
+            deleteArm.disarm()
+            return true
+        }
         return false
+    }
+
+    /**
+     * Trash: the first tap arms, the second deletes the workout with all its sets, on the write lane
+     * so it survives Back, then runs [onDeleted] on Main (unless the screen is already gone).
+     */
+    fun tapDelete(onDeleted: () -> Unit) {
+        if (!deleteArm.tap()) return
+        LiftsIo.write({ repository.deleteWorkout(workoutId) }) {
+            withContext(Dispatchers.Main) { if (!cleared) onDeleted() }
+        }
     }
 
     fun startEditNotes() {
@@ -153,6 +184,7 @@ class WorkoutDetailViewModel(
  * session — notes, per-exercise compact set-notation lines with inline PR stars, and the
  * bodyweight line. The top-bar pencil edits the workout NOTES only (SDK editor as a
  * screen mode, weather idiom); full past-workout editing is deliberately out of scope.
+ * The bottom-bar trash deletes the whole workout after a second tap.
  */
 class WorkoutDetailScreen(
     sealedActivity: SealedLightActivity,
@@ -171,6 +203,7 @@ class WorkoutDetailScreen(
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
+        val deleteArmed by viewModel.deleteArm.armed.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
         LightTheme(colors = themeColors) {
@@ -260,6 +293,19 @@ class WorkoutDetailScreen(
                                 )
                             }
                         }
+
+                        if (deleteArmed) {
+                            ArmedHint(text = "TAP AGAIN TO DELETE THIS WORKOUT")
+                        }
+                        LightBottomBar(
+                            items = listOf(
+                                LightBarButton.LightIcon(
+                                    icon = LightIcons.TRASH,
+                                    contentDescription = "delete workout",
+                                    onClick = { viewModel.tapDelete { goBack() } },
+                                ),
+                            ),
+                        )
                     }
                 }
             }
