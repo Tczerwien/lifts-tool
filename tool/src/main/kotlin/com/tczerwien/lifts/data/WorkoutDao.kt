@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.data
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
@@ -45,8 +46,9 @@ interface WorkoutDao {
     fun setsForWorkout(workoutId: Long): List<SetEntity>
 
     /**
-     * Completed sets of the most recent FINISHED workout (endedAt not null) that contains
-     * [exerciseId], ordered by set position. Empty if the exercise was never performed.
+     * Completed sets of the most recent FINISHED workout (endedAt not null) in which [exerciseId]
+     * had at least one completed set, ordered by slot position then set position. A workout
+     * where the exercise was added but skipped doesn't count. Empty if it was never performed.
      */
     @Query(
         "SELECT sets.* FROM sets " +
@@ -57,9 +59,30 @@ interface WorkoutDao {
             "SELECT w.id FROM workouts w " +
             "JOIN workout_exercises we ON we.workoutId = w.id " +
             "WHERE we.exerciseId = :exerciseId AND w.endedAt IS NOT NULL " +
-            "ORDER BY w.startedAt DESC LIMIT 1" +
+            "AND EXISTS (SELECT 1 FROM sets s WHERE s.workoutExerciseId = we.id AND s.completedAt IS NOT NULL) " +
+            "ORDER BY w.startedAt DESC, w.id DESC LIMIT 1" +
             ") " +
             "ORDER BY workout_exercises.position, sets.position"
     )
     fun previousPerformance(exerciseId: String): List<SetEntity>
+
+    /**
+     * Every completed set of the given exercises, from any workout (finished or not) except
+     * [excludeWorkoutId], in completion order. Pass -1 to exclude nothing.
+     */
+    @Query(
+        "SELECT sets.*, we.exerciseId AS exerciseId, we.workoutId AS workoutId FROM sets " +
+            "JOIN workout_exercises we ON sets.workoutExerciseId = we.id " +
+            "WHERE we.exerciseId IN (:exerciseIds) AND we.workoutId != :excludeWorkoutId " +
+            "AND sets.completedAt IS NOT NULL " +
+            "ORDER BY sets.completedAt, sets.id"
+    )
+    fun completedSetsForExercises(exerciseIds: List<String>, excludeWorkoutId: Long): List<SetWithExercise>
 }
+
+/** A set joined with the exercise and workout its slot belongs to. */
+data class SetWithExercise(
+    @Embedded val set: SetEntity,
+    val exerciseId: String,
+    val workoutId: Long,
+)

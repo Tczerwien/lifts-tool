@@ -53,9 +53,19 @@ class LiftsRepository private constructor(
 
     fun setsForWorkout(workoutId: Long): List<SetEntity> = db.workoutDao.setsForWorkout(workoutId)
 
-    /** Completed sets of the most recent finished workout containing [exerciseId]. */
+    /** Completed sets of the most recent finished workout where [exerciseId] had a completed set. */
     fun previousPerformance(exerciseId: String): List<SetEntity> =
         db.workoutDao.previousPerformance(exerciseId)
+
+    /**
+     * Completed sets of [exerciseIds] from every workout except [excludeWorkoutId], in
+     * completion order, grouped by exercise id. One query, whatever the history length.
+     */
+    fun completedSetsByExercise(exerciseIds: Collection<String>, excludeWorkoutId: Long = -1): Map<String, List<SetEntity>> {
+        if (exerciseIds.isEmpty()) return emptyMap()
+        return db.workoutDao.completedSetsForExercises(exerciseIds.distinct(), excludeWorkoutId)
+            .groupBy(keySelector = { it.exerciseId }, valueTransform = { it.set })
+    }
 
     // --- Templates ---
 
