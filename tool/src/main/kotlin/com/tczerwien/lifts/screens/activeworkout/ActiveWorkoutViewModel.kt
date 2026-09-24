@@ -444,13 +444,36 @@ class ActiveWorkoutViewModel(
         else -> SET_TYPE_WARMUP
     }
 
+    /** Guards [refreshesStarted] and [refreshApplied]. */
+    private val refreshLock = Any()
+    private var refreshesStarted = 0L
+
+    /** The newest refresh whose result is on screen. */
+    private var refreshApplied = 0L
+
+    /**
+     * Runs [apply] for refresh number [ticket] unless one that started later has already landed. A
+     * return from the menu or picker starts two refreshes (onScreenShow's and the action's); the
+     * older one must not put back a set the action just removed.
+     */
+    private fun applyRefresh(ticket: Long, apply: () -> Unit) {
+        synchronized(refreshLock) {
+            if (ticket < refreshApplied) return
+            refreshApplied = ticket
+            apply()
+        }
+    }
+
     /** Full reload from the database — call from Dispatchers.IO. */
     private fun refresh(focusLastExercise: Boolean = false) {
         val workoutId = resolvedWorkoutId ?: return
+        val ticket = synchronized(refreshLock) { ++refreshesStarted }
         val workout = repository.workoutById(workoutId)
         if (workout == null || workout.endedAt != null) {
             // Gone or finished. Our own Finish or Discard handles its exit; anything else leaves.
-            _uiState.update { state -> if (state.finishing) state else state.copy(loaded = true, leave = true) }
+            applyRefresh(ticket) {
+                _uiState.update { state -> if (state.finishing) state else state.copy(loaded = true, leave = true) }
+            }
             return
         }
         val settings = settingsStore.snapshot()
@@ -473,32 +496,34 @@ class ActiveWorkoutViewModel(
         priorHistoryByExercise = session.priorHistory(slots.map { it.exerciseId }.distinct(), workoutId)
         val prIds = prSetIds(slots, sets, priorHistoryByExercise)
         val restState = session.restStateSnapshot()
-        _uiState.update { state ->
-            val lastIndex = (blocks.size - 1).coerceAtLeast(0)
-            val currentIndex = when {
-                focusLastExercise -> lastIndex
-                state.loaded -> state.currentIndex.coerceIn(0, lastIndex)
-                else -> initialExerciseIndex(slots, sets, blocks)
+        applyRefresh(ticket) {
+            _uiState.update { state ->
+                val lastIndex = (blocks.size - 1).coerceAtLeast(0)
+                val currentIndex = when {
+                    focusLastExercise -> lastIndex
+                    state.loaded -> state.currentIndex.coerceIn(0, lastIndex)
+                    else -> initialExerciseIndex(slots, sets, blocks)
+                }
+                val currentBlock = blocks.getOrNull(currentIndex)
+                val activeSetId = state.activeSetId
+                    ?.takeIf { id -> currentBlock?.sets?.any { it.id == id } == true }
+                    ?: currentBlock?.sets?.firstOrNull { it.completedAt == null }?.id
+                state.copy(
+                    loaded = true,
+                    workoutId = workoutId,
+                    workoutName = workout.name,
+                    startedAt = workout.startedAt,
+                    exercises = blocks,
+                    currentIndex = currentIndex,
+                    activeSetId = activeSetId,
+                    prSetIds = prIds,
+                    restEndMillis = restState?.endMillis,
+                    restTotalSec = restState?.totalSec ?: 0,
+                    units = settings.units,
+                    defaultRestSec = settings.defaultRestSec,
+                    warmupRestSec = settings.warmupRestSec,
+                )
             }
-            val currentBlock = blocks.getOrNull(currentIndex)
-            val activeSetId = state.activeSetId
-                ?.takeIf { id -> currentBlock?.sets?.any { it.id == id } == true }
-                ?: currentBlock?.sets?.firstOrNull { it.completedAt == null }?.id
-            state.copy(
-                loaded = true,
-                workoutId = workoutId,
-                workoutName = workout.name,
-                startedAt = workout.startedAt,
-                exercises = blocks,
-                currentIndex = currentIndex,
-                activeSetId = activeSetId,
-                prSetIds = prIds,
-                restEndMillis = restState?.endMillis,
-                restTotalSec = restState?.totalSec ?: 0,
-                units = settings.units,
-                defaultRestSec = settings.defaultRestSec,
-                warmupRestSec = settings.warmupRestSec,
-            )
         }
     }
 
