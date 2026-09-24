@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Moves Lifts data on and off a device over adb. Uses `run-as`, so it only works with a
+# debuggable (debug) build. Pick the device with ANDROID_SERIAL, e.g. ANDROID_SERIAL=emulator-5560.
+#
+#   lifts-adb.sh pull-db [DIR]   copy lifts.db (+ -wal/-shm, so recent writes aren't lost) into DIR
+#   lifts-adb.sh push-db FILE    stop the app and replace its database with FILE
+set -euo pipefail
+
+PKG=com.tczerwien.lifts
+ADB="${ADB:-$(command -v adb || echo "${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb")}"
+
+usage() {
+  sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'
+  exit 2
+}
+
+run_as() {
+  "$ADB" exec-out run-as "$PKG" "$@"
+}
+
+pull_db() {
+  local dir="${1:-.}"
+  mkdir -p "$dir"
+  local name
+  for name in lifts.db lifts.db-wal lifts.db-shm; do
+    if [ "$(run_as sh -c "test -f databases/$name && echo yes" || true)" = "yes" ]; then
+      run_as cat "databases/$name" >"$dir/$name"
+    else
+      rm -f "$dir/$name"
+    fi
+  done
+  echo "pulled into $dir: $(cd "$dir" && ls lifts.db* 2>/dev/null | tr '\n' ' ')"
+}
+
+push_db() {
+  local file="${1:?push-db needs a database file}"
+  [ -f "$file" ] || { echo "no such file: $file" >&2; exit 1; }
+  "$ADB" shell am force-stop "$PKG"
+  "$ADB" exec-in run-as "$PKG" sh -c \
+    'mkdir -p databases && rm -f databases/lifts.db-wal databases/lifts.db-shm && cat > databases/lifts.db' <"$file"
+  echo "pushed $file (app stopped; launch it to load the new data)"
+}
+
+case "${1:-}" in
+  pull-db) shift; pull_db "$@" ;;
+  push-db) shift; push_db "$@" ;;
+  *) usage ;;
+esac
