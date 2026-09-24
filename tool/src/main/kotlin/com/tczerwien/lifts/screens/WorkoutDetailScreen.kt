@@ -117,6 +117,7 @@ class WorkoutDetailViewModel(
     }
 
     fun startEditNotes() {
+        deleteArm.disarm()
         _uiState.update {
             it.copy(editingNotes = true, notesEditSession = it.notesEditSession + 1)
         }

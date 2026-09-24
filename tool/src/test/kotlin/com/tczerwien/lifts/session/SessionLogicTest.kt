@@ -448,7 +448,6 @@ class SessionLogicTest {
     private fun workout(templateId: Long? = null, notes: String? = null) =
         WorkoutEntity(id = 1, name = "Workout", startedAt = 0, templateId = templateId, notes = notes)
 
-
     private fun slot(id: Long, exerciseId: String = "bench", position: Int = 0) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = exerciseId, position = position)
 
