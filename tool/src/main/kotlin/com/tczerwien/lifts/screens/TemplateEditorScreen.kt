@@ -16,13 +16,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -552,21 +552,6 @@ private fun AddExerciseRow(onClick: () -> Unit) {
             maxLines = 1,
         )
     }
-}
-
-/** Superfine confirm hint shown above the bottom bar while a trash action is armed. */
-@Composable
-private fun ArmedHint(text: String) {
-    LightText(
-        text = text,
-        variant = LightTextVariant.Superfine,
-        lighten = true,
-        align = TextAlign.Center,
-        maxLines = 1,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 0.5f.gridUnitsAsDp()),
-    )
 }
 
 /** Stacked up/down arrows (design .reorder cluster); disabled arrows dim to 40%. */
