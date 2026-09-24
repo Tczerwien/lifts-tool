@@ -233,8 +233,18 @@ class TemplateEditorViewModel(
         }
         _uiState.update { it.copy(deleteArmed = false) }
         LiftsIo.write({ repository.deleteTemplate(templateId) }) {
-            withContext(Dispatchers.Main) { onDeleted() }
+            // The delete survives Back, but the callback must not: if the editor is already gone,
+            // goBack() would pop whatever screen is now on top.
+            withContext(Dispatchers.Main) { if (!cleared) onDeleted() }
         }
+    }
+
+    @Volatile
+    private var cleared = false
+
+    override fun onCleared() {
+        cleared = true
+        super.onCleared()
     }
 
     /** Back collapses armed trash states and overlay modes before letting the screen pop. */
@@ -264,11 +274,14 @@ class TemplateEditorViewModel(
         repository.exercisesForTemplate(templateId).firstOrNull { it.id == id }
 
     /**
-     * Runs [block] on the app-wide write queue (serial, survives Back) so read-modify-writes never
-     * interleave, then refreshes.
+     * Runs [block] and then a refresh together on the app-wide write queue (serial, survives Back),
+     * so read-modify-writes never interleave and an older refresh can never land after a newer one.
      */
     private fun mutate(block: () -> Unit) {
-        LiftsIo.write({ block() }) { refresh() }
+        LiftsIo.write {
+            block()
+            refresh()
+        }
     }
 
     private fun refresh() {
