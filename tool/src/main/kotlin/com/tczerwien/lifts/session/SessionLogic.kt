@@ -280,6 +280,18 @@ fun staleAction(
         closeAction(startedAt, sets)
     }
 
+/**
+ * The endedAt Finish records: now, unless the workout sat idle past [staleAfterMillis] (the phone
+ * slept on Active Workout overnight), when it ends at its last logged set, as Home would have
+ * closed it ([staleAction]).
+ */
+fun finishedAt(
+    startedAt: Long,
+    sets: List<SetEntity>,
+    now: Long,
+    staleAfterMillis: Long = STALE_AFTER_MILLIS,
+): Long = (staleAction(startedAt, sets, now, staleAfterMillis) as? OpenWorkoutAction.CloseAt)?.endedAt ?: now
+
 /** One open workout as Home's cleanup sees it. */
 data class OpenWorkout(
     val id: Long,

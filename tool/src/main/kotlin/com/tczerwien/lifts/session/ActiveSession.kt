@@ -196,16 +196,20 @@ class ActiveSession(
     /**
      * Finish button: ends the workout (endedAt, idempotent) and clears the rest. A workout with no
      * logged set is discarded instead, so a mistaken start never lands in History. Sets left
-     * unticked stay as they are, so a workout reopened from Workout Complete still has them. The
-     * summary is left to Workout Complete, which is the only screen that shows it.
+     * unticked stay as they are, so a workout reopened from Workout Complete still has them. A
+     * workout left idle for hours ends at its last logged set ([finishedAt]). The summary is left to
+     * Workout Complete, which is the only screen that shows it.
      */
     fun finishOrDiscard(workoutId: Long, now: Long = System.currentTimeMillis()): FinishOutcome {
         val workout = repository.workoutById(workoutId) ?: return FinishOutcome.MISSING
-        if (completedSetCount(repository.setsForWorkout(workoutId)) == 0) {
+        val sets = repository.setsForWorkout(workoutId)
+        if (completedSetCount(sets) == 0) {
             discardWorkout(workoutId)
             return FinishOutcome.DISCARDED
         }
-        if (workout.endedAt == null) repository.updateWorkout(workout.copy(endedAt = now))
+        if (workout.endedAt == null) {
+            repository.updateWorkout(workout.copy(endedAt = finishedAt(workout.startedAt, sets, now)))
+        }
         runBlocking { clearRest() }
         return FinishOutcome.ENDED
     }

@@ -375,6 +375,27 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `stale starts one millisecond after four idle hours`() {
+        val fourHours = 4 * 3_600_000L
+        val sets = listOf(set(id = 1, completedAt = 1_000L))
+        assertEquals(OpenWorkoutAction.Keep, staleAction(startedAt = 0, sets = sets, now = 1_000L + fourHours))
+        assertEquals(
+            OpenWorkoutAction.CloseAt(1_000L),
+            staleAction(startedAt = 0, sets = sets, now = 1_000L + fourHours + 1),
+        )
+    }
+
+    @Test
+    fun `Finish records now, or the last logged set after a long idle`() {
+        val hour = 3_600_000L
+        val sets = listOf(set(id = 1, completedAt = 19 * hour), set(id = 2))
+        // Finished during the session: the real end.
+        assertEquals(20 * hour, finishedAt(startedAt = 18 * hour, sets = sets, now = 20 * hour))
+        // The phone slept on Active Workout and Finish came the next morning.
+        assertEquals(19 * hour, finishedAt(startedAt = 18 * hour, sets = sets, now = 32 * hour))
+    }
+
+    @Test
     fun `a clock set back keeps the workout`() {
         val sets = listOf(set(id = 1, completedAt = 10_000_000L))
         assertEquals(OpenWorkoutAction.Keep, staleAction(startedAt = 0, sets = sets, now = 1_000L))
