@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -54,8 +55,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 private const val DEFAULT_TARGET_SETS = 3
@@ -117,7 +116,6 @@ class TemplateEditorViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private val mutationMutex = Mutex()
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         mutate {}
@@ -234,8 +232,7 @@ class TemplateEditorViewModel(
             return
         }
         _uiState.update { it.copy(deleteArmed = false) }
-        viewModelScope.launch(Dispatchers.IO) {
-            mutationMutex.withLock { repository.deleteTemplate(templateId) }
+        LiftsIo.write({ repository.deleteTemplate(templateId) }) {
             withContext(Dispatchers.Main) { onDeleted() }
         }
     }
@@ -266,14 +263,12 @@ class TemplateEditorViewModel(
     private fun templateExercise(id: Long): TemplateExerciseEntity? =
         repository.exercisesForTemplate(templateId).firstOrNull { it.id == id }
 
-    /** Runs [block] then a refresh serially on IO so read-modify-writes never interleave. */
+    /**
+     * Runs [block] on the app-wide write queue (serial, survives Back) so read-modify-writes never
+     * interleave, then refreshes.
+     */
     private fun mutate(block: () -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            mutationMutex.withLock {
-                block()
-                refresh()
-            }
-        }
+        LiftsIo.write({ block() }) { refresh() }
     }
 
     private fun refresh() {
