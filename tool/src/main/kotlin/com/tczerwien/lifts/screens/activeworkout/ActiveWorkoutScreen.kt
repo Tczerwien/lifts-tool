@@ -267,8 +267,8 @@ class ActiveWorkoutScreen(
             )
         }) { action ->
             when (action) {
-                WorkoutMenuAction.REMOVE_SET -> viewModel.removeActiveSet()
-                WorkoutMenuAction.REMOVE_EXERCISE -> viewModel.removeCurrentExercise()
+                WorkoutMenuAction.REMOVE_SET -> options.removeSetId?.let(viewModel::removeSet)
+                WorkoutMenuAction.REMOVE_EXERCISE -> options.removeSlotId?.let(viewModel::removeExercise)
                 WorkoutMenuAction.DISCARD_WORKOUT -> viewModel.discard()
             }
         }

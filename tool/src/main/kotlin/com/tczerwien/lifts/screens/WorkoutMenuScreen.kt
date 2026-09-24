@@ -50,7 +50,7 @@ class WorkoutMenuViewModel : LightViewModel<WorkoutMenuAction>() {
  */
 class WorkoutMenuScreen(
     sealedActivity: SealedLightActivity,
-    /** "Set 3" for the active unticked row, or null. */
+    /** The active unticked row as its marker names it ("Set 2", "Warm-up"), or null. */
     private val removeSetLabel: String?,
     /** The current exercise's name while none of its sets is ticked, or null. */
     private val removeExerciseLabel: String?,

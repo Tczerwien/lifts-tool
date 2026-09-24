@@ -72,12 +72,17 @@ class ActiveWorkoutViewModel(
         val leave: Boolean = false,
     )
 
-    /** What the "…" menu can offer for the current exercise and row. */
+    /**
+     * What the "…" menu can offer for the current exercise and row. The ids travel with the menu, so
+     * its result acts on exactly what it showed even if the screen moved on meanwhile.
+     */
     data class MenuOptions(
-        /** "Set 3" for the active row while it is unticked; null otherwise. */
-        val removeSetLabel: String?,
-        /** The current exercise's name while none of its sets is ticked; null otherwise. */
-        val removeExerciseLabel: String?,
+        /** The active row while it is unticked, named as its marker shows it ("Set 2", "Warm-up"). */
+        val removeSetLabel: String? = null,
+        val removeSetId: Long? = null,
+        /** The current exercise's name while none of its sets is ticked. */
+        val removeExerciseLabel: String? = null,
+        val removeSlotId: Long? = null,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -350,30 +355,35 @@ class ActiveWorkoutViewModel(
     }
 
     fun menuOptions(state: UiState): MenuOptions {
-        val block = state.exercises.getOrNull(state.currentIndex)
-            ?: return MenuOptions(removeSetLabel = null, removeExerciseLabel = null)
+        val block = state.exercises.getOrNull(state.currentIndex) ?: return MenuOptions()
         val activeIndex = block.sets.indexOfFirst { it.id == state.activeSetId }
-        val removeSetLabel = block.sets.getOrNull(activeIndex)
-            ?.takeIf { it.completedAt == null }
-            ?.let { "Set ${activeIndex + 1}" }
-        val removeExerciseLabel = block.baseName.takeIf { block.sets.none { it.completedAt != null } }
-        return MenuOptions(removeSetLabel, removeExerciseLabel)
+        val removableSet = block.sets.getOrNull(activeIndex)?.takeIf { it.completedAt == null }
+        val exerciseRemovable = block.sets.none { it.completedAt != null }
+        return MenuOptions(
+            removeSetLabel = removableSet?.let {
+                if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${buildMarkers(block.sets)[activeIndex]}"
+            },
+            removeSetId = removableSet?.id,
+            removeExerciseLabel = block.baseName.takeIf { exerciseRemovable },
+            removeSlotId = block.slot.id.takeIf { exerciseRemovable },
+        )
     }
 
-    /** Menu: removes the active row, only while it is unticked (the session checks again). */
-    fun removeActiveSet() {
+    /** Menu: removes the set it offered, only while it is unticked (the session checks again). */
+    fun removeSet(setId: Long) {
         if (locked) return
-        val set = activeSet(_uiState.value)?.takeIf { it.completedAt == null } ?: return
-        LiftsIo.write({ session.removeSet(set.id) }) { refresh() }
+        val located = locate(setId) ?: return
+        if (located.block.sets[located.index].completedAt != null) return
+        LiftsIo.write({ session.removeSet(setId) }) { refresh() }
     }
 
-    /** Menu: removes the current exercise, only while none of its sets is ticked. */
-    fun removeCurrentExercise() {
+    /** Menu: removes the exercise it offered, only while none of its sets is ticked. */
+    fun removeExercise(slotId: Long) {
         if (locked) return
-        val state = _uiState.value
-        val block = state.exercises.getOrNull(state.currentIndex) ?: return
+        val workoutId = resolvedWorkoutId ?: return
+        val block = _uiState.value.exercises.firstOrNull { it.slot.id == slotId } ?: return
         if (block.sets.any { it.completedAt != null }) return
-        LiftsIo.write({ session.removeExercise(state.workoutId, block.slot.id) }) { refresh() }
+        LiftsIo.write({ session.removeExercise(workoutId, slotId) }) { refresh() }
     }
 
     /** Menu: deletes the whole workout (the menu already took two taps) and leaves. */
