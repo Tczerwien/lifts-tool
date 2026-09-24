@@ -51,7 +51,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "src/main/assets/r8/lifts-rules.txt")
             signingConfig = signingConfigs.getByName("lightsdkDev")
         }
     }
