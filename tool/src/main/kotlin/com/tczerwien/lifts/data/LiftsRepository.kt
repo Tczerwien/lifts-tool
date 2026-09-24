@@ -18,9 +18,14 @@ class LiftsRepository private constructor(
 
     // --- First run ---
 
-    /** Seeds the bundled exercise catalog and the default bar into an empty database. */
+    /**
+     * First run only (the catalog is empty): seeds the bundled exercise catalog and the default bar.
+     * Home calls this on every show, so the bar is tied to the catalog; a lifter who deletes every
+     * bar doesn't get the default back.
+     */
     fun seedIfEmpty() = inTransaction {
-        if (db.exerciseDao.count() == 0L) db.exerciseDao.insertAll(Seeder.exercises())
+        if (db.exerciseDao.count() != 0L) return@inTransaction
+        db.exerciseDao.insertAll(Seeder.exercises())
         if (db.barDao.count() == 0L) db.barDao.insert(Seeder.defaultBar())
     }
 
