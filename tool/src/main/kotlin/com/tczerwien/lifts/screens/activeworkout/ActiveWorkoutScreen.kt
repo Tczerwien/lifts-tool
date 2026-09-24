@@ -14,8 +14,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.tczerwien.lifts.data.LiftsDatabase
-import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.ExercisePickerScreen
 import com.tczerwien.lifts.screens.RestTimerScreen
 import com.tczerwien.lifts.screens.WorkoutCompleteScreen
@@ -32,7 +31,6 @@ import com.tczerwien.lifts.ui.SetRowHeader
 import com.tczerwien.lifts.ui.SetRowState
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.SealedLightActivity
-import com.thelightphone.sdk.buildDatabase
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
@@ -62,9 +60,7 @@ class ActiveWorkoutScreen(
     private val templateId: Long? = null,
 ) : LightScreen<Unit, ActiveWorkoutViewModel>(sealedActivity) {
 
-    private val repository = LiftsRepository.getInstance {
-        lightContext.buildDatabase(LiftsDatabase::class.java, LiftsRepository.DATABASE_NAME)
-    }
+    private val repository = lightContext.liftsRepository()
 
     private val settingsStore = SettingsStore(lightContext.dataStore)
 

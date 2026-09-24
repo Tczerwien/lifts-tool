@@ -14,8 +14,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.viewModelScope
-import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.export.CsvExport
 import com.tczerwien.lifts.export.JsonExport
 import com.tczerwien.lifts.export.MarkdownExport
@@ -29,7 +29,6 @@ import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
-import com.thelightphone.sdk.buildDatabase
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
@@ -205,9 +204,7 @@ class ExportScreen(
     sealedActivity: SealedLightActivity,
 ) : LightScreen<Unit, ExportViewModel>(sealedActivity) {
 
-    private val repository = LiftsRepository.getInstance {
-        lightContext.buildDatabase(LiftsDatabase::class.java, LiftsRepository.DATABASE_NAME)
-    }
+    private val repository = lightContext.liftsRepository()
 
     override val viewModelClass: Class<ExportViewModel>
         get() = ExportViewModel::class.java

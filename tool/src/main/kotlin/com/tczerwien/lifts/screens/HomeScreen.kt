@@ -9,10 +9,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
-import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
-import com.tczerwien.lifts.seed.Seeder
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -24,7 +23,6 @@ import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
-import com.thelightphone.sdk.buildDatabase
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcon
@@ -45,7 +43,6 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel(
     private val repository: LiftsRepository,
-    private val database: LiftsDatabase,
 ) : LightViewModel<Unit>() {
 
     data class TemplateRow(val id: Long, val name: String, val exerciseCount: Int)
@@ -65,7 +62,7 @@ class HomeViewModel(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            Seeder.seedIfEmpty(database.exerciseDao, database.barDao)
+            repository.seedIfEmpty()
             refresh()
         }
     }
@@ -107,28 +104,12 @@ class HomeViewModel(
 class HomeScreen(sealedActivity: SealedLightActivity) :
     LightScreen<Unit, HomeViewModel>(sealedActivity) {
 
-    private val database: LiftsDatabase = obtainDatabase {
-        lightContext.buildDatabase(LiftsDatabase::class.java, LiftsRepository.DATABASE_NAME)
-    }
-
-    private val repository = LiftsRepository.getInstance { database }
+    private val repository = lightContext.liftsRepository()
 
     override val viewModelClass: Class<HomeViewModel>
         get() = HomeViewModel::class.java
 
-    override fun createViewModel() = HomeViewModel(repository, database)
-
-    companion object {
-        @Volatile
-        private var databaseInstance: LiftsDatabase? = null
-
-        /** Process-wide LiftsDatabase singleton so recreation never opens a second Room instance. */
-        private fun obtainDatabase(create: () -> LiftsDatabase): LiftsDatabase {
-            return databaseInstance ?: synchronized(this) {
-                databaseInstance ?: create().also { databaseInstance = it }
-            }
-        }
-    }
+    override fun createViewModel() = HomeViewModel(repository)
 
     @Composable
     override fun Content() {

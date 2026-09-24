@@ -1,5 +1,7 @@
 package com.tczerwien.lifts.data
 
+import com.tczerwien.lifts.seed.Seeder
+
 /**
  * SDK-independent repository over [LiftsDatabase]. The database instance is injected via the
  * [getInstance] lambda — this layer never constructs a Context or touches the SDK.
@@ -8,11 +10,15 @@ package com.tczerwien.lifts.data
 class LiftsRepository private constructor(
     private val db: LiftsDatabase,
 ) {
+    // --- First run ---
+
+    /** Seeds the bundled exercise catalog and the default bar into an empty database. */
+    fun seedIfEmpty() {
+        if (db.exerciseDao.count() == 0L) db.exerciseDao.insertAll(Seeder.exercises())
+        if (db.barDao.count() == 0L) db.barDao.insert(Seeder.defaultBar())
+    }
+
     // --- Exercises ---
-
-    fun exerciseCount(): Long = db.exerciseDao.count()
-
-    fun seedExercises(exercises: List<ExerciseEntity>) = db.exerciseDao.insertAll(exercises)
 
     fun addExercise(exercise: ExerciseEntity) = db.exerciseDao.insert(exercise)
 
