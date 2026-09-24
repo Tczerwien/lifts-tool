@@ -129,7 +129,7 @@ class ActiveSession(
 
     /**
      * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null when no
-     * rest started because the workout has already ended.
+     * rest started because the workout has already ended or was deleted.
      */
     data class SetCompletion(
         val set: SetEntity,
@@ -164,7 +164,7 @@ class ActiveSession(
             defaultRestSec = snapshot.defaultRestSec,
             warmupRestSec = snapshot.warmupRestSec,
         )
-        val workoutOpen = repository.workoutById(workoutId)?.endedAt == null
+        val workoutOpen = repository.workoutById(workoutId)?.let { it.endedAt == null } == true
         if (workoutOpen) runBlocking { startRest(restSec, now) }
         return SetCompletion(
             set = completed,
