@@ -55,6 +55,40 @@ class SeedParserTest {
         assertTrue(entities.none { it.isCustom }, "seeded records must have isCustom=false")
     }
 
+    // --- defaultTrackingType ---
+
+    private fun trackingOf(id: String): String {
+        val entity = entities.find { it.id == id }
+        assertNotNull(entity, "expected seeded exercise '$id'")
+        return entity.trackingType
+    }
+
+    @Test
+    fun trackingTypeIdListsNameRealExercises() {
+        val ids = entities.map { it.id }.toSet()
+        val listed = SeedParser.DURATION_IDS + SeedParser.ASSISTED_IDS +
+            SeedParser.WEIGHTED_BODYWEIGHT_IDS + SeedParser.REPS_ONLY_IDS
+        assertEquals(emptySet(), listed - ids, "tracking-type lists name ids missing from the catalog")
+    }
+
+    @Test
+    fun trackingTypeDefaultsFollowTheRules() {
+        assertEquals("weight_reps", trackingOf("barbell-bench-press-medium-grip"))
+        assertEquals("reps_only", trackingOf("chin-up"), "body-only equipment counts reps")
+        assertEquals("reps_only", trackingOf("parallel-bar-dip"), "listed bodyweight move under 'other'")
+        assertEquals("duration", trackingOf("plank"), "listed hold")
+        assertEquals("duration", trackingOf("running-treadmill"), "cardio is timed")
+        assertEquals("assisted_bodyweight", trackingOf("band-assisted-pull-up"))
+        assertEquals("weighted_bodyweight", trackingOf("weighted-pull-ups"))
+    }
+
+    @Test
+    fun everyStretchIsTimed() {
+        val stretches = entities.filter { it.category == "stretching" }
+        assertTrue(stretches.isNotEmpty())
+        assertTrue(stretches.all { it.trackingType == "duration" }, "stretches must default to duration")
+    }
+
     @Test
     fun jsonPayloadIsUnderTwoMegabytes() {
         val bytes = ExerciseSeedData.json.toByteArray(Charsets.UTF_8).size

@@ -1,6 +1,11 @@
 package com.tczerwien.lifts.seed
 
 import com.tczerwien.lifts.data.ExerciseEntity
+import com.tczerwien.lifts.data.ExerciseEntity.Companion.TRACKING_ASSISTED_BODYWEIGHT
+import com.tczerwien.lifts.data.ExerciseEntity.Companion.TRACKING_DURATION
+import com.tczerwien.lifts.data.ExerciseEntity.Companion.TRACKING_REPS_ONLY
+import com.tczerwien.lifts.data.ExerciseEntity.Companion.TRACKING_WEIGHTED_BODYWEIGHT
+import com.tczerwien.lifts.data.ExerciseEntity.Companion.TRACKING_WEIGHT_REPS
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -33,8 +38,9 @@ internal object SeedParser {
         val records = json.decodeFromString(SEED_LIST_SERIALIZER, raw)
         val usedSlugs = HashSet<String>(records.size * 2)
         return records.map { record ->
+            val slug = uniqueSlug(slugify(record.id), usedSlugs)
             ExerciseEntity(
-                id = uniqueSlug(slugify(record.id), usedSlugs),
+                id = slug,
                 name = record.name,
                 equipment = record.equipment,
                 primaryMuscles = record.primaryMuscles,
@@ -43,9 +49,43 @@ internal object SeedParser {
                 level = record.level,
                 instructions = record.instructions,
                 isCustom = false,
+                trackingType = defaultTrackingType(slug, record.category, record.equipment),
             )
         }
     }
+
+    /**
+     * Which numbers a seeded exercise records by default. The dataset has no such field, so this
+     * is inferred: holds, stretches and cardio are timed; bodyweight moves count reps only; a few
+     * known ids are weighted or assisted bodyweight; everything else is weight x reps.
+     */
+    internal fun defaultTrackingType(slug: String, category: String, equipment: String?): String = when {
+        slug in DURATION_IDS || category == "stretching" || category == "cardio" -> TRACKING_DURATION
+        slug in ASSISTED_IDS -> TRACKING_ASSISTED_BODYWEIGHT
+        slug in WEIGHTED_BODYWEIGHT_IDS -> TRACKING_WEIGHTED_BODYWEIGHT
+        slug in REPS_ONLY_IDS || equipment == "body only" -> TRACKING_REPS_ONLY
+        else -> TRACKING_WEIGHT_REPS
+    }
+
+    internal val DURATION_IDS = setOf(
+        "plank",
+        "side-bridge",
+        "one-handed-hang",
+        "isometric-chest-squeezes",
+        "isometric-neck-exercise-front-and-back",
+        "isometric-neck-exercise-sides",
+    )
+    internal val ASSISTED_IDS = setOf("band-assisted-pull-up")
+    internal val WEIGHTED_BODYWEIGHT_IDS = setOf("weighted-pull-ups", "weighted-bench-dip")
+
+    /** Bodyweight moves the dataset files under "other" equipment (bars, rings). */
+    internal val REPS_ONLY_IDS = setOf(
+        "parallel-bar-dip",
+        "dips-chest-version",
+        "ring-dips",
+        "one-arm-chin-up",
+        "scapular-pull-up",
+    )
 
     /**
      * Lowercases a dataset id and collapses every non-alphanumeric run into a single hyphen,
