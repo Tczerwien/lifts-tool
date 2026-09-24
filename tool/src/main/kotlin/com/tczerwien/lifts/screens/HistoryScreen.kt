@@ -11,9 +11,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -33,11 +33,9 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import kotlin.math.roundToInt
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 /** Uniform list-row height (LightLazyScrollView scrollbar contract). */
 private const val ROW_HEIGHT_UNITS = 3f
@@ -65,8 +63,9 @@ class HistoryViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    /** Reads behind any queued write, so a workout just deleted on Workout Detail never reappears. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        LiftsIo.write({}) { refresh() }
     }
 
     private fun refresh() {

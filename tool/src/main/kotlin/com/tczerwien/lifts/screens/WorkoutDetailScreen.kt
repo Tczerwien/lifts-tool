@@ -88,12 +88,17 @@ class WorkoutDetailViewModel(
     @Volatile
     private var cleared = false
 
+    /** The delete is confirmed and running: nothing may hold the screen once it lands. */
+    @Volatile
+    private var deleting = false
+
     override fun onCleared() {
         cleared = true
         super.onCleared()
     }
 
     override fun onBackPressed(): Boolean {
+        if (deleting) return false
         if (_uiState.value.editingNotes) {
             cancelEditNotes()
             return true
@@ -110,13 +115,15 @@ class WorkoutDetailViewModel(
      * so it survives Back, then runs [onDeleted] on Main (unless the screen is already gone).
      */
     fun tapDelete(onDeleted: () -> Unit) {
-        if (!deleteArm.tap()) return
+        if (deleting || !deleteArm.tap()) return
+        deleting = true
         LiftsIo.write({ repository.deleteWorkout(workoutId) }) {
             withContext(Dispatchers.Main) { if (!cleared) onDeleted() }
         }
     }
 
     fun startEditNotes() {
+        if (deleting) return
         deleteArm.disarm()
         _uiState.update {
             it.copy(editingNotes = true, notesEditSession = it.notesEditSession + 1)
