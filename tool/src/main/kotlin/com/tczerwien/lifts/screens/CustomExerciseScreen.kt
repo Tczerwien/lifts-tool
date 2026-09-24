@@ -79,10 +79,7 @@ class CustomExerciseViewModel(
 
     private var saving = false
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) { loadOptions() }
-    }
-
+    /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
     override fun onScreenShow(screen: SimpleLightScreen<String>) {
         viewModelScope.launch(Dispatchers.IO) { loadOptions() }
     }

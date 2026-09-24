@@ -109,10 +109,7 @@ class ExerciseDetailViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
-    }
-
+    /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         viewModelScope.launch(Dispatchers.IO) { refresh() }
     }

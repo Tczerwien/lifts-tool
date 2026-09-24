@@ -75,11 +75,10 @@ class RestTimerViewModel(
     @Volatile
     private var initialized = false
 
-    init {
-        sync()
-    }
-
-    /** Re-derive from the persisted end on every show (process may have been away). */
+    /**
+     * Re-derive from the persisted end on every show (process may have been away). This is also the
+     * first load: the SDK calls it straight after creating the view model.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         sync()
     }
