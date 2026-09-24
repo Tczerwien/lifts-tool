@@ -192,7 +192,7 @@ fun buildSnapshot(
                                 reps = set.reps,
                                 durationSec = set.durationSec,
                                 rpe = set.rpe,
-                                restSec = set.restTakenSec,
+                                restSec = null, // rest taken isn't recorded yet
                                 isPr = set.id in prSetIds,
                             )
                         },
@@ -205,7 +205,7 @@ fun buildSnapshot(
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
                 durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt() },
-                bodyweightKg = workout.bodyweightKg,
+                bodyweightKg = null, // not stored per workout; comes from the bodyweight log later
                 notes = workout.notes,
                 exercises = slots,
             )

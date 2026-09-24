@@ -218,7 +218,7 @@ class ActiveSession(
             completedSetCount = completedSetCount(sets),
             totalVolumeKg = totalVolumeKg(sets),
             prs = prRecords(slots, sets, prIds, names),
-            bodyweightKg = workout.bodyweightKg,
+            bodyweightKg = null, // not stored per workout; comes from the bodyweight log later
         )
     }
 

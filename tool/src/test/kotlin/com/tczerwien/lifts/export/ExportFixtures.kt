@@ -14,8 +14,8 @@ import java.time.LocalDate
  * RPE, rest, a PR set, workout notes, and instance notes containing a comma + quotes.
  *
  * Expected derived facts:
- * - Workout 1 (2026-07-06, 44m): w60x8; 100x5 @8 r180 (PR — first working set); 100x5.
- * - Workout 2 (2026-07-13, 98m = "1h 38m", BW 80.5): w60x8; 102.5x5 @8 r180 (PR — heavier); 95x5.
+ * - Workout 1 (2026-07-06, 44m): w60x8; 100x5 @8 (PR — first working set); 100x5.
+ * - Workout 2 (2026-07-13, 98m = "1h 38m"): w60x8; 102.5x5 @8 (PR — heavier); 95x5.
  * - Bench PR: max weight 102.5 (2026-07-13), best e1RM 102.5*(1+5/30) = 119.583… (2026-07-13).
  * - Squat is in the catalog but never performed, so exports must omit it.
  * - Weekly buckets (8 weeks ending 2026-07-14): chest 2.0 in weeks 7 and 8 (1-based),
@@ -68,7 +68,6 @@ object ExportFixtures {
         startedAt = millis("2026-07-13T10:00:00Z"),
         endedAt = millis("2026-07-13T11:38:00Z"),
         notes = "Felt strong",
-        bodyweightKg = 80.5,
     )
 
     val workoutExercise1 = WorkoutExerciseEntity(id = 1, workoutId = 1, exerciseId = bench.id, position = 0)
@@ -87,7 +86,7 @@ object ExportFixtures {
         ),
         SetEntity(
             id = 2, workoutExerciseId = 1, position = 1, type = "normal",
-            weightKg = 100.0, reps = 5, rpe = 8.0, restTakenSec = 180,
+            weightKg = 100.0, reps = 5, rpe = 8.0,
             completedAt = millis("2026-07-06T10:15:00Z"),
         ),
         SetEntity(
@@ -100,7 +99,7 @@ object ExportFixtures {
         ),
         SetEntity(
             id = 5, workoutExerciseId = 2, position = 1, type = "normal",
-            weightKg = 102.5, reps = 5, rpe = 8.0, restTakenSec = 180,
+            weightKg = 102.5, reps = 5, rpe = 8.0,
             completedAt = millis("2026-07-13T10:15:00Z"),
         ),
         SetEntity(

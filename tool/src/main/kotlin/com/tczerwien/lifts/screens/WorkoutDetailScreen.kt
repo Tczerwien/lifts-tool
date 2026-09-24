@@ -136,9 +136,7 @@ class WorkoutDetailViewModel(
                     (durationMin?.let { minutes -> " · $minutes min" } ?: ""),
                 notes = workout.notes,
                 blocks = blocks,
-                bodyweightText = workout.bodyweightKg?.let { kg ->
-                    "${Format.bodyweight(kg, unit)} ${unit.suffix}"
-                },
+                bodyweightText = null, // not stored per workout; comes from the bodyweight log later
             )
         }
     }

@@ -66,7 +66,7 @@ class JsonExportTest {
         assertEquals("2026-07-13T10:00:00Z", newest.startTime)
         assertEquals(98, newest.durationMin)
         assertEquals("Push Day", newest.routine)
-        assertEquals(80.5, newest.bodyweightKg)
+        assertEquals(null, newest.bodyweightKg)
         assertEquals("Felt strong", newest.notes)
 
         val exercise = newest.exercises.single()
@@ -85,7 +85,7 @@ class JsonExportTest {
         assertEquals(102.5, prSet.weightKg)
         assertEquals(5, prSet.reps)
         assertEquals(8.0, prSet.rpe)
-        assertEquals(180, prSet.restSec)
+        assertEquals(null, prSet.restSec)
         assertTrue(prSet.isPr, "102.5x5 beats the previous 100 kg max")
 
         assertEquals(false, exercise.sets[2].isPr)

@@ -16,7 +16,7 @@ import androidx.room.TypeConverters
         BarEntity::class,
     ],
     version = 1,
-    exportSchema = false,
+    exportSchema = true,
 )
 @TypeConverters(Converters::class)
 abstract class LiftsDatabase : RoomDatabase() {

@@ -73,6 +73,12 @@ kotlin {
     }
 }
 
+// Room writes each schema version here. It must live under src/main because Light's builder only
+// copies src/main; AutoMigrations read these files at compile time. Commit every new version.
+ksp {
+    arg("room.schemaLocation", "$projectDir/src/main/assets/room-schemas")
+}
+
 dependencies {
     implementation(project(":sdk:client"))
     // Wi-Fi share server for the Export screen; io.ktor is allowlisted by prefix.
