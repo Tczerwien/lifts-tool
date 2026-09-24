@@ -135,9 +135,11 @@ class TemplatesViewModel(
         val target = index + delta
         if (index < 0 || target !in templates.indices) return@mutate
         templates[index] = templates[target].also { templates[target] = templates[index] }
-        templates.forEachIndexed { position, template ->
-            if (template.position != position) {
-                repository.updateTemplate(template.copy(position = position))
+        repository.inTransaction {
+            templates.forEachIndexed { position, template ->
+                if (template.position != position) {
+                    repository.updateTemplate(template.copy(position = position))
+                }
             }
         }
     }

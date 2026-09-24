@@ -33,9 +33,12 @@ class ActiveSession(
     /**
      * Creates a workout from [templateId]: one workout_exercises row per template slot
      * (copying rest overrides), each prefilled with targetSets pending "normal" sets.
-     * A vanished template degrades to an empty workout.
+     * A vanished template degrades to an empty workout. All rows are written in one transaction.
      */
-    fun startFromTemplate(templateId: Long, now: Long = System.currentTimeMillis()): Long {
+    fun startFromTemplate(templateId: Long, now: Long = System.currentTimeMillis()): Long =
+        repository.inTransaction { createFromTemplate(templateId, now) }
+
+    private fun createFromTemplate(templateId: Long, now: Long): Long {
         val template = repository.templateById(templateId)
         val workoutId = repository.addWorkout(
             WorkoutEntity(
@@ -71,9 +74,9 @@ class ActiveSession(
      * Appends an exercise slot. Pending sets are prefilled to mirror the previous
      * session's completed sets (same count, warm-ups kept as warm-ups) so the
      * previous-per-index columns line up; with no history, [DEFAULT_NEW_EXERCISE_SETS]
-     * normal sets.
+     * normal sets. The slot and its sets are written in one transaction.
      */
-    fun addExercise(workoutId: Long, exerciseId: String): Long {
+    fun addExercise(workoutId: Long, exerciseId: String): Long = repository.inTransaction {
         val position = repository.exercisesForWorkout(workoutId)
             .maxOfOrNull { it.position + 1 } ?: 0
         val slotId = repository.addWorkoutExercise(
@@ -88,7 +91,7 @@ class ActiveSession(
         prefillTypes.forEachIndexed { index, type ->
             repository.addSet(SetEntity(workoutExerciseId = slotId, position = index, type = type))
         }
-        return slotId
+        slotId
     }
 
     /** Appends one pending "normal" set to [workoutExerciseId]; returns the new set id. */

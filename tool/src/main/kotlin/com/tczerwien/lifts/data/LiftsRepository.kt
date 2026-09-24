@@ -10,10 +10,16 @@ import com.tczerwien.lifts.seed.Seeder
 class LiftsRepository private constructor(
     private val db: LiftsDatabase,
 ) {
+    /**
+     * Runs [block] as one database transaction, so a group of writes lands together or not at all:
+     * a process killed halfway leaves nothing half-written.
+     */
+    fun <T> inTransaction(block: () -> T): T = db.runInTransaction<T>(block)
+
     // --- First run ---
 
     /** Seeds the bundled exercise catalog and the default bar into an empty database. */
-    fun seedIfEmpty() {
+    fun seedIfEmpty() = inTransaction {
         if (db.exerciseDao.count() == 0L) db.exerciseDao.insertAll(Seeder.exercises())
         if (db.barDao.count() == 0L) db.barDao.insert(Seeder.defaultBar())
     }
@@ -80,7 +86,7 @@ class LiftsRepository private constructor(
     fun updateTemplate(template: TemplateEntity): Boolean = db.templateDao.update(template) > 0
 
     /** Deletes the template and all of its template_exercises rows atomically. */
-    fun deleteTemplate(id: Long): Boolean = db.runInTransaction<Boolean> {
+    fun deleteTemplate(id: Long): Boolean = inTransaction {
         db.templateDao.deleteExercisesForTemplate(id)
         db.templateDao.delete(id) > 0
     }

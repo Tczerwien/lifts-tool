@@ -178,9 +178,11 @@ class TemplateEditorViewModel(
         val target = index + delta
         if (index < 0 || target !in exercises.indices) return@mutate
         exercises[index] = exercises[target].also { exercises[target] = exercises[index] }
-        exercises.forEachIndexed { position, exercise ->
-            if (exercise.position != position) {
-                repository.updateTemplateExercise(exercise.copy(position = position))
+        repository.inTransaction {
+            exercises.forEachIndexed { position, exercise ->
+                if (exercise.position != position) {
+                    repository.updateTemplateExercise(exercise.copy(position = position))
+                }
             }
         }
     }
@@ -215,10 +217,12 @@ class TemplateEditorViewModel(
         }
         _uiState.update { it.copy(removeArmed = false, mode = Mode.Overview) }
         mutate {
-            repository.deleteTemplateExercise(mode.templateExerciseId)
-            repository.exercisesForTemplate(templateId).forEachIndexed { position, exercise ->
-                if (exercise.position != position) {
-                    repository.updateTemplateExercise(exercise.copy(position = position))
+            repository.inTransaction {
+                repository.deleteTemplateExercise(mode.templateExerciseId)
+                repository.exercisesForTemplate(templateId).forEachIndexed { position, exercise ->
+                    if (exercise.position != position) {
+                        repository.updateTemplateExercise(exercise.copy(position = position))
+                    }
                 }
             }
         }
