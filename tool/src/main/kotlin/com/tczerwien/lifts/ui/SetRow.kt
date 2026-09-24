@@ -103,6 +103,8 @@ private fun HeaderLabel(text: String) {
  * warm-up / failure) derive from [state] flags.
  *
  * @param onRowClick selects the row as the stepper target.
+ * @param onMarkerClick taps the set marker (number / "W") to change the set type. Kept apart from
+ *   [onRowClick] so a near-miss on the row can never silently turn a work set into a warm-up.
  * @param onPreviousClick taps previous performance to autofill.
  * @param onCheckToggle toggles set completion.
  */
@@ -111,6 +113,7 @@ fun SetRow(
     state: SetRowState,
     modifier: Modifier = Modifier,
     onRowClick: (() -> Unit)? = null,
+    onMarkerClick: (() -> Unit)? = null,
     onPreviousClick: (() -> Unit)? = null,
     onCheckToggle: (() -> Unit)? = null,
 ) {
@@ -126,9 +129,11 @@ fun SetRow(
             .padding(horizontal = 1f.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Marker (set number / "W", + superfine "F" for failure).
+        // Marker (set number / "W", + superfine "F" for failure) — tap to change the set type.
         Row(
-            modifier = Modifier.width(COL_MARKER_UNITS.gridUnitsAsDp()),
+            modifier = Modifier
+                .width(COL_MARKER_UNITS.gridUnitsAsDp())
+                .let { m -> if (onMarkerClick != null) m.lightClickable(onClick = onMarkerClick) else m },
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {

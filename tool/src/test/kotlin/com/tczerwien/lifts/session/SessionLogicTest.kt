@@ -147,9 +147,19 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a later workout in the history can't steal a star`() {
+        val slots = listOf(slot(id = 1))
+        // 100x5 now, but the history also holds a heavier set from a LATER workout (time 5).
+        val later = set(id = 91, slotId = 99, weightKg = 120.0, reps = 5, completedAt = 5L)
+        val prior = mapOf("bench" to listOf(prior(id = 90, weightKg = 90.0, reps = 5), later))
+        val sets = listOf(set(id = 10, weightKg = 100.0, reps = 5, completedAt = 1L))
+        assertEquals(setOf(10L), prSetIds(slots, sets, prior))
+    }
+
+    @Test
     fun `sets beyond twelve reps only count by weight`() {
         val slots = listOf(slot(id = 1))
-        // e1RM history 119.58; 90x20 has no e1RM and 90 < 100 -> not a PR.
+        // e1RM history 116.67 (100x5); 90x20 has no e1RM and 90 < 100 -> not a PR.
         val prior = mapOf("bench" to listOf(prior(id = 90, weightKg = 100.0, reps = 5)))
         val sets = listOf(set(id = 10, weightKg = 90.0, reps = 20, completedAt = 1L))
         assertTrue(prSetIds(slots, sets, prior).isEmpty())
@@ -276,6 +286,7 @@ class SessionLogicTest {
     )
 
     /** A completed historical set from another workout (slot id irrelevant to isPr). */
+    /** A set from an earlier workout: completed at time 0, before every set these tests log. */
     private fun prior(id: Long, weightKg: Double, reps: Int) =
-        set(id = id, slotId = 99, weightKg = weightKg, reps = reps, completedAt = 1L)
+        set(id = id, slotId = 99, weightKg = weightKg, reps = reps, completedAt = 0L)
 }

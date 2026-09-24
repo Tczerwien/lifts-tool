@@ -2,7 +2,7 @@ package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.analytics.computePrs
-import com.tczerwien.lifts.analytics.isPr
+import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
 import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.BodyweightEntity
@@ -153,17 +153,9 @@ fun buildSnapshot(
     val slotsById = validSlots.associateBy { it.id }
     val completedSets = sets.filter { it.completedAt != null && it.workoutExerciseId in slotsById }
 
-    // PR flags: walk each exercise's history in completion order.
-    val prSetIds = HashSet<Long>()
+    // PR flags: each exercise's history replayed in completion order by the shared records engine.
     val setsByExercise = completedSets.groupBy { slotsById.getValue(it.workoutExerciseId).exerciseId }
-    for ((_, exerciseSets) in setsByExercise) {
-        val ordered = exerciseSets.sortedWith(compareBy({ it.completedAt }, { it.id }))
-        val history = mutableListOf<SetEntity>()
-        for (set in ordered) {
-            if (isPr(set, history)) prSetIds.add(set.id)
-            history.add(set)
-        }
-    }
+    val prSetIds = chronologicalPrSetIds(setsByExercise)
 
     val setsBySlot = completedSets.groupBy { it.workoutExerciseId }
     val slotsByWorkout = validSlots.groupBy { it.workoutId }

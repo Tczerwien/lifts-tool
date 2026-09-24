@@ -5,7 +5,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
-import com.tczerwien.lifts.analytics.isPr
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
@@ -109,17 +108,15 @@ class ActiveSession(
     /** Result of logging a set. [restEndMillis] is the persisted wall-clock rest end. */
     data class SetCompletion(
         val set: SetEntity,
-        val isPr: Boolean,
         val restDurationSec: Int,
         val restEndMillis: Long,
     )
 
     /**
-     * Marks [set] completed with the given values, decides whether it is a PR (against
-     * every other set of the same exercise, including earlier sets of this workout),
-     * selects the rest duration (exercise override else settings default; warm-up pair
-     * for warm-up sets), and persists the rest end timestamp — the DataStore keys are
-     * written on set completion, as the timer contract requires.
+     * Marks [set] completed with the given values, selects the rest duration (exercise
+     * override else settings default; warm-up pair for warm-up sets), and persists the rest
+     * end timestamp — the DataStore keys are written on set completion, as the timer contract
+     * requires. PR stars are worked out by the screen from [prSetIds].
      */
     fun completeSet(
         workoutId: Long,
@@ -134,15 +131,6 @@ class ActiveSession(
         val completed = set.copy(weightKg = weightKg, reps = reps, type = type, completedAt = now)
         repository.updateSet(completed)
 
-        val pr = slot?.let { owner ->
-            val sameExerciseSlotIds = slots.filter { it.exerciseId == owner.exerciseId }
-                .mapTo(HashSet()) { it.id }
-            val inWorkout = repository.setsForWorkout(workoutId).filter {
-                it.workoutExerciseId in sameExerciseSlotIds && it.id != completed.id
-            }
-            isPr(completed, priorHistoryForExercise(owner.exerciseId, workoutId) + inWorkout)
-        } ?: false
-
         val snapshot = settings.snapshot()
         val restSec = restDurationSec(
             setType = type,
@@ -154,7 +142,6 @@ class ActiveSession(
         runBlocking { startRest(restSec, now) }
         return SetCompletion(
             set = completed,
-            isPr = pr,
             restDurationSec = restSec,
             restEndMillis = now + restSec * 1000L,
         )
@@ -167,21 +154,13 @@ class ActiveSession(
         repository.previousPerformance(exerciseId)
 
     /**
-     * Every set of [exerciseId] from workouts other than [excludeWorkoutId]. Full scan
-     * over workouts (the DAO has no all-sets-per-exercise query); each step is an indexed
-     * point query, fine at personal-tracker scale.
+     * Completed sets of each of [exerciseIds] from workouts other than [excludeWorkoutId], in
+     * completion order, keyed by exercise id (exercises never performed map to an empty list).
+     * One query, whatever the history length.
      */
-    fun priorHistoryForExercise(exerciseId: String, excludeWorkoutId: Long): List<SetEntity> {
-        val result = mutableListOf<SetEntity>()
-        for (workout in repository.listWorkouts()) {
-            if (workout.id == excludeWorkoutId) continue
-            val slotIds = repository.exercisesForWorkout(workout.id)
-                .filter { it.exerciseId == exerciseId }
-                .mapTo(HashSet()) { it.id }
-            if (slotIds.isEmpty()) continue
-            result += repository.setsForWorkout(workout.id).filter { it.workoutExerciseId in slotIds }
-        }
-        return result
+    fun priorHistory(exerciseIds: Collection<String>, excludeWorkoutId: Long): Map<String, List<SetEntity>> {
+        val found = repository.completedSetsByExercise(exerciseIds, excludeWorkoutId)
+        return exerciseIds.associateWith { found[it].orEmpty() }
     }
 
     // --- Finishing ---
@@ -207,7 +186,7 @@ class ActiveSession(
         val slots = repository.exercisesForWorkout(workoutId)
         val sets = repository.setsForWorkout(workoutId)
         val exerciseIds = slots.map { it.exerciseId }.distinct()
-        val priorHistory = exerciseIds.associateWith { priorHistoryForExercise(it, workoutId) }
+        val priorHistory = priorHistory(exerciseIds, workoutId)
         val prIds = prSetIds(slots, sets, priorHistory)
         val names = exerciseIds.associateWith { repository.exerciseById(it)?.name ?: it }
         val end = workout.endedAt ?: workout.startedAt

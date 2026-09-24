@@ -29,6 +29,7 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
@@ -68,8 +69,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 class ActiveWorkoutViewModel(
     private val repository: LiftsRepository,
@@ -120,8 +119,6 @@ class ActiveWorkoutViewModel(
     @Volatile
     private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
 
-    private val writeMutex = Mutex()
-
     init {
         viewModelScope.launch(Dispatchers.IO) {
             resolvedWorkoutId = when {
@@ -139,19 +136,26 @@ class ActiveWorkoutViewModel(
 
     // --- Row interactions ---
 
-    /** First tap targets the row with the steppers; tapping the active row again cycles its type. */
+    /** A tap on a row targets it with the steppers; tapping the active row again does nothing. */
     fun onRowTapped(setId: Long) {
-        if (_uiState.value.activeSetId == setId) {
-            val changed = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
-            persistSet(changed)
-        } else {
-            _uiState.update { it.copy(activeSetId = setId) }
-        }
+        if (_uiState.value.activeSetId == setId) return
+        _uiState.update { it.copy(activeSetId = setId) }
     }
 
-    /** Tap on PREVIOUS: copy last session's exact weight/reps into the row and target it. */
+    /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
+    fun onMarkerTapped(setId: Long) {
+        val changed = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
+        _uiState.update { it.copy(activeSetId = setId) }
+        persistSet(changed)
+    }
+
+    /**
+     * Tap on PREVIOUS: copy last session's exact weight/reps into the row and target it. A logged
+     * set is left alone, so a stray tap can't overwrite what was lifted.
+     */
     fun autofill(setId: Long) {
         val located = locate(setId) ?: return
+        if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
         if (previous.weightKg == null && previous.reps == null) return
         val changed = applySetChange(setId) {
@@ -171,9 +175,7 @@ class ActiveWorkoutViewModel(
         val set = located.block.sets[located.index]
         if (set.completedAt != null) {
             applySetChange(setId) { it.copy(completedAt = null) }
-            viewModelScope.launch(Dispatchers.IO) {
-                writeMutex.withLock { session.uncompleteSet(set) }
-            }
+            LiftsIo.write { session.uncompleteSet(set) }
             return
         }
         val previous = located.block.previous.getOrNull(located.index)
@@ -187,10 +189,7 @@ class ActiveWorkoutViewModel(
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
         val workoutId = _uiState.value.workoutId
-        viewModelScope.launch(Dispatchers.IO) {
-            val completion = writeMutex.withLock {
-                session.completeSet(workoutId, set, weightKg, reps, set.type, now)
-            }
+        LiftsIo.write({ session.completeSet(workoutId, set, weightKg, reps, set.type, now) }) { completion ->
             _uiState.update {
                 it.copy(
                     restEndMillis = completion.restEndMillis,
@@ -275,25 +274,18 @@ class ActiveWorkoutViewModel(
     fun addSet() {
         val state = _uiState.value
         val block = state.exercises.getOrNull(state.currentIndex) ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            writeMutex.withLock { session.addSet(state.workoutId, block.slot.id) }
-            refresh()
-        }
+        LiftsIo.write({ session.addSet(state.workoutId, block.slot.id) }) { refresh() }
     }
 
     /** Result of the exercise picker: append the exercise and jump to it. */
     fun addExercise(exerciseId: String) {
         val workoutId = resolvedWorkoutId ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            writeMutex.withLock { session.addExercise(workoutId, exerciseId) }
-            refresh(focusLastExercise = true)
-        }
+        LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { refresh(focusLastExercise = true) }
     }
 
     fun finish() {
         val workoutId = resolvedWorkoutId ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            writeMutex.withLock { session.finish(workoutId) }
+        LiftsIo.write({ session.finish(workoutId) }) {
             _uiState.update {
                 it.copy(pendingCompleteWorkoutId = workoutId, restEndMillis = null, restTotalSec = 0)
             }
@@ -342,10 +334,9 @@ class ActiveWorkoutViewModel(
         return changed
     }
 
+    /** Saves [set] on the app-wide write queue, so pressing Back right after a tap can't drop it. */
     private fun persistSet(set: SetEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
-            writeMutex.withLock { session.updateSet(set) }
-        }
+        LiftsIo.write { session.updateSet(set) }
     }
 
     private fun nextType(type: String): String = when (type) {
@@ -387,8 +378,7 @@ class ActiveWorkoutViewModel(
                 previous = session.previousPerformance(slot.exerciseId),
             )
         }
-        priorHistoryByExercise = slots.map { it.exerciseId }.distinct()
-            .associateWith { session.priorHistoryForExercise(it, workoutId) }
+        priorHistoryByExercise = session.priorHistory(slots.map { it.exerciseId }.distinct(), workoutId)
         val prIds = prSetIds(slots, sets, priorHistoryByExercise)
         val restState = session.restStateSnapshot()
         _uiState.update { state ->
@@ -574,7 +564,10 @@ class ActiveWorkoutScreen(
                                         pr = set.id in uiState.prSetIds,
                                     ),
                                     onRowClick = { viewModel.onRowTapped(set.id) },
-                                    onPreviousClick = previous?.let { { viewModel.autofill(set.id) } },
+                                    onMarkerClick = { viewModel.onMarkerTapped(set.id) },
+                                    onPreviousClick = previous
+                                        ?.takeIf { set.completedAt == null }
+                                        ?.let { { viewModel.autofill(set.id) } },
                                     onCheckToggle = { viewModel.toggleComplete(set.id) },
                                 )
                             }

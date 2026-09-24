@@ -32,8 +32,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
-import com.tczerwien.lifts.analytics.epleyE1RmKg
-import com.tczerwien.lifts.analytics.isPr
+import com.tczerwien.lifts.analytics.chronologicalPrSetIds
+import com.tczerwien.lifts.analytics.exerciseRecords
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
@@ -89,7 +89,8 @@ class ExerciseDetailViewModel(
 
     data class Stat(val label: String, val value: String, val dateLabel: String)
 
-    data class RepMax(val reps: Int, val valueLabel: String?)
+    /** [estimated] values are predicted from the best e1RM (no set of that many reps yet). */
+    data class RepMax(val reps: Int, val valueLabel: String?, val estimated: Boolean = false)
 
     data class Records(val stats: List<Stat>, val repMaxes: List<RepMax>)
 
@@ -174,15 +175,9 @@ class ExerciseDetailViewModel(
             }
         }
 
-        // PR flags computed chronologically: a set is starred when it beat all sets before it.
-        val chronological = perWorkout.flatMap { it.sets }
-            .sortedWith(compareBy({ it.completedAt }, { it.id }))
-        val prSetIds = HashSet<Long>()
-        val prior = mutableListOf<SetEntity>()
-        for (set in chronological) {
-            if (isPr(set, prior)) prSetIds.add(set.id)
-            prior.add(set)
-        }
+        // A set is starred when it beat every set completed before it (shared records engine).
+        val allSets = perWorkout.flatMap { it.sets }
+        val prSetIds = chronologicalPrSetIds(allSets)
 
         val history = perWorkout.map { entry ->
             HistoryRow(
@@ -197,7 +192,7 @@ class ExerciseDetailViewModel(
             pinnedNote = exercise?.pinnedNote,
             instructions = exercise?.instructions ?: emptyList(),
             history = history,
-            records = computeRecords(chronological, unit),
+            records = recordsFor(allSets, unit),
             loaded = true,
         )
     }
@@ -211,76 +206,40 @@ class ExerciseDetailViewModel(
         )
     }
 
-    /**
-     * Records over completed non-warmup weighted sets. [chronological] is ascending by
-     * completion time, so strict `>` comparisons keep the first achiever on ties
-     * (same convention as analytics.computePrs).
-     */
-    private fun computeRecords(chronological: List<SetEntity>, unit: WeightUnit): Records? {
-        val working = chronological.filter { it.type != SET_TYPE_WARMUP && it.weightKg != null }
-        if (working.isEmpty()) return null
-
-        var maxSet: SetEntity? = null
-        var bestE1RmSet: SetEntity? = null
-        var bestE1Rm = 0.0
-        var bestVolumeSet: SetEntity? = null
-        var bestVolume = 0.0
-        for (set in working) {
-            val weight = set.weightKg ?: continue
-            val currentMax = maxSet
-            if (currentMax == null || weight > (currentMax.weightKg ?: 0.0)) maxSet = set
-            val e1Rm = set.reps?.let { epleyE1RmKg(weight, it) }
-            if (e1Rm != null && (bestE1RmSet == null || e1Rm > bestE1Rm)) {
-                bestE1Rm = e1Rm
-                bestE1RmSet = set
-            }
-            val volume = set.reps?.let { weight * it }
-            if (volume != null && (bestVolumeSet == null || volume > bestVolume)) {
-                bestVolume = volume
-                bestVolumeSet = set
-            }
-        }
-
+    /** The Records tab, formatted from the shared records engine. */
+    private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit): Records? {
+        val records = exerciseRecords(sets, REP_MAX_TARGETS) ?: return null
+        fun weightLabel(kg: Double) = "${Format.weight(kg, unit)} ${unit.suffix}"
         val stats = buildList {
-            maxSet?.let { set ->
-                val weightLabel = "${Format.weight(set.weightKg ?: 0.0, unit)} ${unit.suffix}"
+            records.maxWeightSet?.let { set ->
+                val label = weightLabel(set.weightKg ?: 0.0)
+                add(Stat("Max Weight", set.reps?.let { "$label × $it" } ?: label, Format.dateWithYear(set.completedAt ?: 0L)))
+            }
+            val bestE1Rm = records.bestE1RmKg
+            val bestE1RmSet = records.bestE1RmSet
+            if (bestE1Rm != null && bestE1RmSet != null) {
+                add(Stat("Best e1RM", weightLabel(bestE1Rm), Format.dateWithYear(bestE1RmSet.completedAt ?: 0L)))
+            }
+            records.bestVolumeSet?.let { set ->
                 add(
                     Stat(
-                        label = "Max Weight",
-                        value = set.reps?.let { "$weightLabel × $it" } ?: weightLabel,
-                        dateLabel = Format.dateWithYear(set.completedAt ?: 0L),
+                        "Best Volume Set",
+                        Format.setSummary(set.weightKg ?: 0.0, set.reps ?: 0, unit),
+                        Format.dateWithYear(set.completedAt ?: 0L),
                     ),
                 )
             }
-            bestE1RmSet?.let { set ->
-                add(
-                    Stat(
-                        label = "Best e1RM",
-                        value = "${Format.weight(bestE1Rm, unit)} ${unit.suffix}",
-                        dateLabel = Format.dateWithYear(set.completedAt ?: 0L),
-                    ),
-                )
-            }
-            bestVolumeSet?.let { set ->
-                add(
-                    Stat(
-                        label = "Best Volume Set",
-                        value = Format.setSummary(set.weightKg ?: 0.0, set.reps ?: 0, unit),
-                        dateLabel = Format.dateWithYear(set.completedAt ?: 0L),
-                    ),
-                )
+            records.maxRepsSet?.let { set ->
+                add(Stat("Max Reps", "${set.reps ?: 0}", Format.dateWithYear(set.completedAt ?: 0L)))
             }
         }
-
-        val repMaxes = REP_MAX_TARGETS.map { target ->
-            val best = working.filter { it.reps == target }
-                .maxByOrNull { it.weightKg ?: 0.0 }
+        val repMaxes = records.repMaxes.map { repMax ->
             RepMax(
-                reps = target,
-                valueLabel = best?.let { "${Format.weight(it.weightKg ?: 0.0, unit)} ${unit.suffix}" },
+                reps = repMax.reps,
+                valueLabel = repMax.weightKg?.let { weightLabel(it) + if (repMax.estimated) " est." else "" },
+                estimated = repMax.estimated,
             )
         }
-
         return Records(stats = stats, repMaxes = repMaxes)
     }
 
@@ -481,7 +440,7 @@ class ExerciseDetailScreen(
                             text = repMax.valueLabel ?: "—",
                             variant = LightTextVariant.Copy,
                             monospace = true,
-                            lighten = repMax.valueLabel == null,
+                            lighten = repMax.valueLabel == null || repMax.estimated,
                             maxLines = 1,
                         )
                     },

@@ -13,7 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
-import com.tczerwien.lifts.analytics.isPr
+import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
@@ -142,38 +142,11 @@ class WorkoutDetailViewModel(
     }
 
     /**
-     * Ids of sets (across ALL workouts) that were PRs when logged, for the exercises in
-     * [exerciseIds] — the same chronological walk the export layer uses (buildSnapshot):
-     * per exercise, completed sets in completion order, each checked against everything
-     * before it via [isPr]. Loads history with one slots+sets query pair per workout that
-     * contains a relevant exercise; fine for a read-only detail screen.
+     * Ids of sets (across all workouts) that were PRs when logged, for the exercises in
+     * [exerciseIds]: the shared records engine over one history query.
      */
-    private fun computePrSetIds(exerciseIds: Set<String>): Set<Long> {
-        if (exerciseIds.isEmpty()) return emptySet()
-        val setsByExercise = HashMap<String, MutableList<SetEntity>>()
-        for (workout in repository.listWorkouts()) {
-            val slots = repository.exercisesForWorkout(workout.id)
-            if (slots.none { it.exerciseId in exerciseIds }) continue
-            val slotById = slots.associateBy { it.id }
-            for (set in repository.setsForWorkout(workout.id)) {
-                if (set.completedAt == null) continue
-                val exerciseId = slotById[set.workoutExerciseId]?.exerciseId ?: continue
-                if (exerciseId in exerciseIds) {
-                    setsByExercise.getOrPut(exerciseId) { mutableListOf() }.add(set)
-                }
-            }
-        }
-        val prIds = HashSet<Long>()
-        for (sets in setsByExercise.values) {
-            val ordered = sets.sortedWith(compareBy({ it.completedAt }, { it.id }))
-            val history = mutableListOf<SetEntity>()
-            for (set in ordered) {
-                if (isPr(set, history)) prIds.add(set.id)
-                history.add(set)
-            }
-        }
-        return prIds
-    }
+    private fun computePrSetIds(exerciseIds: Set<String>): Set<Long> =
+        chronologicalPrSetIds(repository.completedSetsByExercise(exerciseIds))
 }
 
 /**

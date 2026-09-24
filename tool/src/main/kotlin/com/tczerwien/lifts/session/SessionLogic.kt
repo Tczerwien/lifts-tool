@@ -1,6 +1,6 @@
 package com.tczerwien.lifts.session
 
-import com.tczerwien.lifts.analytics.isPr
+import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 
@@ -59,10 +59,11 @@ fun totalVolumeKg(sets: List<SetEntity>): Double =
         }
 
 /**
- * Ids of sets in [workoutSets] that were PRs at the moment they were completed, replaying
- * completions in chronological order on top of [priorHistory] (sets of the same exercises
- * from other workouts, keyed by exerciseId). Warm-ups never flag; [isPr] also handles the
- * first-ever working set of an exercise (which counts as a PR).
+ * Ids of sets in [workoutSets] that were PRs at the moment they were completed. Each exercise's
+ * completed sets from this workout and from [priorHistory] (sets of the same exercises from other
+ * workouts, keyed by exerciseId) are replayed together in completion order, so a set is only
+ * compared with sets completed before it. Later or abandoned workouts in [priorHistory] can't
+ * steal a star. Rules are those of the shared records engine.
  */
 fun prSetIds(
     slots: List<WorkoutExerciseEntity>,
@@ -70,20 +71,16 @@ fun prSetIds(
     priorHistory: Map<String, List<SetEntity>>,
 ): Set<Long> {
     val slotById = slots.associateBy { it.id }
-    val runningHistory = HashMap<String, MutableList<SetEntity>>()
-    for ((exerciseId, sets) in priorHistory) {
-        runningHistory[exerciseId] = sets.toMutableList()
-    }
-    val result = mutableSetOf<Long>()
-    val completed = workoutSets.filter { it.completedAt != null }
-        .sortedWith(compareBy({ it.completedAt }, { it.id }))
-    for (set in completed) {
+    val workoutSetIds = workoutSets.mapTo(HashSet()) { it.id }
+    val byExercise = HashMap<String, MutableList<SetEntity>>()
+    for (set in workoutSets) {
         val exerciseId = slotById[set.workoutExerciseId]?.exerciseId ?: continue
-        val history = runningHistory.getOrPut(exerciseId) { mutableListOf() }
-        if (isPr(set, history)) result.add(set.id)
-        history.add(set)
+        byExercise.getOrPut(exerciseId) { mutableListOf() }.add(set)
     }
-    return result
+    for ((exerciseId, sets) in byExercise) {
+        sets += priorHistory[exerciseId].orEmpty().filter { it.id !in workoutSetIds }
+    }
+    return chronologicalPrSetIds(byExercise).filterTo(HashSet()) { it in workoutSetIds }
 }
 
 /** One "New Records" line: the current record-holding set of one exercise. */

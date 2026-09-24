@@ -23,11 +23,13 @@ import java.time.temporal.ChronoUnit
 private const val SET_TYPE_WARMUP = "warmup"
 
 /**
- * Epley estimated one-rep max: `weightKg * (1 + reps / 30.0)`.
- * Valid for 1..12 reps (estimates degrade quickly beyond that); returns null otherwise.
+ * Epley estimated one-rep max: `weightKg * (1 + reps / 30.0)`. A single is its own 1RM (the
+ * formula would inflate it by 3.3%). Valid for 1..12 reps (estimates degrade quickly beyond
+ * that); returns null otherwise.
  */
 fun epleyE1RmKg(weightKg: Double, reps: Int): Double? {
     if (reps !in 1..12) return null
+    if (reps == 1) return weightKg
     return weightKg * (1 + reps / 30.0)
 }
 
@@ -51,10 +53,12 @@ data class ExercisePr(
 )
 
 /**
- * Computes one [ExercisePr] per exercise that has at least one completed, non-warmup,
- * weighted set. Sets are joined through [workoutExercises] and must belong to a workout
- * present in [workouts]. Result order follows the [exercises] list; any exercise ids
- * referenced by sets but missing from [exercises] are appended sorted by id.
+ * Computes one [ExercisePr] per exercise that has at least one record-eligible weighted set
+ * (see [recordEligible]: completed, not a warm-up, at least one rep). Sets are joined
+ * through [workoutExercises] and must belong to a workout present in [workouts]. Result order
+ * follows the [exercises] list; any exercise ids referenced by sets but missing from
+ * [exercises] are appended sorted by id. Weights within [WEIGHT_TOLERANCE_KG] tie, and ties keep
+ * the first set to reach a value.
  */
 fun computePrs(
     exercises: List<ExerciseEntity>,
@@ -67,7 +71,7 @@ fun computePrs(
 
     val setsByExercise = HashMap<String, MutableList<SetEntity>>()
     for (set in sets) {
-        if (set.completedAt == null || set.type == SET_TYPE_WARMUP) continue
+        if (!recordEligible(set) || (set.weightKg ?: 0.0) <= 0.0) continue
         val slot = weById[set.workoutExerciseId] ?: continue
         setsByExercise.getOrPut(slot.exerciseId) { mutableListOf() }.add(set)
     }
@@ -90,14 +94,14 @@ fun computePrs(
         for (set in ordered) {
             val weight = set.weightKg ?: continue
             val currentMax = maxWeight
-            if (currentMax == null || weight > currentMax) {
+            if (currentMax == null || weight > currentMax + WEIGHT_TOLERANCE_KG) {
                 maxWeight = weight
                 maxWeightDate = set.completedAt ?: 0L
                 maxWeightSet = set
             }
             val e1Rm = set.reps?.let { epleyE1RmKg(weight, it) }
             val currentBest = bestE1Rm
-            if (e1Rm != null && (currentBest == null || e1Rm > currentBest)) {
+            if (e1Rm != null && (currentBest == null || e1Rm > currentBest + WEIGHT_TOLERANCE_KG)) {
                 bestE1Rm = e1Rm
                 bestE1RmDate = set.completedAt
                 bestE1RmSet = set
@@ -234,31 +238,6 @@ fun bodyweightTrend(
         weeklyAvgKg = weeklyAvg,
         rateKgPerWeek = rate,
     )
-}
-
-/**
- * Whether [newSet] would be a personal record against [history] (all prior sets of the
- * same exercise; the function filters history to completed, non-warmup, weighted sets,
- * so callers may pass raw lists — but [history] must not contain [newSet] itself).
- *
- * A set is a PR when it is heavier than every historical set (at any rep count), or when
- * its Epley e1RM beats the best historical e1RM. The first-ever weighted working set of
- * an exercise counts as a PR. Warm-up or weightless [newSet] never does.
- * [newSet] does not need to be completed yet (the UI asks before logging).
- */
-fun isPr(newSet: SetEntity, history: List<SetEntity>): Boolean {
-    if (newSet.type == SET_TYPE_WARMUP) return false
-    val weight = newSet.weightKg ?: return false
-    val prior = history.filter {
-        it.completedAt != null && it.type != SET_TYPE_WARMUP && it.weightKg != null
-    }
-    val maxWeight = prior.maxOfOrNull { it.weightKg!! } ?: return true
-    if (weight > maxWeight) return true
-    val e1Rm = newSet.reps?.let { epleyE1RmKg(weight, it) } ?: return false
-    val bestE1Rm = prior
-        .mapNotNull { set -> set.reps?.let { epleyE1RmKg(set.weightKg!!, it) } }
-        .maxOrNull() ?: return true
-    return e1Rm > bestE1Rm
 }
 
 /**

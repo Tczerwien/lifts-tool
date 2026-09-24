@@ -34,7 +34,7 @@ class AnalyticsTest {
     fun epleyKnownValues() {
         assertEquals(116.66666666666667, epleyE1RmKg(100.0, 5)!!, 1e-9)
         assertEquals(140.0, epleyE1RmKg(100.0, 12)!!, 1e-9)
-        assertEquals(103.33333333333333, epleyE1RmKg(100.0, 1)!!, 1e-9)
+        assertEquals(100.0, epleyE1RmKg(100.0, 1)!!, 1e-9, "a single is its own 1RM")
         assertEquals(119.58333333333333, epleyE1RmKg(102.5, 5)!!, 1e-9)
     }
 
