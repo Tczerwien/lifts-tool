@@ -24,6 +24,13 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY startedAt DESC LIMIT :limit")
     fun listRecent(limit: Int): List<WorkoutEntity>
 
+    /** Workouts still in progress (endedAt null), newest first. */
+    @Query("SELECT * FROM workouts WHERE endedAt IS NULL ORDER BY startedAt DESC, id DESC")
+    fun listOpen(): List<WorkoutEntity>
+
+    @Query("DELETE FROM workouts WHERE id = :id")
+    fun delete(id: Long): Int
+
     @Insert
     fun insertWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Long
 
@@ -32,6 +39,36 @@ interface WorkoutDao {
 
     @Update
     fun updateSet(set: SetEntity): Int
+
+    @Update
+    fun updateWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Int
+
+    @Query("SELECT * FROM sets WHERE id = :id")
+    fun setById(id: Long): SetEntity?
+
+    @Query("SELECT * FROM workout_exercises WHERE id = :id")
+    fun workoutExerciseById(id: Long): WorkoutExerciseEntity?
+
+    @Query("SELECT * FROM sets WHERE workoutExerciseId = :workoutExerciseId ORDER BY position, id")
+    fun setsForWorkoutExercise(workoutExerciseId: Long): List<SetEntity>
+
+    @Query("DELETE FROM sets WHERE id = :id")
+    fun deleteSet(id: Long): Int
+
+    @Query("DELETE FROM sets WHERE workoutExerciseId = :workoutExerciseId")
+    fun deleteSetsForWorkoutExercise(workoutExerciseId: Long): Int
+
+    @Query("DELETE FROM workout_exercises WHERE id = :id")
+    fun deleteWorkoutExercise(id: Long): Int
+
+    @Query(
+        "DELETE FROM sets WHERE workoutExerciseId IN " +
+            "(SELECT id FROM workout_exercises WHERE workoutId = :workoutId)"
+    )
+    fun deleteSetsForWorkout(workoutId: Long): Int
+
+    @Query("DELETE FROM workout_exercises WHERE workoutId = :workoutId")
+    fun deleteExercisesForWorkout(workoutId: Long): Int
 
     @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId ORDER BY position")
     fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity>

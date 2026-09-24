@@ -53,12 +53,58 @@ class LiftsRepository private constructor(
 
     fun listRecentWorkouts(limit: Int): List<WorkoutEntity> = db.workoutDao.listRecent(limit)
 
+    /** Workouts still in progress, newest first. Normally at most one; see HomeViewModel's cleanup. */
+    fun listOpenWorkouts(): List<WorkoutEntity> = db.workoutDao.listOpen()
+
+    /**
+     * Deletes the workout with all of its exercise slots and sets, in one transaction. The rows
+     * are removed child-first, so nothing is left behind whether or not SQLite's foreign-key
+     * cascade is switched on.
+     */
+    fun deleteWorkout(id: Long): Boolean = inTransaction {
+        db.workoutDao.deleteSetsForWorkout(id)
+        db.workoutDao.deleteExercisesForWorkout(id)
+        db.workoutDao.delete(id) > 0
+    }
+
+    /** Clears endedAt, so a workout finished by mistake is in progress again. */
+    fun reopenWorkout(id: Long): Boolean = inTransaction {
+        val workout = db.workoutDao.byId(id) ?: return@inTransaction false
+        workout.endedAt == null || db.workoutDao.update(workout.copy(endedAt = null)) > 0
+    }
+
     fun addWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Long =
         db.workoutDao.insertWorkoutExercise(workoutExercise)
 
     fun addSet(set: SetEntity): Long = db.workoutDao.insertSet(set)
 
     fun updateSet(set: SetEntity): Boolean = db.workoutDao.updateSet(set) > 0
+
+    /** Deletes one set and renumbers the rest of its exercise slot 0..n-1, in one transaction. */
+    fun deleteSet(id: Long): Boolean = inTransaction {
+        val set = db.workoutDao.setById(id) ?: return@inTransaction false
+        db.workoutDao.deleteSet(id)
+        db.workoutDao.setsForWorkoutExercise(set.workoutExerciseId).forEachIndexed { position, remaining ->
+            if (remaining.position != position) db.workoutDao.updateSet(remaining.copy(position = position))
+        }
+        true
+    }
+
+    /**
+     * Deletes one exercise slot with its sets and renumbers the workout's remaining slots 0..n-1,
+     * in one transaction.
+     */
+    fun deleteSlot(id: Long): Boolean = inTransaction {
+        val slot = db.workoutDao.workoutExerciseById(id) ?: return@inTransaction false
+        db.workoutDao.deleteSetsForWorkoutExercise(id)
+        db.workoutDao.deleteWorkoutExercise(id)
+        db.workoutDao.exercisesForWorkout(slot.workoutId).forEachIndexed { position, remaining ->
+            if (remaining.position != position) {
+                db.workoutDao.updateWorkoutExercise(remaining.copy(position = position))
+            }
+        }
+        true
+    }
 
     fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
         db.workoutDao.exercisesForWorkout(workoutId)
