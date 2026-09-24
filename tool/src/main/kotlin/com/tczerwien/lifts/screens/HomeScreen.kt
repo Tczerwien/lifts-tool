@@ -71,6 +71,11 @@ class HomeViewModel(
         val startChoice: StartChoice? = null,
         /** One-shot: Content opens this workout straight away (a cold start mid-workout). */
         val autoResumeWorkoutId: Long? = null,
+        /**
+         * Loaded since Home last showed. Until then [unfinished] may be stale (Back from a workout
+         * started while none was open), so a Start tap could open a second workout; it is ignored.
+         */
+        val ready: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -83,22 +88,40 @@ class HomeViewModel(
     @Volatile
     private var firstLoad = true
 
+    @Volatile
+    private var showing = false
+
     /**
      * Loads on every show, on the write lane: that orders it after anything Active Workout queued on
      * its way out (such as discarding an untouched workout), and the cleanup below writes too.
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        showing = true
+        _uiState.update { it.copy(ready = false) }
         LiftsIo.write({ load() }) { loaded ->
-            // A Start row tapped while this was loading keeps its choice, as long as a workout is open.
             _uiState.update { current ->
-                loaded.copy(startChoice = current.startChoice.takeIf { loaded.unfinished != null })
+                loaded.copy(
+                    ready = true,
+                    startChoice = current.startChoice.takeIf { loaded.unfinished != null },
+                    // A cold start the lifter already left Home from (History, say) stays put.
+                    autoResumeWorkoutId = loaded.autoResumeWorkoutId.takeIf { showing },
+                )
             }
         }
     }
 
-    /** A Start row: starts at once, unless a workout is open, when it offers Resume or Discard and start. */
+    override fun onScreenHide(screen: SimpleLightScreen<Unit>) {
+        showing = false
+        _uiState.update { it.copy(autoResumeWorkoutId = null) }
+    }
+
+    /**
+     * A Start row: starts at once (true), unless a workout is open, when it offers Resume or Discard
+     * and start. Ignored until Home has loaded, so a quick tap can't miss the open workout.
+     */
     fun onStartTapped(templateId: Long?): Boolean {
         val state = _uiState.value
+        if (!state.ready) return false
         if (state.unfinished == null) return true
         discardAndStartArm.disarm()
         val choice = StartChoice(templateId).takeIf { it != state.startChoice }
