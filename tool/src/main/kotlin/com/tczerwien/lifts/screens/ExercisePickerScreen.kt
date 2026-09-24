@@ -84,7 +84,10 @@ class ExercisePickerViewModel(
         viewModelScope.launch(Dispatchers.IO) { refresh() }
     }
 
-    /** Search editor consumes the system back gesture. */
+    /**
+     * Back from the search editor closes it. Only the in-app back button reaches this: the SDK routes the
+     * system Back key straight to the activity.
+     */
     override fun onBackPressed(): Boolean {
         if (!_uiState.value.searchOpen) return false
         cancelSearch()

@@ -88,7 +88,10 @@ class CustomExerciseViewModel(
         viewModelScope.launch(Dispatchers.IO) { loadOptions() }
     }
 
-    /** Any editor/picker mode consumes the system back gesture and returns to the form. */
+    /**
+     * Back from any editor or picker mode returns to the form. Only the in-app back button reaches this: the SDK routes the
+     * system Back key straight to the activity.
+     */
     override fun onBackPressed(): Boolean {
         if (_uiState.value.mode == Mode.FORM) return false
         closeMode()

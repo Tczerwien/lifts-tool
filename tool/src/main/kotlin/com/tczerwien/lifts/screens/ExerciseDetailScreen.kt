@@ -116,7 +116,10 @@ class ExerciseDetailViewModel(
         viewModelScope.launch(Dispatchers.IO) { refresh() }
     }
 
-    /** Note editor consumes the system back gesture. */
+    /**
+     * Back from the note editor closes it. Only the in-app back button reaches this: the SDK routes the
+     * system Back key straight to the activity.
+     */
     override fun onBackPressed(): Boolean {
         if (!_uiState.value.noteOpen) return false
         closeNoteEditor()
