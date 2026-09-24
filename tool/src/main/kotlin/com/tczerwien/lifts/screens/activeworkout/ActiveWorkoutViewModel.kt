@@ -1,0 +1,397 @@
+package com.tczerwien.lifts.screens.activeworkout
+
+import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.data.ExerciseEntity
+import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.SET_TYPE_FAILURE
+import com.tczerwien.lifts.session.SET_TYPE_NORMAL
+import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.nextPendingSet
+import com.tczerwien.lifts.session.prSetIds
+import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
+import com.thelightphone.sdk.LightViewModel
+import com.thelightphone.sdk.SimpleLightScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+class ActiveWorkoutViewModel(
+    private val repository: LiftsRepository,
+    private val session: ActiveSession,
+    private val settingsStore: SettingsStore,
+    private val resumeWorkoutId: Long?,
+    private val templateId: Long?,
+) : LightViewModel<Unit>() {
+
+    /** One exercise of the session with its sets and previous-per-index lookup. */
+    data class ExerciseBlock(
+        val slot: WorkoutExerciseEntity,
+        val name: String,
+        val baseName: String,
+        val detailLine: String,
+        val cue: String?,
+        val sets: List<SetEntity>,
+        val previous: List<SetEntity>,
+    )
+
+    data class UiState(
+        val loaded: Boolean = false,
+        val workoutId: Long = 0,
+        val workoutName: String = "",
+        val startedAt: Long = 0,
+        val exercises: List<ExerciseBlock> = emptyList(),
+        val currentIndex: Int = 0,
+        val activeSetId: Long? = null,
+        val prSetIds: Set<Long> = emptySet(),
+        val restEndMillis: Long? = null,
+        val restTotalSec: Int = 0,
+        val units: WeightUnit = SettingsStore.DEFAULT_UNITS,
+        val defaultRestSec: Int = SettingsStore.DEFAULT_REST_SEC_VALUE,
+        val warmupRestSec: Int = SettingsStore.DEFAULT_WARMUP_REST_SEC_VALUE,
+        /** Finish flow: non-null asks Content to navigate to Workout Complete once. */
+        val pendingCompleteWorkoutId: Long? = null,
+        /** The workout ended (returned from Complete): Content leaves the screen. */
+        val workoutEnded: Boolean = false,
+    )
+
+    private val _uiState = MutableStateFlow(UiState())
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    @Volatile
+    private var resolvedWorkoutId: Long? = null
+
+    /** Prior sets per exercise from other workouts; cached per refresh for PR replay. */
+    @Volatile
+    private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            resolvedWorkoutId = when {
+                resumeWorkoutId != null -> resumeWorkoutId
+                templateId != null -> session.startFromTemplate(templateId)
+                else -> session.startEmpty()
+            }
+            refresh()
+        }
+    }
+
+    override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        viewModelScope.launch(Dispatchers.IO) { refresh() }
+    }
+
+    // --- Row interactions ---
+
+    /** A tap on a row targets it with the steppers; tapping the active row again does nothing. */
+    fun onRowTapped(setId: Long) {
+        if (_uiState.value.activeSetId == setId) return
+        _uiState.update { it.copy(activeSetId = setId) }
+    }
+
+    /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
+    fun onMarkerTapped(setId: Long) {
+        val changed = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
+        _uiState.update { it.copy(activeSetId = setId) }
+        persistSet(changed)
+    }
+
+    /**
+     * Tap on PREVIOUS: copy last session's exact weight/reps into the row and target it. A logged
+     * set is left alone, so a stray tap can't overwrite what was lifted.
+     */
+    fun autofill(setId: Long) {
+        val located = locate(setId) ?: return
+        if (located.block.sets[located.index].completedAt != null) return
+        val previous = located.block.previous.getOrNull(located.index) ?: return
+        if (previous.weightKg == null && previous.reps == null) return
+        val changed = applySetChange(setId) {
+            it.copy(weightKg = previous.weightKg ?: it.weightKg, reps = previous.reps ?: it.reps)
+        } ?: return
+        _uiState.update { it.copy(activeSetId = setId) }
+        persistSet(changed)
+    }
+
+    /**
+     * Checkbox toggle. Completing autofills missing values from previous performance
+     * (a row with nothing to log is ignored), advances the active row, and starts rest
+     * per the completion result. Uncompleting keeps the logged values.
+     */
+    fun toggleComplete(setId: Long) {
+        val located = locate(setId) ?: return
+        val set = located.block.sets[located.index]
+        if (set.completedAt != null) {
+            applySetChange(setId) { it.copy(completedAt = null) }
+            LiftsIo.write { session.uncompleteSet(set) }
+            return
+        }
+        val previous = located.block.previous.getOrNull(located.index)
+        val weightKg = set.weightKg ?: previous?.weightKg
+        val reps = set.reps ?: previous?.reps
+        if (weightKg == null && reps == null) return
+        val now = System.currentTimeMillis()
+        applySetChange(setId) { it.copy(weightKg = weightKg, reps = reps, completedAt = now) }
+        _uiState.update { state ->
+            val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
+            state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
+        }
+        val workoutId = _uiState.value.workoutId
+        LiftsIo.write({ session.completeSet(workoutId, set, weightKg, reps, set.type, now) }) { completion ->
+            _uiState.update {
+                it.copy(
+                    restEndMillis = completion.restEndMillis,
+                    restTotalSec = completion.restDurationSec,
+                )
+            }
+        }
+    }
+
+    // --- Steppers (operate on the active row) ---
+
+    fun stepWeight(direction: Int) {
+        val state = _uiState.value
+        val set = activeSet(state) ?: return
+        val base = currentWeightDisplay(state, set)
+        val next = Format.roundWeight(
+            (base + direction * state.units.weightStep).coerceAtLeast(0.0),
+        )
+        val changed = applySetChange(set.id) {
+            it.copy(weightKg = Format.displayToKg(next, state.units))
+        } ?: return
+        persistSet(changed)
+    }
+
+    fun stepReps(direction: Int) {
+        val state = _uiState.value
+        val set = activeSet(state) ?: return
+        val next = (currentReps(state, set) + direction).coerceAtLeast(0)
+        val changed = applySetChange(set.id) { it.copy(reps = next) } ?: return
+        persistSet(changed)
+    }
+
+    fun weightDecrementEnabled(state: UiState): Boolean {
+        val set = activeSet(state) ?: return false
+        return currentWeightDisplay(state, set) > 0.0
+    }
+
+    fun repsDecrementEnabled(state: UiState): Boolean {
+        val set = activeSet(state) ?: return false
+        return currentReps(state, set) > 0
+    }
+
+    fun activeSet(state: UiState): SetEntity? {
+        val id = state.activeSetId ?: return null
+        return state.exercises.getOrNull(state.currentIndex)?.sets?.firstOrNull { it.id == id }
+    }
+
+    /** Active row's display weight; empty rows seed from this session's earlier rows, else previous performance. */
+    private fun currentWeightDisplay(state: UiState, set: SetEntity): Double {
+        set.weightKg?.let { return Format.roundWeight(Format.kgToDisplay(it, state.units)) }
+        val located = locate(set.id) ?: return 0.0
+        val seedKg = located.block.sets.take(located.index).lastOrNull { it.weightKg != null }?.weightKg
+            ?: located.block.previous.getOrNull(located.index)?.weightKg
+        return seedKg?.let { Format.roundWeight(Format.kgToDisplay(it, state.units)) } ?: 0.0
+    }
+
+    private fun currentReps(state: UiState, set: SetEntity): Int {
+        set.reps?.let { return it }
+        val located = locate(set.id) ?: return 0
+        return located.block.sets.take(located.index).lastOrNull { it.reps != null }?.reps
+            ?: located.block.previous.getOrNull(located.index)?.reps
+            ?: 0
+    }
+
+    // --- Structure ---
+
+    /** Collapsed next-exercise row: advance (wrapping), targeting its first pending set. */
+    fun advanceExercise() {
+        _uiState.update { state ->
+            if (state.exercises.size < 2) {
+                state
+            } else {
+                val next = (state.currentIndex + 1) % state.exercises.size
+                state.copy(
+                    currentIndex = next,
+                    activeSetId = state.exercises[next].sets.firstOrNull { it.completedAt == null }?.id,
+                )
+            }
+        }
+    }
+
+    fun addSet() {
+        val state = _uiState.value
+        val block = state.exercises.getOrNull(state.currentIndex) ?: return
+        LiftsIo.write({ session.addSet(state.workoutId, block.slot.id) }) { refresh() }
+    }
+
+    /** Result of the exercise picker: append the exercise and jump to it. */
+    fun addExercise(exerciseId: String) {
+        val workoutId = resolvedWorkoutId ?: return
+        LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { refresh(focusLastExercise = true) }
+    }
+
+    fun finish() {
+        val workoutId = resolvedWorkoutId ?: return
+        LiftsIo.write({ session.finish(workoutId) }) {
+            _uiState.update {
+                it.copy(pendingCompleteWorkoutId = workoutId, restEndMillis = null, restTotalSec = 0)
+            }
+        }
+    }
+
+    fun consumePendingComplete() {
+        _uiState.update { it.copy(pendingCompleteWorkoutId = null) }
+    }
+
+    // --- Internals ---
+
+    private data class LocatedSet(val block: ExerciseBlock, val index: Int)
+
+    private fun locate(setId: Long): LocatedSet? {
+        for (block in _uiState.value.exercises) {
+            val index = block.sets.indexOfFirst { it.id == setId }
+            if (index >= 0) return LocatedSet(block, index)
+        }
+        return null
+    }
+
+    /** Applies [transform] to one set in local state and re-replays PR flags; returns the new entity. */
+    private fun applySetChange(setId: Long, transform: (SetEntity) -> SetEntity): SetEntity? {
+        var changed: SetEntity? = null
+        _uiState.update { state ->
+            val exercises = state.exercises.map { block ->
+                val index = block.sets.indexOfFirst { it.id == setId }
+                if (index < 0) {
+                    block
+                } else {
+                    val updated = transform(block.sets[index])
+                    changed = updated
+                    block.copy(sets = block.sets.mapIndexed { i, s -> if (i == index) updated else s })
+                }
+            }
+            state.copy(
+                exercises = exercises,
+                prSetIds = prSetIds(
+                    slots = exercises.map { it.slot },
+                    workoutSets = exercises.flatMap { it.sets },
+                    priorHistory = priorHistoryByExercise,
+                ),
+            )
+        }
+        return changed
+    }
+
+    /** Saves [set] on the app-wide write queue, so pressing Back right after a tap can't drop it. */
+    private fun persistSet(set: SetEntity) {
+        LiftsIo.write { session.updateSet(set) }
+    }
+
+    private fun nextType(type: String): String = when (type) {
+        SET_TYPE_WARMUP -> SET_TYPE_FAILURE
+        SET_TYPE_FAILURE -> SET_TYPE_NORMAL
+        else -> SET_TYPE_WARMUP
+    }
+
+    /** Full reload from the database — call from Dispatchers.IO. */
+    private fun refresh(focusLastExercise: Boolean = false) {
+        val workoutId = resolvedWorkoutId ?: return
+        val workout = repository.workoutById(workoutId) ?: return
+        if (workout.endedAt != null) {
+            // Finished (back from Workout Complete): leave — unless we are the ones
+            // navigating there right now.
+            _uiState.update { state ->
+                if (state.pendingCompleteWorkoutId != null) {
+                    state
+                } else {
+                    state.copy(loaded = true, workoutEnded = true)
+                }
+            }
+            return
+        }
+        val settings = settingsStore.snapshot()
+        val slots = repository.exercisesForWorkout(workoutId)
+        val sets = repository.setsForWorkout(workoutId)
+        val setsBySlot = sets.groupBy { it.workoutExerciseId }
+        val blocks = slots.map { slot ->
+            val exercise = repository.exerciseById(slot.exerciseId)
+            val name = exercise?.name ?: slot.exerciseId
+            ExerciseBlock(
+                slot = slot,
+                name = name,
+                baseName = name.substringBefore(" ("),
+                detailLine = detailLine(exercise),
+                cue = exercise?.pinnedNote?.takeIf { it.isNotBlank() },
+                sets = setsBySlot[slot.id].orEmpty().sortedBy { it.position },
+                previous = session.previousPerformance(slot.exerciseId),
+            )
+        }
+        priorHistoryByExercise = session.priorHistory(slots.map { it.exerciseId }.distinct(), workoutId)
+        val prIds = prSetIds(slots, sets, priorHistoryByExercise)
+        val restState = session.restStateSnapshot()
+        _uiState.update { state ->
+            val lastIndex = (blocks.size - 1).coerceAtLeast(0)
+            val currentIndex = when {
+                focusLastExercise -> lastIndex
+                state.loaded -> state.currentIndex.coerceIn(0, lastIndex)
+                else -> initialExerciseIndex(slots, sets, blocks)
+            }
+            val currentBlock = blocks.getOrNull(currentIndex)
+            val activeSetId = state.activeSetId
+                ?.takeIf { id -> currentBlock?.sets?.any { it.id == id } == true }
+                ?: currentBlock?.sets?.firstOrNull { it.completedAt == null }?.id
+            state.copy(
+                loaded = true,
+                workoutId = workoutId,
+                workoutName = workout.name,
+                startedAt = workout.startedAt,
+                exercises = blocks,
+                currentIndex = currentIndex,
+                activeSetId = activeSetId,
+                prSetIds = prIds,
+                restEndMillis = restState?.endMillis,
+                restTotalSec = restState?.totalSec ?: 0,
+                units = settings.units,
+                defaultRestSec = settings.defaultRestSec,
+                warmupRestSec = settings.warmupRestSec,
+            )
+        }
+    }
+
+    /** On first load (fresh or resumed) open the exercise the lifter is actually on. */
+    private fun initialExerciseIndex(
+        slots: List<WorkoutExerciseEntity>,
+        sets: List<SetEntity>,
+        blocks: List<ExerciseBlock>,
+    ): Int {
+        val next = nextPendingSet(slots, sets) ?: return 0
+        return blocks.indexOfFirst { it.slot.id == next.slot.id }.coerceAtLeast(0)
+    }
+
+    /** "Barbell · Chest — Triceps, Front Delts" from the catalog entity. */
+    private fun detailLine(exercise: ExerciseEntity?): String {
+        exercise ?: return ""
+        val parts = mutableListOf<String>()
+        exercise.equipment?.takeIf { it.isNotBlank() }?.let { parts += titleCase(it) }
+        val muscles = buildString {
+            append(exercise.primaryMuscles.joinToString(", ") { titleCase(it) })
+            if (exercise.secondaryMuscles.isNotEmpty()) {
+                if (isNotEmpty()) append(" — ")
+                append(exercise.secondaryMuscles.joinToString(", ") { titleCase(it) })
+            }
+        }
+        if (muscles.isNotBlank()) parts += muscles
+        return parts.joinToString(" · ")
+    }
+
+    private fun titleCase(value: String): String =
+        value.split(' ').joinToString(" ") { word ->
+            word.replaceFirstChar { it.uppercaseChar() }
+        }
+}
