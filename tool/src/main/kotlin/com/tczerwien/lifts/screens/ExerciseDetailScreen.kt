@@ -37,6 +37,7 @@ import com.tczerwien.lifts.analytics.exerciseRecords
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -143,13 +144,12 @@ class ExerciseDetailViewModel(
     /** Blank input clears the pinned note. */
     fun saveNote(raw: String) {
         _uiState.value = _uiState.value.copy(noteOpen = false)
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId)
             if (exercise != null) {
                 repository.updateExercise(exercise.copy(pinnedNote = raw.trim().takeIf { it.isNotEmpty() }))
             }
-            refresh()
-        }
+        }) { refresh() }
     }
 
     private fun refresh() {

@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -137,7 +138,7 @@ class BarWeightsViewModel(
         val mode = state.mode as? Mode.EditWeight ?: return
         // Close the editor synchronously so a double-tap on ACCEPT cannot insert twice.
         _uiState.update { it.copy(mode = Mode.BarList) }
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write {
             val existing = state.bars.firstOrNull { it.id == mode.barId }
             // A rename alone must not re-round the weight (45 lb would drift through 0.5-unit rounding).
             val weightKg = if (existing != null && !mode.stepped) {
@@ -160,7 +161,7 @@ class BarWeightsViewModel(
         val state = _uiState.value
         val barId = (state.mode as? Mode.EditWeight)?.barId ?: return
         _uiState.update { it.copy(mode = Mode.BarList) }
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write {
             repository.deleteBar(barId)
             val bars = repository.listBars()
             _uiState.update { it.copy(bars = bars) }
@@ -274,7 +275,7 @@ class BarWeightsScreen(
                         right = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 LightText(
-                                    text = Format.weight(bar.weightKg, uiState.units),
+                                    text = Format.plate(bar.weightKg, uiState.units),
                                     variant = LightTextVariant.Copy,
                                     monospace = true,
                                     maxLines = 1,
