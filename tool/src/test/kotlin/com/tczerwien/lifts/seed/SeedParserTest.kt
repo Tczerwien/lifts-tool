@@ -51,8 +51,15 @@ class SeedParserTest {
     }
 
     @Test
-    fun allRecordsAreNotCustom() {
-        assertTrue(entities.none { it.isCustom }, "seeded records must have isCustom=false")
+    fun wellKnownIdsStayPinned() {
+        // Workouts store these ids. If a catalog update renamed one, logged history would lose its
+        // exercise, so a change here must come with a data fix.
+        val ids = entities.map { it.id }.toSet()
+        val pinned = listOf(
+            "barbell-bench-press-medium-grip", "barbell-squat", "romanian-deadlift", "pullups",
+            "incline-dumbbell-press", "cable-seated-lateral-raise", "leg-press", "chin-up", "plank",
+        )
+        assertEquals(emptyList(), pinned.filterNot { it in ids })
     }
 
     // --- defaultTrackingType ---
