@@ -66,8 +66,16 @@ class BarWeightsViewModel(
         /** SDK text editor for the name; [barId] null = adding. [session] forces fresh editor state per open. */
         data class EditName(val barId: Long?, val prefill: String, val session: Int) : Mode
 
-        /** Weight stepper; ACCEPT commits, back cancels, TRASH (existing bars) deletes. */
-        data class EditWeight(val barId: Long?, val name: String, val displayWeight: Double) : Mode
+        /**
+         * Weight stepper; ACCEPT commits, back cancels, TRASH (existing bars) deletes. [stepped]
+         * records whether the stepper moved; an untouched edit keeps the stored kg exactly.
+         */
+        data class EditWeight(
+            val barId: Long?,
+            val name: String,
+            val displayWeight: Double,
+            val stepped: Boolean = false,
+        ) : Mode
     }
 
     data class UiState(
@@ -121,7 +129,7 @@ class BarWeightsViewModel(
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
         val next = (mode.displayWeight + delta * state.units.weightStep).coerceAtLeast(0.0)
-        _uiState.update { it.copy(mode = mode.copy(displayWeight = next)) }
+        _uiState.update { it.copy(mode = mode.copy(displayWeight = next, stepped = true)) }
     }
 
     fun save() {
@@ -130,8 +138,13 @@ class BarWeightsViewModel(
         // Close the editor synchronously so a double-tap on ACCEPT cannot insert twice.
         _uiState.update { it.copy(mode = Mode.BarList) }
         viewModelScope.launch(Dispatchers.IO) {
-            val weightKg = Format.displayToKg(mode.displayWeight, state.units)
             val existing = state.bars.firstOrNull { it.id == mode.barId }
+            // A rename alone must not re-round the weight (45 lb would drift through 0.5-unit rounding).
+            val weightKg = if (existing != null && !mode.stepped) {
+                existing.weightKg
+            } else {
+                Format.displayToKg(mode.displayWeight, state.units)
+            }
             if (existing != null) {
                 repository.updateBar(existing.copy(name = mode.name, weightKg = weightKg))
             } else {

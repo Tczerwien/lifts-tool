@@ -7,10 +7,11 @@ package com.tczerwien.lifts.domain
 object PlateMath {
 
     /**
-     * Comparison tolerance in kg. Values converted from lb carry floating-point dust
-     * far below this, while the smallest real plate sits far above it.
+     * Comparison tolerance in kg (1 g). Weights converted from lb, or stored rounded, can be off
+     * by tens of micrograms (a 45 lb bar saved as 20.4117 kg is 43 µg heavy), while the smallest
+     * real plate (0.25 kg) is 250 times this.
      */
-    private const val EPSILON_KG = 1e-6
+    private const val EPSILON_KG = 1e-3
 
     /** Default cap per plate size per side — a collar only holds so many plates. */
     const val DEFAULT_PLATES_PER_SIZE_LIMIT = 8
@@ -66,4 +67,15 @@ object PlateMath {
             exact = remaining <= EPSILON_KG,
         )
     }
+
+    /**
+     * One side's plates as text, heaviest first: "45 · 25 · 2.5 × 2". A single plate shows no
+     * count, and each group is glued with non-breaking spaces so a wrap only ever falls between
+     * groups, never inside one. [formatPlate] renders a plate weight in the display unit.
+     */
+    fun perSideLabel(perSide: List<PlateCount>, formatPlate: (Double) -> String): String =
+        perSide.joinToString(" · ") { plate ->
+            val weight = formatPlate(plate.plateKg)
+            if (plate.count == 1) weight else "$weight\u00A0×\u00A0${plate.count}"
+        }
 }

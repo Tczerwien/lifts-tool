@@ -131,4 +131,46 @@ class PlateMathTest {
         assertEquals(listOf(4.0 to 1), loadout.perSide.map { it.plateKg to it.count })
         assertEquals(8.0, loadout.achievedKg, 1e-9)
     }
+
+    // --- against the app's real defaults ---
+
+    @Test
+    fun everyFivePoundLoadOnTheSeededBarIsExact() {
+        val bar = com.tczerwien.lifts.seed.Seeder.DEFAULT_BAR_KG
+        val plates = com.tczerwien.lifts.settings.SettingsStore.DEFAULT_PLATE_INVENTORY_KG
+        for (lb in 45..585 step 5) {
+            val loadout = PlateMath.loadout(Format.lbToKg(lb.toDouble()), bar, plates)
+            assertNotNull(loadout, "$lb lb")
+            assertTrue(loadout.exact, "$lb lb should load exactly, got ${Format.kgToLb(loadout.achievedKg)}")
+        }
+    }
+
+    @Test
+    fun oneThirtyFiveIsOneFortyFivePerSide() {
+        val loadout = PlateMath.loadout(
+            Format.lbToKg(135.0),
+            com.tczerwien.lifts.seed.Seeder.DEFAULT_BAR_KG,
+            com.tczerwien.lifts.settings.SettingsStore.DEFAULT_PLATE_INVENTORY_KG,
+        )!!
+        assertEquals(1, loadout.perSide.size)
+        assertEquals(45.0, Format.kgToLb(loadout.perSide.single().plateKg), 1e-6)
+        assertEquals(1, loadout.perSide.single().count)
+    }
+
+    @Test
+    fun oldRoundedBarValueStillLoadsExactly() {
+        // Installs seeded before the fix store the bar as 20.4117 kg (43 µg heavy).
+        val loadout = PlateMath.loadout(
+            Format.lbToKg(225.0), 20.4117, com.tczerwien.lifts.settings.SettingsStore.DEFAULT_PLATE_INVENTORY_KG,
+        )!!
+        assertTrue(loadout.exact)
+    }
+
+    @Test
+    fun perSideLabelDropsSingleCountsAndKeepsGroupsTogether() {
+        val label = PlateMath.perSideLabel(
+            listOf(PlateMath.PlateCount(45.0, 2), PlateMath.PlateCount(25.0, 1), PlateMath.PlateCount(2.5, 1)),
+        ) { it.toString().removeSuffix(".0") }
+        assertEquals("45\u00A0×\u00A02 · 25 · 2.5", label)
+    }
 }

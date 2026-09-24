@@ -81,6 +81,13 @@ object Format {
     fun weight(kg: Double, unit: WeightUnit): String =
         trimTrailingZero(roundWeight(kgToDisplay(kg, unit)))
 
+    /**
+     * Canonical kg -> plate or bar weight with up to 3 decimals and no trailing zeros, e.g. "45",
+     * "1.25", "20.412". Not snapped to the 0.5 weight grid: a 1.25 kg plate must never read 1.5.
+     */
+    fun plate(kg: Double, unit: WeightUnit): String =
+        "%.3f".format(Locale.US, kgToDisplay(kg, unit)).trimEnd('0').trimEnd('.')
+
     /** Canonical kg -> rounded bodyweight display string, e.g. "180.4". */
     fun bodyweight(kg: Double, unit: WeightUnit): String =
         trimTrailingZero(roundBodyweight(kgToDisplay(kg, unit)))

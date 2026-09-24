@@ -17,6 +17,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.LiftsDatabase
@@ -151,8 +153,8 @@ class PlateCalculatorViewModel(
     }
 
     companion object {
-        /** A stored bar matching the prefilled bar weight this closely is "the" bar. */
-        const val BAR_MATCH_EPSILON_KG = 1e-6
+        /** A stored bar matching the prefilled bar weight this closely (1 g) is "the" bar. */
+        const val BAR_MATCH_EPSILON_KG = 1e-3
     }
 }
 
@@ -236,7 +238,9 @@ class PlateCalculatorScreen(
 
                 SectionLabel("Per Side")
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 1f.gridUnitsAsDp()),
                     contentAlignment = Alignment.Center,
                 ) {
                     PerSideLine(uiState)
@@ -287,7 +291,7 @@ class PlateCalculatorScreen(
                         maxLines = 1,
                     )
                     LightText(
-                        text = Format.weight(bar.weightKg, uiState.units),
+                        text = Format.plate(bar.weightKg, uiState.units),
                         variant = LightTextVariant.Detail,
                         lighten = true,
                         monospace = true,
@@ -380,13 +384,13 @@ class PlateCalculatorScreen(
                 maxLines = 1,
             )
 
+            // Up to two lines: dropping a plate off the end would have you load the wrong weight.
             else -> LightText(
-                text = loadout.perSide.joinToString(" · ") { plateCount ->
-                    "${Format.weight(plateCount.plateKg, uiState.units)} × ${plateCount.count}"
-                },
+                text = PlateMath.perSideLabel(loadout.perSide) { Format.plate(it, uiState.units) },
                 variant = LightTextVariant.Copy,
-                monospace = true,
-                maxLines = 1,
+                align = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -394,7 +398,7 @@ class PlateCalculatorScreen(
     private fun noteText(uiState: PlateCalculatorViewModel.UiState): String {
         val loadout = uiState.loadout
         return if (loadout != null && !loadout.exact) {
-            "no exact load — nearest ${Format.weight(loadout.achievedKg, uiState.units)} ${uiState.units.suffix}"
+            "no exact load — nearest ${Format.plate(loadout.achievedKg, uiState.units)} ${uiState.units.suffix}"
         } else {
             "bars & plates from Settings"
         }

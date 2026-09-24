@@ -3,6 +3,7 @@ package com.tczerwien.lifts.seed
 import com.tczerwien.lifts.data.BarDao
 import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.ExerciseDao
+import com.tczerwien.lifts.ui.Format
 
 /** Seeds the bundled exercise catalog and default equipment on first run. Blocking — call from Dispatchers.IO. */
 object Seeder {
@@ -11,8 +12,10 @@ object Seeder {
             exerciseDao.insertAll(SeedParser.parse())
         }
         if (barDao.count() == 0L) {
-            // 45 lb in kg.
-            barDao.insert(BarEntity(name = "Olympic Bar", weightKg = 20.4117, position = 0))
+            barDao.insert(BarEntity(name = "Olympic Bar", weightKg = DEFAULT_BAR_KG, position = 0))
         }
     }
+
+    /** A 45 lb Olympic bar, converted exactly (not rounded) so plate math lands on real loads. */
+    val DEFAULT_BAR_KG = Format.lbToKg(45.0)
 }

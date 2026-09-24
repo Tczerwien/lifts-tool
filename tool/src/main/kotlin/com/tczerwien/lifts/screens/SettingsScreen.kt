@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFieldRow
@@ -90,7 +92,7 @@ class SettingsViewModel(
             WeightUnit.KG -> WeightUnit.LB
         }
         _uiState.update { it.copy(settings = settings.copy(units = next)) }
-        viewModelScope.launch(Dispatchers.IO) { settingsStore.setUnits(next) }
+        LiftsIo.write { settingsStore.setUnits(next) }
     }
 
     fun openRestEditor(field: RestField) {
@@ -99,8 +101,7 @@ class SettingsViewModel(
 
     fun openPlateEditor() {
         val settings = _uiState.value.settings ?: return
-        val prefill = settings.plateInventoryKg
-            .joinToString(", ") { Format.weight(it, settings.units) }
+        val prefill = PlateList.format(settings.plateInventoryKg, settings.units)
         _uiState.update { it.copy(mode = Mode.EditPlates(prefill = prefill, session = ++editorSession)) }
     }
 
@@ -124,7 +125,7 @@ class SettingsViewModel(
             RestField.WARMUP -> settings.copy(warmupRestSec = next)
         }
         _uiState.update { it.copy(settings = updated) }
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write {
             when (mode.field) {
                 RestField.DEFAULT -> settingsStore.setDefaultRestSec(next)
                 RestField.WARMUP -> settingsStore.setWarmupRestSec(next)
@@ -132,10 +133,14 @@ class SettingsViewModel(
         }
     }
 
-    /** Parses the submitted plate list; garbage with no valid numbers leaves the inventory untouched. */
+    /**
+     * Parses the submitted plate list. Submitting the prefill unchanged, or garbage with no valid
+     * numbers, leaves the inventory untouched.
+     */
     fun submitPlates(text: String) {
         val settings = _uiState.value.settings ?: return
-        val parsed = parsePlateList(text, settings.units)
+        val prefill = (_uiState.value.mode as? Mode.EditPlates)?.prefill
+        val parsed = if (text.trim() == prefill?.trim()) null else PlateList.parse(text, settings.units)
         if (parsed == null) {
             _uiState.update { it.copy(mode = Mode.FieldList) }
             return
@@ -143,7 +148,7 @@ class SettingsViewModel(
         _uiState.update {
             it.copy(settings = settings.copy(plateInventoryKg = parsed), mode = Mode.FieldList)
         }
-        viewModelScope.launch(Dispatchers.IO) { settingsStore.setPlateInventoryKg(parsed) }
+        LiftsIo.write { settingsStore.setPlateInventoryKg(parsed) }
     }
 
     override fun onBackPressed(): Boolean {
@@ -158,23 +163,6 @@ class SettingsViewModel(
 
         /** 15:00 ceiling so hold-repeat cannot run away. */
         const val MAX_REST_SEC = 900
-
-        private val PLATE_SPLIT_REGEX = Regex("[,/;\\s]+")
-
-        /**
-         * Defensive parse of a user-entered plate list in display units to canonical kg,
-         * heaviest first. Splits on commas, slashes, semicolons, and whitespace; drops
-         * non-numbers, non-positives, and duplicates. Null when nothing valid remains.
-         */
-        fun parsePlateList(text: String, unit: WeightUnit): List<Double>? {
-            val display = text.split(PLATE_SPLIT_REGEX)
-                .mapNotNull { it.trim().toDoubleOrNull() }
-                .filter { it > 0 }
-                .distinct()
-                .sortedDescending()
-            if (display.isEmpty()) return null
-            return display.map { Format.displayToKg(it, unit) }
-        }
     }
 }
 
@@ -355,7 +343,7 @@ class SettingsScreen(
     private fun plateSummary(settings: SettingsStore.Settings): String {
         if (settings.plateInventoryKg.isEmpty()) return "None"
         val values = settings.plateInventoryKg
-            .joinToString(" / ") { Format.weight(it, settings.units) }
+            .joinToString(" / ") { Format.plate(it, settings.units) }
         return "$values ${settings.units.suffix}"
     }
 
