@@ -34,9 +34,13 @@ class ActiveSession(
      * Creates a workout from [templateId]: one workout_exercises row per template slot
      * (copying rest overrides), each prefilled with targetSets pending "normal" sets.
      * A vanished template degrades to an empty workout. All rows are written in one transaction.
+     * A rest left running from an earlier workout is cleared, so the new one never inherits it.
      */
-    fun startFromTemplate(templateId: Long, now: Long = System.currentTimeMillis()): Long =
-        repository.inTransaction { createFromTemplate(templateId, now) }
+    fun startFromTemplate(templateId: Long, now: Long = System.currentTimeMillis()): Long {
+        val workoutId = repository.inTransaction { createFromTemplate(templateId, now) }
+        runBlocking { clearRest() }
+        return workoutId
+    }
 
     private fun createFromTemplate(templateId: Long, now: Long): Long {
         val template = repository.templateById(templateId)
@@ -65,8 +69,12 @@ class ActiveSession(
         return workoutId
     }
 
-    fun startEmpty(now: Long = System.currentTimeMillis()): Long =
-        repository.addWorkout(WorkoutEntity(name = DEFAULT_WORKOUT_NAME, startedAt = now))
+    /** Creates an empty workout; like [startFromTemplate] it clears any leftover rest. */
+    fun startEmpty(now: Long = System.currentTimeMillis()): Long {
+        val workoutId = repository.addWorkout(WorkoutEntity(name = DEFAULT_WORKOUT_NAME, startedAt = now))
+        runBlocking { clearRest() }
+        return workoutId
+    }
 
     /**
      * Appends an exercise slot. Pending sets are prefilled to mirror the previous
@@ -104,13 +112,29 @@ class ActiveSession(
 
     fun updateSet(set: SetEntity): Boolean = repository.updateSet(set)
 
+    /** Removes a set that hasn't been logged; a logged set is left alone. */
+    fun removeSet(setId: Long): Boolean = repository.inTransaction {
+        val set = repository.setById(setId) ?: return@inTransaction false
+        set.completedAt == null && repository.deleteSet(setId)
+    }
+
+    /** Removes an exercise slot with its sets, only while none of them is logged. */
+    fun removeExercise(workoutId: Long, workoutExerciseId: Long): Boolean = repository.inTransaction {
+        val logged = repository.setsForWorkout(workoutId)
+            .any { it.workoutExerciseId == workoutExerciseId && it.completedAt != null }
+        !logged && repository.deleteSlot(workoutExerciseId)
+    }
+
     fun uncompleteSet(set: SetEntity): Boolean = repository.updateSet(set.copy(completedAt = null))
 
-    /** Result of logging a set. [restEndMillis] is the persisted wall-clock rest end. */
+    /**
+     * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null when no
+     * rest started because the workout has already ended.
+     */
     data class SetCompletion(
         val set: SetEntity,
         val restDurationSec: Int,
-        val restEndMillis: Long,
+        val restEndMillis: Long?,
     )
 
     /**
@@ -140,11 +164,12 @@ class ActiveSession(
             defaultRestSec = snapshot.defaultRestSec,
             warmupRestSec = snapshot.warmupRestSec,
         )
-        runBlocking { startRest(restSec, now) }
+        val workoutOpen = repository.workoutById(workoutId)?.endedAt == null
+        if (workoutOpen) runBlocking { startRest(restSec, now) }
         return SetCompletion(
             set = completed,
             restDurationSec = restSec,
-            restEndMillis = now + restSec * 1000L,
+            restEndMillis = if (workoutOpen) now + restSec * 1000L else null,
         )
     }
 
@@ -164,17 +189,54 @@ class ActiveSession(
         return exerciseIds.associateWith { found[it].orEmpty() }
     }
 
-    // --- Finishing ---
+    // --- Finishing and discarding ---
 
-    /** Sets endedAt (idempotent), clears any running rest timer, and returns the summary. */
-    fun finish(workoutId: Long, now: Long = System.currentTimeMillis()): WorkoutSummary? {
-        val workout = repository.workoutById(workoutId) ?: return null
-        if (workout.endedAt == null) {
-            repository.updateWorkout(workout.copy(endedAt = now))
+    enum class FinishOutcome { ENDED, DISCARDED, MISSING }
+
+    /**
+     * Finish button: ends the workout (endedAt, idempotent) and clears the rest. A workout with no
+     * logged set is discarded instead, so a mistaken start never lands in History. Sets left
+     * unticked stay as they are, so a workout reopened from Workout Complete still has them. The
+     * summary is left to Workout Complete, which is the only screen that shows it.
+     */
+    fun finishOrDiscard(workoutId: Long, now: Long = System.currentTimeMillis()): FinishOutcome {
+        val workout = repository.workoutById(workoutId) ?: return FinishOutcome.MISSING
+        if (completedSetCount(repository.setsForWorkout(workoutId)) == 0) {
+            discardWorkout(workoutId)
+            return FinishOutcome.DISCARDED
         }
+        if (workout.endedAt == null) repository.updateWorkout(workout.copy(endedAt = now))
         runBlocking { clearRest() }
-        return summarize(workoutId)
+        return FinishOutcome.ENDED
     }
+
+    /** Deletes the workout with its slots and sets, and clears the rest. */
+    fun discardWorkout(workoutId: Long): Boolean {
+        val deleted = repository.deleteWorkout(workoutId)
+        runBlocking { clearRest() }
+        return deleted
+    }
+
+    /**
+     * Deletes the workout if it is still open and nothing has changed since it was started
+     * ([isUntouched]), so opening a template by mistake and backing out leaves no trace.
+     */
+    fun discardIfUntouched(workoutId: Long): Boolean {
+        val workout = repository.workoutById(workoutId) ?: return false
+        if (workout.endedAt != null || !untouched(workout, repository.setsForWorkout(workoutId))) return false
+        return discardWorkout(workoutId)
+    }
+
+    /** [isUntouched] for a stored workout, against the template it came from as it is now. */
+    private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean = isUntouched(
+        workout = workout,
+        slots = repository.exercisesForWorkout(workout.id),
+        sets = sets,
+        templateExercises = workout.templateId?.let { repository.exercisesForTemplate(it) },
+    )
+
+    /** Clears endedAt after a Finish the lifter takes back from Workout Complete. */
+    fun reopenWorkout(workoutId: Long): Boolean = repository.reopenWorkout(workoutId)
 
     /**
      * Summary of [workoutId]: duration, completed-set count (any type), volume

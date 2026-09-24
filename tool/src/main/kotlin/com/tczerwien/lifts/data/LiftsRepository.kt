@@ -80,6 +80,8 @@ class LiftsRepository private constructor(
 
     fun updateSet(set: SetEntity): Boolean = db.workoutDao.updateSet(set) > 0
 
+    fun setById(id: Long): SetEntity? = db.workoutDao.setById(id)
+
     /** Deletes one set and renumbers the rest of its exercise slot 0..n-1, in one transaction. */
     fun deleteSet(id: Long): Boolean = inTransaction {
         val set = db.workoutDao.setById(id) ?: return@inTransaction false

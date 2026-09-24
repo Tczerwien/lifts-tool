@@ -17,14 +17,19 @@ import androidx.compose.ui.Modifier
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.ExercisePickerScreen
 import com.tczerwien.lifts.screens.RestTimerScreen
+import com.tczerwien.lifts.screens.WorkoutCompleteResult
 import com.tczerwien.lifts.screens.WorkoutCompleteScreen
+import com.tczerwien.lifts.screens.WorkoutMenuAction
+import com.tczerwien.lifts.screens.WorkoutMenuScreen
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.pendingSetCount
 import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.SetRow
 import com.tczerwien.lifts.ui.SetRowHeader
@@ -45,9 +50,10 @@ import kotlinx.coroutines.delay
 /**
  * Active workout (design/screens/active-workout.html): one exercise at a time with its
  * set grid (PREVIOUS autofill, steppers on the active row, checkbox logging + PR stars),
- * a collapsed next-exercise row, and the rest strip. Bottom bar: rest timer / add
- * exercise / finish. The elapsed clock and rest remaining are derived from wall-clock
- * timestamps, ticking only while the screen is shown.
+ * a collapsed next-exercise row, and the rest strip. Top bar: back / name and clock / Finish,
+ * which takes two taps and discards a workout with nothing logged. Bottom bar: rest timer / add
+ * exercise / "…" (remove set, remove exercise, discard). The elapsed clock and rest remaining are
+ * derived from wall-clock timestamps, ticking only while the screen is shown.
  *
  * Constructor contract (FROZEN): [workoutId] resumes; else [templateId] creates the
  * session from a template inside this screen; both null starts an empty workout.
@@ -85,14 +91,23 @@ class ActiveWorkoutScreen(
             }
         }
 
+        val finishArmed by viewModel.finishArm.armed.collectAsState()
+
         LaunchedEffect(uiState.pendingCompleteWorkoutId) {
             uiState.pendingCompleteWorkoutId?.let { completedId ->
                 viewModel.consumePendingComplete()
-                navigateTo({ WorkoutCompleteScreen(it, workoutId = completedId) })
+                navigateTo({ WorkoutCompleteScreen(it, workoutId = completedId) }) { result ->
+                    // Delivered as Complete pops. DONE leaves straight away, so the finished workout is
+                    // never drawn; with no result (system Back) the view model leaves instead.
+                    when (result) {
+                        WorkoutCompleteResult.DONE -> goBack()
+                        WorkoutCompleteResult.RESUME -> viewModel.resumeAfterComplete()
+                    }
+                }
             }
         }
-        LaunchedEffect(uiState.workoutEnded) {
-            if (uiState.workoutEnded) goBack()
+        LaunchedEffect(uiState.leave) {
+            if (uiState.leave) goBack()
         }
 
         val current = uiState.exercises.getOrNull(uiState.currentIndex)
@@ -116,12 +131,13 @@ class ActiveWorkoutScreen(
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
+                val live = uiState.loaded && !uiState.finishing && !uiState.leave
                 LightTopBar(
                     leftButton = LightBarButton.LightIcon(
                         icon = LightIcons.BACK,
                         onClick = { goBack() },
                     ),
-                    center = if (uiState.loaded) {
+                    center = if (live) {
                         LightTopBarCenter.TwoLineDetail(
                             line1 = uiState.workoutName,
                             line2 = topBarSubtitle(uiState, nowMillis),
@@ -129,10 +145,19 @@ class ActiveWorkoutScreen(
                     } else {
                         null
                     },
+                    rightButton = if (live) {
+                        LightBarButton.LightIcon(
+                            icon = LightIcons.ACCEPT,
+                            contentDescription = "finish workout",
+                            onClick = viewModel::tapFinish,
+                        )
+                    } else {
+                        null
+                    },
                 )
 
                 when {
-                    !uiState.loaded -> Spacer(modifier = Modifier.weight(1f))
+                    !live -> Spacer(modifier = Modifier.weight(1f))
 
                     current == null -> EmptyWorkoutBody(modifier = Modifier.weight(1f))
 
@@ -199,30 +224,65 @@ class ActiveWorkoutScreen(
                     }
                 }
 
+                if (live && finishArmed) {
+                    ArmedHint(text = finishHint(uiState))
+                }
                 LightBottomBar(
                     items = listOf(
                         LightBarButton.LightIcon(
                             icon = LightIcons.ALARM,
                             contentDescription = "rest timer",
-                            onClick = openTimer,
+                            onClick = { if (live) openTimer() },
                         ),
                         LightBarButton.LightIcon(
                             icon = LightIcons.ADD,
                             contentDescription = "add exercise",
                             onClick = {
-                                navigateTo(::ExercisePickerScreen) { exerciseId ->
-                                    viewModel.addExercise(exerciseId)
+                                if (live) {
+                                    navigateTo(::ExercisePickerScreen) { exerciseId ->
+                                        viewModel.addExercise(exerciseId)
+                                    }
                                 }
                             },
                         ),
                         LightBarButton.LightIcon(
-                            icon = LightIcons.ACCEPT,
-                            contentDescription = "finish workout",
-                            onClick = { viewModel.finish() },
+                            icon = LightIcons.ELLIPSES,
+                            contentDescription = "workout menu",
+                            onClick = { if (live) openMenu(uiState) },
                         ),
                     ),
                 )
             }
+        }
+    }
+
+    private fun openMenu(uiState: ActiveWorkoutViewModel.UiState) {
+        viewModel.finishArm.disarm()
+        val options = viewModel.menuOptions(uiState)
+        navigateTo({
+            WorkoutMenuScreen(
+                it,
+                removeSetLabel = options.removeSetLabel,
+                removeExerciseLabel = options.removeExerciseLabel,
+            )
+        }) { action ->
+            when (action) {
+                WorkoutMenuAction.REMOVE_SET -> viewModel.removeActiveSet()
+                WorkoutMenuAction.REMOVE_EXERCISE -> viewModel.removeCurrentExercise()
+                WorkoutMenuAction.DISCARD_WORKOUT -> viewModel.discard()
+            }
+        }
+    }
+
+    /** "TAP AGAIN TO FINISH · 3 SETS NOT LOGGED"; with nothing logged, Finish discards and says so. */
+    private fun finishHint(uiState: ActiveWorkoutViewModel.UiState): String {
+        val sets = uiState.exercises.flatMap { it.sets }
+        val pending = pendingSetCount(sets)
+        return when {
+            pending == sets.size -> "TAP AGAIN TO DISCARD · NOTHING LOGGED"
+            pending == 1 -> "TAP AGAIN TO FINISH · 1 SET NOT LOGGED"
+            pending > 1 -> "TAP AGAIN TO FINISH · $pending SETS NOT LOGGED"
+            else -> "TAP AGAIN TO FINISH"
         }
     }
 

@@ -6,6 +6,7 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
@@ -13,6 +14,7 @@ import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.nextPendingSet
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightViewModel
@@ -57,10 +59,25 @@ class ActiveWorkoutViewModel(
         val units: WeightUnit = SettingsStore.DEFAULT_UNITS,
         val defaultRestSec: Int = SettingsStore.DEFAULT_REST_SEC_VALUE,
         val warmupRestSec: Int = SettingsStore.DEFAULT_WARMUP_REST_SEC_VALUE,
+        /**
+         * Finish or Discard confirmed and in flight (or Workout Complete is showing): every other tap
+         * is ignored and the set list is hidden, so the finished workout never flashes on screen.
+         */
+        val finishing: Boolean = false,
         /** Finish flow: non-null asks Content to navigate to Workout Complete once. */
         val pendingCompleteWorkoutId: Long? = null,
-        /** The workout ended (returned from Complete): Content leaves the screen. */
-        val workoutEnded: Boolean = false,
+        /** Workout Complete is on top of this screen. */
+        val completeOpen: Boolean = false,
+        /** Nothing left to show (discarded, finished, or gone): Content leaves the screen. */
+        val leave: Boolean = false,
+    )
+
+    /** What the "…" menu can offer for the current exercise and row. */
+    data class MenuOptions(
+        /** "Set 3" for the active row while it is unticked; null otherwise. */
+        val removeSetLabel: String?,
+        /** The current exercise's name while none of its sets is ticked; null otherwise. */
+        val removeExerciseLabel: String?,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -73,31 +90,76 @@ class ActiveWorkoutViewModel(
     @Volatile
     private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
+    /** Top-bar Finish takes two taps; see [tapFinish]. */
+    val finishArm = ArmedAction(viewModelScope)
+
+    @Volatile
+    private var started = false
+
+    /** Everything loads here, not in init: the SDK calls this straight after creating the view model. */
+    override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        if (!started) {
+            started = true
+            start()
+            return
+        }
+        if (_uiState.value.completeOpen) {
+            // Back from Workout Complete. Its result (DONE or RESUME) is delivered right after this
+            // returns; with none (the system Back) the workout stays finished and this screen leaves.
+            viewModelScope.launch(Dispatchers.Main) {
+                if (_uiState.value.completeOpen) _uiState.update { it.copy(completeOpen = false, leave = true) }
+            }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) { refresh() }
+    }
+
+    /**
+     * Creates (or resumes) the workout on the write lane, so it is ordered with every other write:
+     * a discard queued just before on Home lands first, and the untouched check in [onCleared] after.
+     */
+    private fun start() {
+        LiftsIo.write({
             resolvedWorkoutId = when {
                 resumeWorkoutId != null -> resumeWorkoutId
                 templateId != null -> session.startFromTemplate(templateId)
                 else -> session.startEmpty()
             }
-            refresh()
-        }
+        }) { refresh() }
     }
 
-    override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+    /** Backing out of a workout nothing was done in leaves nothing behind (a template opened by mistake). */
+    override fun onCleared() {
+        if (!_uiState.value.finishing) {
+            LiftsIo.write { resolvedWorkoutId?.let { session.discardIfUntouched(it) } }
+        }
+        super.onCleared()
     }
+
+    /** Back cancels an armed Finish before it leaves the screen. */
+    override fun onBackPressed(): Boolean {
+        val state = _uiState.value
+        if (state.finishing || state.leave || !finishArm.armed.value) return false
+        finishArm.disarm()
+        return true
+    }
+
+    /** True once Finish or Discard is under way: taps that would change the workout are ignored. */
+    private val locked: Boolean
+        get() = _uiState.value.finishing
 
     // --- Row interactions ---
 
     /** A tap on a row targets it with the steppers; tapping the active row again does nothing. */
     fun onRowTapped(setId: Long) {
+        if (locked) return
         if (_uiState.value.activeSetId == setId) return
         _uiState.update { it.copy(activeSetId = setId) }
     }
 
     /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
     fun onMarkerTapped(setId: Long) {
+        if (locked) return
         val changed = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
         _uiState.update { it.copy(activeSetId = setId) }
         persistSet(changed)
@@ -108,6 +170,7 @@ class ActiveWorkoutViewModel(
      * set is left alone, so a stray tap can't overwrite what was lifted.
      */
     fun autofill(setId: Long) {
+        if (locked) return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
@@ -125,6 +188,7 @@ class ActiveWorkoutViewModel(
      * per the completion result. Uncompleting keeps the logged values.
      */
     fun toggleComplete(setId: Long) {
+        if (locked) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
         if (set.completedAt != null) {
@@ -156,6 +220,7 @@ class ActiveWorkoutViewModel(
     // --- Steppers (operate on the active row) ---
 
     fun stepWeight(direction: Int) {
+        if (locked) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val base = currentWeightDisplay(state, set)
@@ -169,6 +234,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun stepReps(direction: Int) {
+        if (locked) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val next = (currentReps(state, set) + direction).coerceAtLeast(0)
@@ -212,6 +278,7 @@ class ActiveWorkoutViewModel(
 
     /** Collapsed next-exercise row: advance (wrapping), targeting its first pending set. */
     fun advanceExercise() {
+        if (locked) return
         _uiState.update { state ->
             if (state.exercises.size < 2) {
                 state
@@ -226,6 +293,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun addSet() {
+        if (locked) return
         val state = _uiState.value
         val block = state.exercises.getOrNull(state.currentIndex) ?: return
         LiftsIo.write({ session.addSet(state.workoutId, block.slot.id) }) { refresh() }
@@ -233,21 +301,88 @@ class ActiveWorkoutViewModel(
 
     /** Result of the exercise picker: append the exercise and jump to it. */
     fun addExercise(exerciseId: String) {
+        if (locked) return
         val workoutId = resolvedWorkoutId ?: return
         LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { refresh(focusLastExercise = true) }
     }
 
-    fun finish() {
+    // --- Finish, discard and the "…" menu ---
+
+    /**
+     * Top-bar Finish. The first tap arms it and the screen says how many sets are still unticked; a
+     * second tap 0.4 to 3 s later confirms, so a double-tap can't finish by accident.
+     */
+    fun tapFinish() {
+        if (locked || !_uiState.value.loaded) return
+        if (finishArm.tap()) finish()
+    }
+
+    /** Ends the workout and opens Workout Complete, or discards it when nothing was logged. */
+    private fun finish() {
         val workoutId = resolvedWorkoutId ?: return
-        LiftsIo.write({ session.finish(workoutId) }) {
+        _uiState.update { it.copy(finishing = true) }
+        LiftsIo.write({ session.finishOrDiscard(workoutId) }) { outcome ->
             _uiState.update {
-                it.copy(pendingCompleteWorkoutId = workoutId, restEndMillis = null, restTotalSec = 0)
+                when (outcome) {
+                    FinishOutcome.ENDED -> it.copy(
+                        pendingCompleteWorkoutId = workoutId,
+                        restEndMillis = null,
+                        restTotalSec = 0,
+                    )
+                    FinishOutcome.DISCARDED, FinishOutcome.MISSING -> it.copy(leave = true)
+                }
             }
         }
     }
 
     fun consumePendingComplete() {
-        _uiState.update { it.copy(pendingCompleteWorkoutId = null) }
+        _uiState.update { it.copy(pendingCompleteWorkoutId = null, completeOpen = true) }
+    }
+
+    /** RESUME on Workout Complete: the workout is open again and logging carries on. */
+    fun resumeAfterComplete() {
+        val workoutId = resolvedWorkoutId ?: return
+        _uiState.update { it.copy(completeOpen = false) }
+        LiftsIo.write({ session.reopenWorkout(workoutId) }) {
+            refresh()
+            _uiState.update { it.copy(finishing = false) }
+        }
+    }
+
+    fun menuOptions(state: UiState): MenuOptions {
+        val block = state.exercises.getOrNull(state.currentIndex)
+            ?: return MenuOptions(removeSetLabel = null, removeExerciseLabel = null)
+        val activeIndex = block.sets.indexOfFirst { it.id == state.activeSetId }
+        val removeSetLabel = block.sets.getOrNull(activeIndex)
+            ?.takeIf { it.completedAt == null }
+            ?.let { "Set ${activeIndex + 1}" }
+        val removeExerciseLabel = block.baseName.takeIf { block.sets.none { it.completedAt != null } }
+        return MenuOptions(removeSetLabel, removeExerciseLabel)
+    }
+
+    /** Menu: removes the active row, only while it is unticked (the session checks again). */
+    fun removeActiveSet() {
+        if (locked) return
+        val set = activeSet(_uiState.value)?.takeIf { it.completedAt == null } ?: return
+        LiftsIo.write({ session.removeSet(set.id) }) { refresh() }
+    }
+
+    /** Menu: removes the current exercise, only while none of its sets is ticked. */
+    fun removeCurrentExercise() {
+        if (locked) return
+        val state = _uiState.value
+        val block = state.exercises.getOrNull(state.currentIndex) ?: return
+        if (block.sets.any { it.completedAt != null }) return
+        LiftsIo.write({ session.removeExercise(state.workoutId, block.slot.id) }) { refresh() }
+    }
+
+    /** Menu: deletes the whole workout (the menu already took two taps) and leaves. */
+    fun discard() {
+        val workoutId = resolvedWorkoutId ?: return
+        if (locked) return
+        finishArm.disarm()
+        _uiState.update { it.copy(finishing = true) }
+        LiftsIo.write({ session.discardWorkout(workoutId) }) { _uiState.update { it.copy(leave = true) } }
     }
 
     // --- Internals ---
@@ -302,17 +437,10 @@ class ActiveWorkoutViewModel(
     /** Full reload from the database — call from Dispatchers.IO. */
     private fun refresh(focusLastExercise: Boolean = false) {
         val workoutId = resolvedWorkoutId ?: return
-        val workout = repository.workoutById(workoutId) ?: return
-        if (workout.endedAt != null) {
-            // Finished (back from Workout Complete): leave — unless we are the ones
-            // navigating there right now.
-            _uiState.update { state ->
-                if (state.pendingCompleteWorkoutId != null) {
-                    state
-                } else {
-                    state.copy(loaded = true, workoutEnded = true)
-                }
-            }
+        val workout = repository.workoutById(workoutId)
+        if (workout == null || workout.endedAt != null) {
+            // Gone or finished. Our own Finish or Discard handles its exit; anything else leaves.
+            _uiState.update { state -> if (state.finishing) state else state.copy(loaded = true, leave = true) }
             return
         }
         val settings = settingsStore.snapshot()

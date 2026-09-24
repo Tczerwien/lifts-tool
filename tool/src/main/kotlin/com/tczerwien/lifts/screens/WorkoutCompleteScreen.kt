@@ -46,11 +46,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** How the lifter leaves Workout Complete. */
+enum class WorkoutCompleteResult {
+    /** Back to Home. */
+    DONE,
+
+    /** The Finish was a mistake: reopen the workout and carry on logging. */
+    RESUME,
+}
+
 class WorkoutCompleteViewModel(
     private val session: ActiveSession,
     private val settingsStore: SettingsStore,
     private val workoutId: Long,
-) : LightViewModel<Unit>() {
+) : LightViewModel<WorkoutCompleteResult>() {
 
     data class UiState(
         val loaded: Boolean = false,
@@ -61,15 +70,13 @@ class WorkoutCompleteViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    init {
-        refresh()
-    }
+    @Volatile
+    private var loadStarted = false
 
-    override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        refresh()
-    }
-
-    private fun refresh() {
+    /** The summary of a finished workout never changes, so it is worked out once, on first show. */
+    override fun onScreenShow(screen: SimpleLightScreen<WorkoutCompleteResult>) {
+        if (loadStarted) return
+        loadStarted = true
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState(
                 loaded = true,
@@ -83,13 +90,13 @@ class WorkoutCompleteViewModel(
 /**
  * Post-finish summary (design/screens/workout-complete.html): duration, completed sets +
  * volume in display units, the New Records list (star per line), and the bodyweight line
- * when the workout logged one. No back chevron — Done returns with a non-null result and
- * ActiveWorkout leaves itself once it sees the workout ended, landing on Home.
+ * when the workout logged one. No back chevron. DONE returns to Active Workout, which pops
+ * straight on to Home; RESUME has Active Workout reopen the workout for more sets.
  */
 class WorkoutCompleteScreen(
     sealedActivity: SealedLightActivity,
     private val workoutId: Long,
-) : LightScreen<Unit, WorkoutCompleteViewModel>(sealedActivity) {
+) : LightScreen<WorkoutCompleteResult, WorkoutCompleteViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
 
@@ -132,8 +139,13 @@ class WorkoutCompleteScreen(
                 LightBottomBar(
                     items = listOf(
                         LightBarButton.Text(
+                            text = "RESUME",
+                            contentDescription = "resume workout",
+                            onClick = { goBack(WorkoutCompleteResult.RESUME) },
+                        ),
+                        LightBarButton.Text(
                             text = "DONE",
-                            onClick = { goBack(Unit) },
+                            onClick = { goBack(WorkoutCompleteResult.DONE) },
                         ),
                     ),
                 )
