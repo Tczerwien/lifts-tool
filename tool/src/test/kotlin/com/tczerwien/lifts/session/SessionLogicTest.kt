@@ -147,6 +147,21 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `new records keep a weighted PR over a later reps-only PR`() {
+        val slots = listOf(slot(id = 1, exerciseId = "dips"), slot(id = 2, exerciseId = "pullups", position = 1))
+        val sets = listOf(
+            set(id = 10, slotId = 1, weightKg = 20.0, reps = 8, completedAt = 1L),
+            set(id = 11, slotId = 1, weightKg = null, reps = 15, completedAt = 2L),
+            set(id = 12, slotId = 2, weightKg = 0.0, reps = 12, completedAt = 3L),
+        )
+        val ids = prSetIds(slots, sets, emptyMap())
+        assertEquals(setOf(10L, 11L, 12L), ids, "weighted and weightless firsts are both PRs")
+        val records = prRecords(slots, sets, ids, emptyMap())
+        assertEquals(listOf("dips" to 20.0, "pullups" to null), records.map { it.exerciseId to it.weightKg })
+        assertEquals(12, records[1].reps, "a reps-only record keeps its reps and shows no 0 weight")
+    }
+
+    @Test
     fun `a later workout in the history can't steal a star`() {
         val slots = listOf(slot(id = 1))
         // 100x5 now, but the history also holds a heavier set from a LATER workout (time 5).
@@ -177,7 +192,7 @@ class SessionLogicTest {
         val records = prRecords(slots, sets, setOf(10L, 11L), mapOf("bench" to "Bench Press (Barbell)"))
         assertEquals(1, records.size)
         assertEquals("Bench Press (Barbell)", records[0].exerciseName)
-        assertEquals(102.5, records[0].weightKg, 1e-9)
+        assertEquals(102.5, records[0].weightKg!!, 1e-9)
         assertEquals(5, records[0].reps)
     }
 

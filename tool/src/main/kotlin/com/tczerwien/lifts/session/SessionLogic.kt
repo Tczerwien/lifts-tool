@@ -83,11 +83,11 @@ fun prSetIds(
     return chronologicalPrSetIds(byExercise).filterTo(HashSet()) { it in workoutSetIds }
 }
 
-/** One "New Records" line: the current record-holding set of one exercise. */
+/** One "New Records" line: the current record-holding set of one exercise. [weightKg] is null for a reps-only record. */
 data class PrRecord(
     val exerciseId: String,
     val exerciseName: String,
-    val weightKg: Double,
+    val weightKg: Double?,
     val reps: Int?,
 )
 
@@ -108,7 +108,10 @@ fun prRecords(
         .sortedWith(compareBy({ it.completedAt }, { it.id }))
     for (set in prSets) {
         val exerciseId = slotById[set.workoutExerciseId]?.exerciseId ?: continue
-        bestByExercise[exerciseId] = set // chronological iteration: latest wins
+        val current = bestByExercise[exerciseId]
+        // Weighted records outrank reps-only ones (a +20 kg dip beats a bodyweight rep PR);
+        // within a kind, chronological iteration makes the latest win.
+        if (current == null || set.isWeighted() || !current.isWeighted()) bestByExercise[exerciseId] = set
     }
     val positionByExercise = HashMap<String, Int>()
     for (slot in slots.sortedBy { it.position }) {
@@ -117,7 +120,8 @@ fun prRecords(
     return bestByExercise.entries
         .sortedBy { positionByExercise[it.key] ?: Int.MAX_VALUE }
         .mapNotNull { (exerciseId, set) ->
-            val weight = set.weightKg ?: return@mapNotNull null
+            val weight = set.weightKg?.takeIf { it > 0.0 }
+            if (weight == null && set.reps == null) return@mapNotNull null
             PrRecord(
                 exerciseId = exerciseId,
                 exerciseName = exerciseNames[exerciseId] ?: exerciseId,
@@ -126,6 +130,8 @@ fun prRecords(
             )
         }
 }
+
+private fun SetEntity.isWeighted(): Boolean = (weightKg ?: 0.0) > 0.0
 
 /** Post-finish summary for the Workout Complete screen. */
 data class WorkoutSummary(

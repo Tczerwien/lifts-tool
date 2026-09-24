@@ -227,9 +227,12 @@ private fun Mono(text: String, variant: LightTextVariant, lighten: Boolean = fal
     )
 }
 
-/** "165 × 5" (weight-only PRs render just the weight). */
-private fun prSetDisplay(weightKg: Double, reps: Int?, units: WeightUnit): String =
-    if (reps != null) Format.setSummary(weightKg, reps, units) else Format.weight(weightKg, units)
+/** "165 × 5"; a weight-only PR renders just the weight, a reps-only PR (pull-ups) "15 reps". */
+private fun prSetDisplay(weightKg: Double?, reps: Int?, units: WeightUnit): String = when {
+    weightKg != null && reps != null -> Format.setSummary(weightKg, reps, units)
+    weightKg != null -> Format.weight(weightKg, units)
+    else -> "${reps ?: 0} reps"
+}
 
 /** Volume in display units with a thousands separator, e.g. "12,440". */
 private fun volumeDisplay(volumeKg: Double, units: WeightUnit): String =

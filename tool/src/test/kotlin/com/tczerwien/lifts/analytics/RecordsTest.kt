@@ -91,10 +91,33 @@ class RecordsTest {
                 logged(weight, reps, at = 1000L + i * 10 + random.nextInt(0, 5), type = type)
             }
             val ordered = sets.sortedWith(compareBy({ it.completedAt }, { it.id }))
-            val naive = ordered.filterIndexed { i, set -> recordEligible(set) && isPr(set, ordered.take(i)) }
+            val expected = ordered.filterIndexed { i, set -> referenceIsPr(set, ordered.take(i)) }
                 .mapTo(HashSet()) { it.id }
-            assertEquals(naive, chronologicalPrSetIds(sets), "round $round")
+            assertEquals(expected, chronologicalPrSetIds(sets), "round $round")
         }
+    }
+
+    /**
+     * The PR rules written out directly over the earlier sets, sharing no code with RecordTracker,
+     * so the engine is checked against the rules rather than against itself.
+     */
+    private fun referenceIsPr(set: SetEntity, earlier: List<SetEntity>): Boolean {
+        val reps = set.reps ?: return false
+        if (set.completedAt == null || set.type == "warmup" || reps < 1) return false
+        val eligible = earlier.filter { it.completedAt != null && it.type != "warmup" && (it.reps ?: 0) >= 1 }
+        val weight = set.weightKg ?: 0.0
+        if (weight <= 0.0) {
+            val bestReps = eligible.filter { (it.weightKg ?: 0.0) <= 0.0 }.maxOfOrNull { it.reps!! } ?: return true
+            return reps > bestReps
+        }
+        val weighted = eligible.filter { (it.weightKg ?: 0.0) > 0.0 }
+        val maxWeight = weighted.maxOfOrNull { it.weightKg!! } ?: return true
+        if (weight > maxWeight + 0.12) return true
+        if (reps > 12) return false
+        val e1Rm = if (reps == 1) weight else weight * (1 + reps / 30.0)
+        val bestE1Rm = weighted.filter { it.reps!! <= 12 }
+            .maxOfOrNull { if (it.reps == 1) it.weightKg!! else it.weightKg!! * (1 + it.reps!! / 30.0) } ?: return false
+        return e1Rm > bestE1Rm + 0.12
     }
 
     // --- exerciseRecords ---
