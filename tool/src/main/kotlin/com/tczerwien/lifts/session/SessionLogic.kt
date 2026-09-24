@@ -280,20 +280,31 @@ fun staleAction(
         closeAction(startedAt, sets)
     }
 
+/** One open workout as Home's cleanup sees it. */
+data class OpenWorkout(
+    val id: Long,
+    val startedAt: Long,
+    val sets: List<SetEntity>,
+    val untouched: Boolean,
+)
+
 /**
- * Home's rule for each open workout, keeping at most one open: an untouched one is deleted; any
- * but the newest is closed, since only one can be resumed; the newest follows [staleAction].
+ * Home's rule for the open workouts ([open], newest first), so that at most one stays open.
+ * Untouched ones are deleted. Of the rest, the newest follows [staleAction] and every older one is
+ * closed ([closeAction]), since only one workout can be resumed.
  */
-fun openWorkoutAction(
-    startedAt: Long,
-    sets: List<SetEntity>,
-    untouched: Boolean,
-    newest: Boolean,
-    now: Long,
-): OpenWorkoutAction = when {
-    untouched -> OpenWorkoutAction.Delete
-    !newest -> closeAction(startedAt, sets)
-    else -> staleAction(startedAt, sets, now)
+fun planOpenWorkouts(open: List<OpenWorkout>, now: Long): Map<Long, OpenWorkoutAction> {
+    var newestSeen = false
+    return open.associate { workout ->
+        workout.id to when {
+            workout.untouched -> OpenWorkoutAction.Delete
+            !newestSeen -> {
+                newestSeen = true
+                staleAction(workout.startedAt, workout.sets, now)
+            }
+            else -> closeAction(workout.startedAt, workout.sets)
+        }
+    }
 }
 
 /** True when an open workout was used within [windowMillis] of [now], so a cold start reopens it. */

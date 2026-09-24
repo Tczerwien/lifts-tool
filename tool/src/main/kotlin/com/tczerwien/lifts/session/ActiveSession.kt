@@ -227,6 +227,36 @@ class ActiveSession(
         return discardWorkout(workoutId)
     }
 
+    /**
+     * Home's cleanup ([planOpenWorkouts]), run whenever Home shows: deletes untouched open workouts,
+     * closes stale or superseded ones at their last logged set, and returns the one left open, if
+     * any. It never touches the rest timer, which belongs to the newest workout.
+     */
+    fun tidyOpenWorkouts(now: Long = System.currentTimeMillis()): WorkoutEntity? {
+        val open = repository.listOpenWorkouts()
+        val setsById = open.associate { it.id to repository.setsForWorkout(it.id) }
+        val plan = planOpenWorkouts(
+            open.map { workout ->
+                val sets = setsById.getValue(workout.id)
+                OpenWorkout(workout.id, workout.startedAt, sets, untouched(workout, sets))
+            },
+            now,
+        )
+        var kept: WorkoutEntity? = null
+        for (workout in open) {
+            when (val action = plan.getValue(workout.id)) {
+                OpenWorkoutAction.Keep -> kept = workout
+                is OpenWorkoutAction.CloseAt -> repository.updateWorkout(workout.copy(endedAt = action.endedAt))
+                OpenWorkoutAction.Delete -> repository.deleteWorkout(workout.id)
+            }
+        }
+        return kept
+    }
+
+    /** When [workout] was last used: its latest logged set, else its start. */
+    fun lastActivity(workout: WorkoutEntity): Long =
+        lastActivityMillis(workout.startedAt, repository.setsForWorkout(workout.id))
+
     /** [isUntouched] for a stored workout, against the template it came from as it is now. */
     private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean = isUntouched(
         workout = workout,

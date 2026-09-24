@@ -4,14 +4,22 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
+import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.shouldAutoResume
+import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -35,14 +43,15 @@ import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
-import kotlinx.coroutines.Dispatchers
+import com.thelightphone.sdk.ui.gridUnitsAsDp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 
 class HomeViewModel(
     private val repository: LiftsRepository,
+    private val session: ActiveSession,
 ) : LightViewModel<Unit>() {
 
     data class TemplateRow(val id: Long, val name: String, val exerciseCount: Int)
@@ -51,27 +60,79 @@ class HomeViewModel(
 
     data class RecentRow(val workoutId: Long, val name: String, val dateMillis: Long, val setCount: Int)
 
+    /** A Start row tapped while a workout is open; [templateId] null is Empty Workout. */
+    data class StartChoice(val templateId: Long?)
+
     data class UiState(
         val templates: List<TemplateRow> = emptyList(),
         val unfinished: UnfinishedRow? = null,
         val recent: List<RecentRow> = emptyList(),
+        /** Expanded under its Start row: "Resume <open workout>" or "Discard and start". */
+        val startChoice: StartChoice? = null,
+        /** One-shot: Content opens this workout straight away (a cold start mid-workout). */
+        val autoResumeWorkoutId: Long? = null,
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    init {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.seedIfEmpty()
-            refresh()
+    /** "Discard and start" takes two taps. */
+    val discardAndStartArm = ArmedAction(viewModelScope)
+
+    /** Auto-resume is considered on the first load only: a cold start, not a Back from the workout. */
+    @Volatile
+    private var firstLoad = true
+
+    /**
+     * Loads on every show, on the write lane: that orders it after anything Active Workout queued on
+     * its way out (such as discarding an untouched workout), and the cleanup below writes too.
+     */
+    override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        LiftsIo.write({ load() }) { loaded ->
+            // A Start row tapped while this was loading keeps its choice, as long as a workout is open.
+            _uiState.update { current ->
+                loaded.copy(startChoice = current.startChoice.takeIf { loaded.unfinished != null })
+            }
         }
     }
 
-    override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+    /** A Start row: starts at once, unless a workout is open, when it offers Resume or Discard and start. */
+    fun onStartTapped(templateId: Long?): Boolean {
+        val state = _uiState.value
+        if (state.unfinished == null) return true
+        discardAndStartArm.disarm()
+        val choice = StartChoice(templateId).takeIf { it != state.startChoice }
+        _uiState.update { it.copy(startChoice = choice) }
+        return false
     }
 
-    private fun refresh() {
+    fun clearStartChoice() {
+        discardAndStartArm.disarm()
+        _uiState.update { it.copy(startChoice = null) }
+    }
+
+    /**
+     * Second tap of "Discard and start": queues the delete of the open workout and returns true, and
+     * the caller opens the new one. Its creation is queued behind the delete on the same lane.
+     */
+    fun tapDiscardAndStart(): Boolean {
+        val open = _uiState.value.unfinished ?: return true
+        if (!discardAndStartArm.tap()) return false
+        _uiState.update { it.copy(startChoice = null, unfinished = null) }
+        LiftsIo.write { session.discardWorkout(open.workoutId) }
+        return true
+    }
+
+    fun consumeAutoResume() {
+        _uiState.update { it.copy(autoResumeWorkoutId = null) }
+    }
+
+    private fun load(): UiState {
+        repository.seedIfEmpty()
+        val now = System.currentTimeMillis()
+        val open = session.tidyOpenWorkouts(now)
+        val autoResume = firstLoad && open != null && shouldAutoResume(session.lastActivity(open), now)
+        firstLoad = false
         val templates = repository.listTemplates().map { template ->
             TemplateRow(
                 id = template.id,
@@ -79,11 +140,7 @@ class HomeViewModel(
                 exerciseCount = repository.exercisesForTemplate(template.id).size,
             )
         }
-        val workouts = repository.listWorkouts()
-        val unfinished = workouts.firstOrNull { it.endedAt == null }?.let { workout ->
-            UnfinishedRow(workoutId = workout.id, name = workout.name, startedAt = workout.startedAt)
-        }
-        val recent = workouts.filter { it.endedAt != null }.take(2).map { workout ->
+        val recent = repository.listWorkouts().filter { it.endedAt != null }.take(2).map { workout ->
             RecentRow(
                 workoutId = workout.id,
                 name = workout.name,
@@ -91,14 +148,21 @@ class HomeViewModel(
                 setCount = repository.setsForWorkout(workout.id).count { it.completedAt != null },
             )
         }
-        _uiState.value = UiState(templates = templates, unfinished = unfinished, recent = recent)
+        return UiState(
+            templates = templates,
+            unfinished = open?.let { UnfinishedRow(workoutId = it.id, name = it.name, startedAt = it.startedAt) },
+            recent = recent,
+            autoResumeWorkoutId = open?.id?.takeIf { autoResume },
+        )
     }
 }
 
 /**
  * Home (design/screens/home.html): start a template, an empty workout, or resume; two
  * most recent finished workouts; bottom bar to History / Bodyweight / Consistency /
- * Settings. Top-bar right (pencil) manages templates.
+ * Settings. Top-bar right (pencil) manages templates. Only one workout is ever open: while
+ * one is, a Start row offers to resume it or (two taps) discard it and start. On a cold
+ * start with a workout used in the last two hours, Home opens it straight away.
  */
 @InitialScreen
 class HomeScreen(sealedActivity: SealedLightActivity) :
@@ -106,15 +170,51 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
 
     private val repository = lightContext.liftsRepository()
 
+    private val session = ActiveSession(repository, SettingsStore(lightContext.dataStore), lightContext.dataStore)
+
     override val viewModelClass: Class<HomeViewModel>
         get() = HomeViewModel::class.java
 
-    override fun createViewModel() = HomeViewModel(repository)
+    override fun createViewModel() = HomeViewModel(repository, session)
+
+    /** Opens a new workout from [templateId] (null: empty). */
+    private fun openNew(templateId: Long?) {
+        navigateTo({ ActiveWorkoutScreen(it, templateId = templateId) })
+    }
 
     @Composable
     override fun Content() {
         val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
+        val discardArmed by viewModel.discardAndStartArm.armed.collectAsState()
+
+        LaunchedEffect(uiState.autoResumeWorkoutId) {
+            uiState.autoResumeWorkoutId?.let { workoutId ->
+                viewModel.consumeAutoResume()
+                navigateTo({ ActiveWorkoutScreen(it, workoutId = workoutId) })
+            }
+        }
+
+        fun start(templateId: Long?) {
+            if (viewModel.onStartTapped(templateId)) openNew(templateId)
+        }
+
+        @Composable
+        fun choiceUnder(templateId: Long?) {
+            val unfinished = uiState.unfinished ?: return
+            if (uiState.startChoice != HomeViewModel.StartChoice(templateId)) return
+            StartChoiceRows(
+                openName = unfinished.name,
+                discardArmed = discardArmed,
+                onResume = {
+                    viewModel.clearStartChoice()
+                    navigateTo({ ActiveWorkoutScreen(it, workoutId = unfinished.workoutId) })
+                },
+                onDiscardAndStart = {
+                    if (viewModel.tapDiscardAndStart()) openNew(templateId)
+                },
+            )
+        }
 
         LightTheme(colors = themeColors) {
             Column(
@@ -163,9 +263,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
 
                     uiState.templates.forEach { template ->
                         LiftsListRow(
-                            onClick = {
-                                navigateTo({ ActiveWorkoutScreen(it, templateId = template.id) })
-                            },
+                            onClick = { start(template.id) },
                             left = {
                                 LightText(
                                     text = template.name,
@@ -182,11 +280,12 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                                 )
                             },
                         )
+                        choiceUnder(template.id)
                         RowDivider()
                     }
 
                     LiftsListRow(
-                        onClick = { navigateTo({ ActiveWorkoutScreen(it) }) },
+                        onClick = { start(null) },
                         left = {
                             LightText(
                                 text = "Empty Workout",
@@ -197,6 +296,7 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
                         },
                         right = { LightIcon(icon = LightIcons.ADD, size = 1.6f) },
                     )
+                    choiceUnder(null)
 
                     if (uiState.recent.isNotEmpty()) {
                         SectionLabel("Recent")
@@ -253,4 +353,45 @@ class HomeScreen(sealedActivity: SealedLightActivity) :
             }
         }
     }
+}
+
+/** Under a tapped Start row while another workout is open: resume that one, or discard it and start. */
+@Composable
+private fun StartChoiceRows(
+    openName: String,
+    discardArmed: Boolean,
+    onResume: () -> Unit,
+    onDiscardAndStart: () -> Unit,
+) {
+    val indent = Modifier.padding(start = 1f.gridUnitsAsDp())
+    LiftsListRow(
+        onClick = onResume,
+        left = {
+            LightText(
+                text = "Resume $openName",
+                variant = LightTextVariant.Copy,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = indent,
+            )
+        },
+        right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.2f) },
+    )
+    LiftsListRow(
+        onClick = onDiscardAndStart,
+        left = {
+            LightText(
+                text = "Discard it and start",
+                variant = LightTextVariant.Copy,
+                lighten = true,
+                maxLines = 1,
+                modifier = indent,
+            )
+        },
+        right = if (discardArmed) {
+            { LightText(text = "TAP AGAIN", variant = LightTextVariant.Detail, lighten = true, maxLines = 1) }
+        } else {
+            null
+        },
+    )
 }

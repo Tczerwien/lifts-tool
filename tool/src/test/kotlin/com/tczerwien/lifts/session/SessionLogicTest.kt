@@ -383,24 +383,34 @@ class SessionLogicTest {
     @Test
     fun `Home keeps one open workout, deleting untouched ones and closing older ones`() {
         val hour = 3_600_000L
-        val logged = listOf(set(id = 1, completedAt = 2 * hour))
         val now = 3 * hour
-        assertEquals(
-            OpenWorkoutAction.Delete,
-            openWorkoutAction(startedAt = now, sets = emptyList(), untouched = true, newest = true, now = now),
+        val plan = planOpenWorkouts(
+            listOf(
+                // Newest first. A mistaken tap: nothing in it.
+                OpenWorkout(id = 4, startedAt = now, sets = emptyList(), untouched = true),
+                // The real workout, so it stays open even though it isn't the newest row.
+                OpenWorkout(id = 3, startedAt = hour, sets = listOf(set(id = 1, completedAt = 2 * hour)), false),
+                // An older orphan with sets logged: closed at its last set.
+                OpenWorkout(id = 2, startedAt = 0, sets = listOf(set(id = 2, completedAt = hour / 2)), false),
+                // An older orphan with nothing logged: deleted.
+                OpenWorkout(id = 1, startedAt = 0, sets = listOf(set(id = 3)), untouched = false),
+            ),
+            now,
         )
-        assertEquals(
-            OpenWorkoutAction.CloseAt(2 * hour),
-            openWorkoutAction(startedAt = hour, sets = logged, untouched = false, newest = false, now = now),
+        assertEquals(OpenWorkoutAction.Delete, plan[4])
+        assertEquals(OpenWorkoutAction.Keep, plan[3])
+        assertEquals(OpenWorkoutAction.CloseAt(hour / 2), plan[2])
+        assertEquals(OpenWorkoutAction.Delete, plan[1])
+    }
+
+    @Test
+    fun `a stale newest workout is closed too, leaving none open`() {
+        val hour = 3_600_000L
+        val plan = planOpenWorkouts(
+            listOf(OpenWorkout(id = 1, startedAt = 0, sets = listOf(set(id = 1, completedAt = hour)), false)),
+            now = 1_500 * hour,
         )
-        assertEquals(
-            OpenWorkoutAction.Delete,
-            openWorkoutAction(startedAt = hour, sets = listOf(set(id = 2)), untouched = false, newest = false, now),
-        )
-        assertEquals(
-            OpenWorkoutAction.Keep,
-            openWorkoutAction(startedAt = hour, sets = logged, untouched = false, newest = true, now = now),
-        )
+        assertEquals(mapOf(1L to OpenWorkoutAction.CloseAt(hour)), plan)
     }
 
     @Test
