@@ -1,0 +1,181 @@
+package com.tczerwien.lifts.session
+
+import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import kotlin.math.abs
+
+/**
+ * PREVIOUS and starting values: which of last session's sets each of today's rows is compared
+ * with, which rows a new slot starts with, and what a row logs when it is ticked as it stands.
+ * Every screen that shows or logs these goes through here. Pure, covered by PreviousTest.
+ */
+
+/** Rows a hand-added exercise starts with when it has no history. */
+const val DEFAULT_NEW_EXERCISE_SETS = 3
+
+private fun SetEntity.isWarmup(): Boolean = type == SET_TYPE_WARMUP
+
+/**
+ * Last session's completed sets of one exercise ([previous], as the previousPerformance query
+ * returns them: slot order, then set order), split into one group per slot, in slot order.
+ */
+fun previousGroups(previous: List<SetEntity>): List<List<SetEntity>> =
+    previous.groupBy { it.workoutExerciseId }.values.map { group -> group.sortedBy { it.position } }
+
+/**
+ * Last session's sets for each of today's [slots], keyed by slot id. Slots are matched by
+ * occurrence: the k-th slot of an exercise (in position order) gets the k-th slot group from last
+ * time, so a back-off Bench slot is compared with last week's back-off sets, not the top sets.
+ * A slot last time had no counterpart for gets an empty list.
+ */
+fun previousForSlots(
+    slots: List<WorkoutExerciseEntity>,
+    previousByExercise: Map<String, List<SetEntity>>,
+): Map<Long, List<SetEntity>> {
+    val groupsByExercise = HashMap<String, List<List<SetEntity>>>()
+    val seen = HashMap<String, Int>()
+    return slots.sortedBy { it.position }.associate { slot ->
+        val occurrence = seen[slot.exerciseId] ?: 0
+        seen[slot.exerciseId] = occurrence + 1
+        val groups = groupsByExercise.getOrPut(slot.exerciseId) {
+            previousGroups(previousByExercise[slot.exerciseId].orEmpty())
+        }
+        slot.id to groups.getOrElse(occurrence) { emptyList() }
+    }
+}
+
+/**
+ * Pairs each of today's [rows] (one slot, in position order) with last session's set of the same
+ * kind from [previous]: the k-th warm-up with last time's k-th warm-up, the k-th work set with last
+ * time's k-th work set. Failure and drop sets are work. Null where last time had fewer. The result
+ * is parallel to [rows].
+ */
+fun alignPrevious(rows: List<SetEntity>, previous: List<SetEntity>): List<SetEntity?> {
+    val warmups = previous.filter { it.isWarmup() }
+    val work = previous.filterNot { it.isWarmup() }
+    var warmupIndex = 0
+    var workIndex = 0
+    return rows.map { row -> if (row.isWarmup()) warmups.getOrNull(warmupIndex++) else work.getOrNull(workIndex++) }
+}
+
+/** The weight and reps a row shows and logs. */
+data class RowValues(val weightKg: Double?, val reps: Int?)
+
+/**
+ * What each of [rows] (one slot, in position order) logs if ticked as it stands, worked out per
+ * field, weight and reps separately:
+ * 1. the row's own value;
+ * 2. the value of today's previous row of the same kind (warm-up or work), if that row moved off
+ *    its own PREVIOUS: you put 5 lb on set 1, so set 2 starts there too;
+ * 3. this row's PREVIOUS ([aligned], from [alignPrevious]);
+ * 4. today's previous row of the same kind, which is how a new exercise carries set 1 forward;
+ * 5. nothing.
+ * "Today's previous row" means its value as worked out here, so a change carries down the sets.
+ */
+fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>): List<RowValues> {
+    val result = ArrayList<RowValues>(rows.size)
+    var lastWarmup: Int? = null
+    var lastWork: Int? = null
+    rows.forEachIndexed { index, row ->
+        val earlierIndex = if (row.isWarmup()) lastWarmup else lastWork
+        val earlier = earlierIndex?.let { result[it] }
+        val earlierPrevious = earlierIndex?.let { aligned.getOrNull(it) }
+        val previous = aligned.getOrNull(index)
+        val weight = row.weightKg
+            ?: earlier?.weightKg?.takeIf { !sameWeight(it, earlierPrevious?.weightKg) }
+            ?: previous?.weightKg
+            ?: earlier?.weightKg
+        val reps = row.reps
+            ?: earlier?.reps?.takeIf { it != earlierPrevious?.reps }
+            ?: previous?.reps
+            ?: earlier?.reps
+        result += RowValues(weight, reps)
+        if (row.isWarmup()) lastWarmup = index else lastWork = index
+    }
+    return result
+}
+
+/** [seedRows] for one row. */
+fun seedFor(rows: List<SetEntity>, index: Int, aligned: List<SetEntity?>): RowValues = seedRows(rows, aligned)[index]
+
+/** Stored kg values count as equal within a microgram, so a lb round trip isn't a "change". */
+private fun sameWeight(a: Double, b: Double?): Boolean = b != null && abs(a - b) < 1e-6
+
+/**
+ * Set types a new slot starts with, from [lastTime] (the matching slot group from last session).
+ * From a template ([targetWorkSets] given): last time's warm-ups, then that many work sets. Added
+ * by hand: last time's pattern, warm-ups kept, every other type as a plain work set. With no
+ * history either way: [targetWorkSets], or [DEFAULT_NEW_EXERCISE_SETS], work sets.
+ */
+fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null): List<String> {
+    if (targetWorkSets != null) {
+        return List(lastTime.count { it.isWarmup() }) { SET_TYPE_WARMUP } +
+            List(targetWorkSets.coerceAtLeast(0)) { SET_TYPE_NORMAL }
+    }
+    if (lastTime.isEmpty()) return List(DEFAULT_NEW_EXERCISE_SETS) { SET_TYPE_NORMAL }
+    return lastTime.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
+}
+
+/** One slot as a start creates it: the exercise, and its rows' set types in order. */
+data class PlannedSlot(val exerciseId: String, val types: List<String>)
+
+/**
+ * The slots a workout started from [templateExercises] begins with: one per template exercise in
+ * position order, each with [prefillTypes] from its occurrence's slot group last session
+ * ([previousByExercise]). ActiveSession.startFromTemplate creates exactly these, and [isUntouched]
+ * compares against them, so the two can't drift apart.
+ */
+fun planTemplate(
+    templateExercises: List<TemplateExerciseEntity>,
+    previousByExercise: Map<String, List<SetEntity>>,
+): List<PlannedSlot> {
+    val seen = HashMap<String, Int>()
+    return templateExercises.sortedBy { it.position }.map { planned ->
+        val occurrence = seen[planned.exerciseId] ?: 0
+        seen[planned.exerciseId] = occurrence + 1
+        val lastTime = previousGroups(previousByExercise[planned.exerciseId].orEmpty()).getOrElse(occurrence) { emptyList() }
+        PlannedSlot(planned.exerciseId, prefillTypes(lastTime, targetWorkSets = planned.targetSets))
+    }
+}
+
+/** "Set 2 of 3", counting work sets only, or "Warm-up 1 of 2" for a warm-up row of [rows]. */
+fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
+    val warmup = rows[index].isWarmup()
+    val number = rows.take(index + 1).count { it.isWarmup() == warmup }
+    val count = rows.count { it.isWarmup() == warmup }
+    return if (warmup) "Warm-up $number of $count" else "Set $number of $count"
+}
+
+/** What the Rest Timer's NEXT line is about. */
+sealed interface RestNext {
+    /** [rows] is the slot's rows in position order; [index] is the next unticked one. */
+    data class Next(val slot: WorkoutExerciseEntity, val rows: List<SetEntity>, val index: Int) : RestNext
+
+    /** The workout has no exercises yet. */
+    data object NoExercises : RestNext
+
+    /** Every row is ticked. */
+    data object AllDone : RestNext
+}
+
+/**
+ * The set the lifter is resting toward: the first unticked row of [currentSlotId] (the exercise on
+ * screen) when it has one, otherwise [nextPendingSet]'s pick.
+ */
+fun restNextContext(
+    slots: List<WorkoutExerciseEntity>,
+    sets: List<SetEntity>,
+    currentSlotId: Long?,
+): RestNext {
+    if (slots.isEmpty()) return RestNext.NoExercises
+    val current = slots.firstOrNull { it.id == currentSlotId }
+    if (current != null) {
+        val rows = sets.filter { it.workoutExerciseId == current.id }.sortedBy { it.position }
+        val index = rows.indexOfFirst { it.completedAt == null }
+        if (index >= 0) return RestNext.Next(current, rows, index)
+    }
+    val next = nextPendingSet(slots, sets) ?: return RestNext.AllDone
+    val rows = sets.filter { it.workoutExerciseId == next.slot.id }.sortedBy { it.position }
+    return RestNext.Next(next.slot, rows, rows.indexOfFirst { it.id == next.set.id })
+}
