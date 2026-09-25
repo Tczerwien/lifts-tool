@@ -68,15 +68,15 @@ class HistoryViewModel(
         LiftsIo.write({}) { refresh() }
     }
 
+    /** One query: finished workouts newest first, each with its ticked-set count. */
     private fun refresh() {
-        // listWorkouts is startedAt DESC, so finished workouts come out newest first.
-        val rows = repository.listWorkouts().mapNotNull { workout ->
+        val rows = repository.finishedWorkoutsWithSetCounts().mapNotNull { (workout, completedSets) ->
             val endedAt = workout.endedAt ?: return@mapNotNull null
             Row(
                 workoutId = workout.id,
                 name = workout.name,
                 dateMillis = workout.startedAt,
-                setCount = repository.setsForWorkout(workout.id).count { it.completedAt != null },
+                setCount = completedSets,
                 durationMin = ((endedAt - workout.startedAt) / 60000.0).roundToInt(),
             )
         }

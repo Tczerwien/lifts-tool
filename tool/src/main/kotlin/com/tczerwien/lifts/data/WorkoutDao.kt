@@ -24,6 +24,20 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY startedAt DESC LIMIT :limit")
     fun listRecent(limit: Int): List<WorkoutEntity>
 
+    /** Finished workouts, newest first, each with its number of ticked sets. [limit] -1 means all. */
+    @Query(
+        "SELECT w.*, (SELECT COUNT(*) FROM sets s JOIN workout_exercises we ON s.workoutExerciseId = we.id " +
+            "WHERE we.workoutId = w.id AND s.completedAt IS NOT NULL) AS completedSets " +
+            "FROM workouts w WHERE w.endedAt IS NOT NULL ORDER BY w.startedAt DESC LIMIT :limit"
+    )
+    fun finishedWithSetCounts(limit: Int): List<WorkoutWithSetCount>
+
+    @Query("SELECT * FROM workout_exercises")
+    fun listAllWorkoutExercises(): List<WorkoutExerciseEntity>
+
+    @Query("SELECT * FROM sets")
+    fun listAllSets(): List<SetEntity>
+
     /** Workouts still in progress (endedAt null), newest first. */
     @Query("SELECT * FROM workouts WHERE endedAt IS NULL ORDER BY startedAt DESC, id DESC")
     fun listOpen(): List<WorkoutEntity>
@@ -108,7 +122,7 @@ interface WorkoutDao {
      * [excludeWorkoutId], in completion order. Pass -1 to exclude nothing.
      */
     @Query(
-        "SELECT sets.*, we.exerciseId AS exerciseId, we.workoutId AS workoutId FROM sets " +
+        "SELECT sets.*, we.exerciseId AS exerciseId, we.workoutId AS workoutId, we.position AS slotPosition FROM sets " +
             "JOIN workout_exercises we ON sets.workoutExerciseId = we.id " +
             "WHERE we.exerciseId IN (:exerciseIds) AND we.workoutId != :excludeWorkoutId " +
             "AND sets.completedAt IS NOT NULL " +
@@ -117,9 +131,16 @@ interface WorkoutDao {
     fun completedSetsForExercises(exerciseIds: List<String>, excludeWorkoutId: Long): List<SetWithExercise>
 }
 
-/** A set joined with the exercise and workout its slot belongs to. */
+/** A set joined with the exercise and workout its slot belongs to, and that slot's position. */
 data class SetWithExercise(
     @Embedded val set: SetEntity,
     val exerciseId: String,
     val workoutId: Long,
+    val slotPosition: Int,
+)
+
+/** A workout with its number of ticked sets. */
+data class WorkoutWithSetCount(
+    @Embedded val workout: WorkoutEntity,
+    val completedSets: Int,
 )

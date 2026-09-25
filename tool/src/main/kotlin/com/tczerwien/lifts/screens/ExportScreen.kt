@@ -163,8 +163,8 @@ class ExportViewModel(
         val snapshot = buildSnapshot(
             exercises = repository.listExercises(),
             workouts = workouts,
-            workoutExercises = workouts.flatMap { repository.exercisesForWorkout(it.id) },
-            sets = workouts.flatMap { repository.setsForWorkout(it.id) },
+            workoutExercises = repository.listAllWorkoutExercises(),
+            sets = repository.listAllSets(),
             bodyweight = repository.listBodyweight(),
             bars = repository.listBars(),
             exportedAtIso = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),

@@ -62,6 +62,23 @@ class LiftsRepository private constructor(
 
     fun listRecentWorkouts(limit: Int): List<WorkoutEntity> = db.workoutDao.listRecent(limit)
 
+    /** Finished workouts, newest first, with their ticked-set counts, in one query. [limit] -1 means all. */
+    fun finishedWorkoutsWithSetCounts(limit: Int = -1): List<WorkoutWithSetCount> =
+        db.workoutDao.finishedWithSetCounts(limit)
+
+    /** Every exercise slot of every workout, in one query (for export). */
+    fun listAllWorkoutExercises(): List<WorkoutExerciseEntity> = db.workoutDao.listAllWorkoutExercises()
+
+    /** Every set of every workout, in one query (for export). */
+    fun listAllSets(): List<SetEntity> = db.workoutDao.listAllSets()
+
+    /**
+     * Every completed set of [exerciseId] from any workout, with the workout and slot position it
+     * belongs to, in completion order, in one query.
+     */
+    fun completedSetsWithWorkout(exerciseId: String): List<SetWithExercise> =
+        db.workoutDao.completedSetsForExercises(listOf(exerciseId), -1)
+
     /** Workouts still in progress, newest first. Normally at most one; see HomeViewModel's cleanup. */
     override fun listOpenWorkouts(): List<WorkoutEntity> = db.workoutDao.listOpen()
 

@@ -183,12 +183,12 @@ class HomeViewModel(
                 exerciseCount = repository.exercisesForTemplate(template.id).size,
             )
         }
-        val recent = repository.listWorkouts().filter { it.endedAt != null }.take(2).map { workout ->
+        val recent = repository.finishedWorkoutsWithSetCounts(limit = 2).map { (workout, completedSets) ->
             RecentRow(
                 workoutId = workout.id,
                 name = workout.name,
                 dateMillis = workout.endedAt ?: workout.startedAt,
-                setCount = repository.setsForWorkout(workout.id).count { it.completedAt != null },
+                setCount = completedSets,
             )
         }
         return UiState(

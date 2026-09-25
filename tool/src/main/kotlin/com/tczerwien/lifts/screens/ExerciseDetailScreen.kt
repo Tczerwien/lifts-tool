@@ -152,23 +152,16 @@ class ExerciseDetailViewModel(
         val exercise = repository.exerciseById(exerciseId)
         val unit = settings.snapshot().units
 
-        // Every workout containing this exercise, newest first, with its completed sets.
+        // Every workout containing this exercise, newest first, with its completed sets in slot
+        // then set order: two queries, whatever the history length.
+        val setsByWorkout = repository.completedSetsWithWorkout(exerciseId).groupBy { it.workoutId }
         val perWorkout = repository.listWorkouts().mapNotNull { workout ->
-            val slotIds = repository.exercisesForWorkout(workout.id)
-                .filter { it.exerciseId == exerciseId }
-                .mapTo(HashSet()) { it.id }
-            if (slotIds.isEmpty()) return@mapNotNull null
-            val sets = repository.setsForWorkout(workout.id)
-                .filter { it.workoutExerciseId in slotIds && it.completedAt != null }
-            if (sets.isEmpty()) {
-                null
-            } else {
-                PerWorkout(
-                    workoutId = workout.id,
-                    dateMillis = workout.endedAt ?: workout.startedAt,
-                    sets = sets,
-                )
-            }
+            val sets = setsByWorkout[workout.id] ?: return@mapNotNull null
+            PerWorkout(
+                workoutId = workout.id,
+                dateMillis = workout.endedAt ?: workout.startedAt,
+                sets = sets.sortedWith(compareBy({ it.slotPosition }, { it.set.position })).map { it.set },
+            )
         }
 
         // A set is starred when it beat every set completed before it (shared records engine).
