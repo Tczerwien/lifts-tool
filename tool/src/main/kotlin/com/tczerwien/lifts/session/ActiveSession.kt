@@ -120,7 +120,8 @@ class ActiveSession(
         )
     }
 
-    fun updateSet(set: SetEntity): Boolean = repository.updateSet(set)
+    /** Saves [set]'s values; see [LiftsStore.updateSetValues]. */
+    fun updateSet(set: SetEntity): Boolean = repository.updateSetValues(set)
 
     /** Removes a set that hasn't been logged; a logged set is left alone. */
     fun removeSet(setId: Long): Boolean = repository.inTransaction {
@@ -135,7 +136,7 @@ class ActiveSession(
         !logged && repository.deleteSlot(workoutExerciseId)
     }
 
-    fun uncompleteSet(set: SetEntity): Boolean = repository.updateSet(set.copy(completedAt = null))
+    fun uncompleteSet(set: SetEntity): Boolean = repository.updateSetValues(set.copy(completedAt = null))
 
     /**
      * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null when no
@@ -164,7 +165,7 @@ class ActiveSession(
         val slots = repository.exercisesForWorkout(workoutId)
         val slot = slots.firstOrNull { it.id == set.workoutExerciseId }
         val completed = set.copy(weightKg = weightKg, reps = reps, type = type, completedAt = now)
-        repository.updateSet(completed)
+        repository.updateSetValues(completed)
 
         val snapshot = settings.snapshot()
         val restSec = restDurationSec(

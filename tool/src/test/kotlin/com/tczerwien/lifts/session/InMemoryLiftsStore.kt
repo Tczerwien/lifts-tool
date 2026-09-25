@@ -58,7 +58,11 @@ class InMemoryLiftsStore : LiftsStore {
 
     override fun addSet(set: SetEntity): Long = newId(set.id).also { sets[it] = set.copy(id = it) }
 
-    override fun updateSet(set: SetEntity): Boolean = sets.containsKey(set.id).also { if (it) sets[set.id] = set }
+    override fun updateSetValues(set: SetEntity): Boolean {
+        val stored = sets[set.id] ?: return false
+        sets[set.id] = set.copy(workoutExerciseId = stored.workoutExerciseId, position = stored.position)
+        return true
+    }
 
     override fun setById(id: Long): SetEntity? = sets[id]
 

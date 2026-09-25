@@ -158,6 +158,19 @@ class ActiveSessionTest {
         assertNull(session.restStateSnapshot())
     }
 
+    @Test
+    fun `a save that lands after a removal keeps the renumbered position`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "bench")
+        val (first, _, third) = store.setsForWorkout(workoutId)
+        session.removeSet(first.id)
+        // The screen still holds the third row at its old position 2 when a stepper tap saves it.
+        session.updateSet(third.copy(weightKg = 50.0))
+        val rows = store.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }
+        assertEquals(listOf(0, 1), rows.map { it.position })
+        assertEquals(50.0, rows.last().weightKg)
+    }
+
     // --- Finishing ---
 
     @Test

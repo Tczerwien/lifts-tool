@@ -54,6 +54,24 @@ interface WorkoutDao {
     @Update
     fun updateSet(set: SetEntity): Int
 
+    /**
+     * Writes a set's values only. Its slot and position stay as the database has them, so a save
+     * that lands after a set was removed and the rest renumbered can't put back an old position.
+     */
+    @Query(
+        "UPDATE sets SET type = :type, weightKg = :weightKg, reps = :reps, durationSec = :durationSec, " +
+            "rpe = :rpe, completedAt = :completedAt WHERE id = :id"
+    )
+    fun updateSetValues(
+        id: Long,
+        type: String,
+        weightKg: Double?,
+        reps: Int?,
+        durationSec: Int?,
+        rpe: Double?,
+        completedAt: Long?,
+    ): Int
+
     @Update
     fun updateWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Int
 

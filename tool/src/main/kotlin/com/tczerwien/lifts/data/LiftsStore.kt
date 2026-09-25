@@ -30,7 +30,8 @@ interface LiftsStore {
 
     fun addSet(set: SetEntity): Long
 
-    fun updateSet(set: SetEntity): Boolean
+    /** Writes [set]'s values (type, weight, reps, duration, RPE, tick); its slot and position are left alone. */
+    fun updateSetValues(set: SetEntity): Boolean
 
     fun setById(id: Long): SetEntity?
 

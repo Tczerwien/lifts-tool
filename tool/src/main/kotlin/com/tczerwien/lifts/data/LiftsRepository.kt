@@ -104,7 +104,15 @@ class LiftsRepository private constructor(
 
     override fun addSet(set: SetEntity): Long = db.workoutDao.insertSet(set)
 
-    override fun updateSet(set: SetEntity): Boolean = db.workoutDao.updateSet(set) > 0
+    override fun updateSetValues(set: SetEntity): Boolean = db.workoutDao.updateSetValues(
+        id = set.id,
+        type = set.type,
+        weightKg = set.weightKg,
+        reps = set.reps,
+        durationSec = set.durationSec,
+        rpe = set.rpe,
+        completedAt = set.completedAt,
+    ) > 0
 
     override fun setById(id: Long): SetEntity? = db.workoutDao.setById(id)
 
