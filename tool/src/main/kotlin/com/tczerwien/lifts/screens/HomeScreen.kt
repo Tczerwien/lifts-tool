@@ -91,28 +91,45 @@ class HomeViewModel(
     @Volatile
     private var showing = false
 
+    /** The newest load asked for. Loads read in that order on the lane, so it has the freshest data. */
+    @Volatile
+    private var latestLoad = 0L
+
+    /** Guards [appliedLoad], the newest load on screen. */
+    private val loadLock = Any()
+    private var appliedLoad = 0L
+
     /**
      * Loads on every show, on the write lane: that orders it after anything Active Workout queued on
      * its way out (such as discarding an untouched workout), and the cleanup below writes too.
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         showing = true
+        val ticket = ++latestLoad
         _uiState.update { it.copy(ready = false) }
         LiftsIo.write({ load() }) { loaded ->
-            _uiState.update { current ->
-                loaded.copy(
-                    ready = true,
-                    startChoice = current.startChoice.takeIf { loaded.unfinished != null },
-                    // A cold start the lifter already left Home from (History, say) stays put.
-                    autoResumeWorkoutId = loaded.autoResumeWorkoutId.takeIf { showing },
-                )
+            // Loads land in any order: an older one never replaces a newer one, and Home is ready
+            // for Start taps only once the newest has landed.
+            synchronized(loadLock) {
+                if (ticket < appliedLoad) return@write
+                appliedLoad = ticket
+                _uiState.update { current ->
+                    loaded.copy(
+                        ready = ticket == latestLoad,
+                        startChoice = current.startChoice.takeIf { loaded.unfinished != null },
+                        // A cold start the lifter already left Home from (History, say) stays put.
+                        autoResumeWorkoutId = loaded.autoResumeWorkoutId.takeIf { showing },
+                    )
+                }
             }
         }
     }
 
+    /** Leaving Home drops a pending auto-resume and any open Resume / Discard choice. */
     override fun onScreenHide(screen: SimpleLightScreen<Unit>) {
         showing = false
-        _uiState.update { it.copy(autoResumeWorkoutId = null) }
+        discardAndStartArm.disarm()
+        _uiState.update { it.copy(autoResumeWorkoutId = null, startChoice = null) }
     }
 
     /**
@@ -137,9 +154,12 @@ class HomeViewModel(
     /**
      * Second tap of "Discard and start": queues the delete of the open workout and returns true, and
      * the caller opens the new one. Its creation is queued behind the delete on the same lane.
+     * Ignored until Home has loaded, so rows left over from before can't delete a finished workout.
      */
     fun tapDiscardAndStart(): Boolean {
-        val open = _uiState.value.unfinished ?: return true
+        val state = _uiState.value
+        if (!state.ready) return false
+        val open = state.unfinished ?: return true
         if (!discardAndStartArm.tap()) return false
         _uiState.update { it.copy(startChoice = null, unfinished = null) }
         LiftsIo.write { session.discardWorkout(open.workoutId) }
