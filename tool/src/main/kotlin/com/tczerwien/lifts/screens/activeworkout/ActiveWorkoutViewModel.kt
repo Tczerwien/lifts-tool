@@ -555,14 +555,19 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * Last session and PR history for exercises not seen yet on this screen; one previousPerformance
-     * query per new exercise plus one history query for all of them.
+     * Last session and PR history for exercises not seen yet on this screen: two queries per new
+     * exercise plus one history query for all of them. Merged under [refreshLock], so two reloads
+     * running at once can't drop each other's additions.
      */
     private fun cacheHistory(exerciseIds: List<String>, workoutId: Long) {
         val missing = exerciseIds.filterNot { it in lastTimeByExercise }
         if (missing.isEmpty()) return
-        lastTimeByExercise = lastTimeByExercise + session.previousGroupsByExercise(missing)
-        priorHistoryByExercise = priorHistoryByExercise + session.priorHistory(missing, workoutId)
+        val lastTime = session.previousGroupsByExercise(missing)
+        val history = session.priorHistory(missing, workoutId)
+        synchronized(refreshLock) {
+            lastTimeByExercise = lastTimeByExercise + lastTime
+            priorHistoryByExercise = priorHistoryByExercise + history
+        }
     }
 
     /**
