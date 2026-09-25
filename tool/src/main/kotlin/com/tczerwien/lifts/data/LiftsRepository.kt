@@ -143,6 +143,8 @@ class LiftsRepository private constructor(
     override fun previousPerformance(exerciseId: String): List<SetEntity> =
         db.workoutDao.previousPerformance(exerciseId)
 
+    override fun previousSlotIds(exerciseId: String): List<Long> = db.workoutDao.previousSlotIds(exerciseId)
+
     /**
      * Completed sets of [exerciseIds] from every workout except [excludeWorkoutId], in
      * completion order, grouped by exercise id. One query, whatever the history length.

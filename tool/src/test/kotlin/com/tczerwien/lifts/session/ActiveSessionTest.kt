@@ -96,6 +96,22 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a Bench slot skipped last week doesn't shift the next one onto it`() {
+        val lastWeek = store.addFinishedWorkout(
+            startedAt = 1_000_000,
+            "bench" to List(3) { Triple(n, 85.0, 5) },
+            "bench" to List(2) { Triple(n, 70.0, 10) },
+        )
+        store.skipSlot(lastWeek, position = 0)
+        val workoutId = session.startEmpty(now = 2_000_000)
+        val top = session.addExercise(workoutId, "bench")
+        val backOff = session.addExercise(workoutId, "bench")
+        // The skipped top slot has nothing to mirror; the back-off slot still mirrors its own two sets.
+        assertEquals(DEFAULT_NEW_EXERCISE_SETS, store.setsForWorkout(workoutId).count { it.workoutExerciseId == top })
+        assertEquals(2, store.setsForWorkout(workoutId).count { it.workoutExerciseId == backOff })
+    }
+
+    @Test
     fun `backing out of a template start with warm-ups discards it, but not once a set is ticked`() {
         store.addFinishedWorkout(1_000_000, "rdl" to listOf(Triple(w, 43.0, 8), Triple(n, 84.0, 8)))
         val template = store.addTemplate("Lower A", "rdl" to 2)

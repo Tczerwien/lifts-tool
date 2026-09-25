@@ -85,7 +85,13 @@ class InMemoryLiftsStore : LiftsStore {
     override fun setsForWorkout(workoutId: Long): List<SetEntity> =
         exercisesForWorkout(workoutId).flatMap { slot -> setsOf(slot.id) }
 
-    override fun previousPerformance(exerciseId: String): List<SetEntity> {
+    override fun previousPerformance(exerciseId: String): List<SetEntity> =
+        previousSlots(exerciseId).flatMap { slot -> setsOf(slot.id).filter { it.completedAt != null } }
+
+    override fun previousSlotIds(exerciseId: String): List<Long> = previousSlots(exerciseId).map { it.id }
+
+    /** The exercise's slots in the latest finished workout where it has a ticked set. */
+    private fun previousSlots(exerciseId: String): List<WorkoutExerciseEntity> {
         val latest = workouts.values
             .filter { workout ->
                 workout.endedAt != null && exercisesForWorkout(workout.id).any { slot ->
@@ -94,9 +100,7 @@ class InMemoryLiftsStore : LiftsStore {
             }
             .maxWithOrNull(compareBy<WorkoutEntity> { it.startedAt }.thenBy { it.id })
             ?: return emptyList()
-        return exercisesForWorkout(latest.id)
-            .filter { it.exerciseId == exerciseId }
-            .flatMap { slot -> setsOf(slot.id).filter { it.completedAt != null } }
+        return exercisesForWorkout(latest.id).filter { it.exerciseId == exerciseId }
     }
 
     override fun completedSetsByExercise(
@@ -149,5 +153,11 @@ class InMemoryLiftsStore : LiftsStore {
         }
         updateWorkout(workouts.getValue(workoutId).copy(endedAt = clock + 60_000))
         return workoutId
+    }
+
+    /** Unticks every set of the slot at [position] in [workoutId]: a slot that was skipped. */
+    fun skipSlot(workoutId: Long, position: Int) {
+        val slot = exercisesForWorkout(workoutId).single { it.position == position }
+        setsOf(slot.id).forEach { sets[it.id] = it.copy(completedAt = null) }
     }
 }

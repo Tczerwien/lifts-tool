@@ -119,7 +119,7 @@ class ActiveWorkoutViewModel(
      * these cached, a reload is four queries, not a scan of the whole history.
      */
     @Volatile
-    private var lastTimeByExercise: Map<String, List<SetEntity>> = emptyMap()
+    private var lastTimeByExercise: Map<String, List<List<SetEntity>>> = emptyMap()
 
     @Volatile
     private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
@@ -561,7 +561,7 @@ class ActiveWorkoutViewModel(
     private fun cacheHistory(exerciseIds: List<String>, workoutId: Long) {
         val missing = exerciseIds.filterNot { it in lastTimeByExercise }
         if (missing.isEmpty()) return
-        lastTimeByExercise = lastTimeByExercise + session.previousByExercise(missing)
+        lastTimeByExercise = lastTimeByExercise + session.previousGroupsByExercise(missing)
         priorHistoryByExercise = priorHistoryByExercise + session.priorHistory(missing, workoutId)
     }
 

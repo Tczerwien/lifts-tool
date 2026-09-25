@@ -158,7 +158,7 @@ class RestTimerViewModel(
             is RestNext.Next -> context
         }
         val exerciseId = next.slot.exerciseId
-        val lastTime = previousForSlots(slots, session.previousByExercise(listOf(exerciseId)))[next.slot.id].orEmpty()
+        val lastTime = previousForSlots(slots, session.previousGroupsByExercise(listOf(exerciseId)))[next.slot.id].orEmpty()
         val aligned = alignPrevious(next.rows, lastTime)
         val units = settingsStore.snapshot().units
         val seed = seedFor(next.rows, next.index, aligned, units)

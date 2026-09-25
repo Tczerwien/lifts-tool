@@ -55,7 +55,7 @@ class ActiveSession(
         )
         template ?: return workoutId
         val templateExercises = repository.exercisesForTemplate(templateId).sortedBy { it.position }
-        val plan = planTemplate(templateExercises, previousByExercise(templateExercises.map { it.exerciseId }))
+        val plan = planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
         templateExercises.zip(plan).forEachIndexed { index, (templateExercise, planned) ->
             val slotId = repository.addWorkoutExercise(
                 WorkoutExerciseEntity(
@@ -73,9 +73,15 @@ class ActiveSession(
         return workoutId
     }
 
-    /** Last session's sets of each of [exerciseIds] ([LiftsStore.previousPerformance]), one query each. */
-    fun previousByExercise(exerciseIds: Collection<String>): Map<String, List<SetEntity>> =
-        exerciseIds.distinct().associateWith { repository.previousPerformance(it) }
+    /**
+     * Last session's sets of each of [exerciseIds], one group per slot that session had, empty
+     * slots included ([previousGroups]). Two queries per exercise.
+     */
+    fun previousGroupsByExercise(exerciseIds: Collection<String>): Map<String, List<List<SetEntity>>> =
+        exerciseIds.distinct().associateWith { previousGroupsOf(it) }
+
+    private fun previousGroupsOf(exerciseId: String): List<List<SetEntity>> =
+        previousGroups(repository.previousPerformance(exerciseId), repository.previousSlotIds(exerciseId))
 
     /** Creates an empty workout; like [startFromTemplate] it clears any leftover rest. */
     fun startEmpty(now: Long = System.currentTimeMillis()): Long {
@@ -97,7 +103,7 @@ class ActiveSession(
         val slotId = repository.addWorkoutExercise(
             WorkoutExerciseEntity(workoutId = workoutId, exerciseId = exerciseId, position = position),
         )
-        val lastTime = previousGroups(repository.previousPerformance(exerciseId)).getOrElse(occurrence) { emptyList() }
+        val lastTime = previousGroupsOf(exerciseId).getOrElse(occurrence) { emptyList() }
         prefillTypes(lastTime).forEachIndexed { index, type ->
             repository.addSet(SetEntity(workoutExerciseId = slotId, position = index, type = type))
         }
@@ -286,7 +292,7 @@ class ActiveSession(
         sets = sets,
         planned = workout.templateId?.let { templateId ->
             val templateExercises = repository.exercisesForTemplate(templateId)
-            planTemplate(templateExercises, previousByExercise(templateExercises.map { it.exerciseId }))
+            planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
         },
     )
 

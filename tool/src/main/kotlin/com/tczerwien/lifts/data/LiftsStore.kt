@@ -52,6 +52,9 @@ interface LiftsStore {
      */
     fun previousPerformance(exerciseId: String): List<SetEntity>
 
+    /** Every slot of [exerciseId] in the workout [previousPerformance] reads, ticked or not, in position order. */
+    fun previousSlotIds(exerciseId: String): List<Long>
+
     /** Completed sets of [exerciseIds] from every workout except [excludeWorkoutId], in completion order. */
     fun completedSetsByExercise(exerciseIds: Collection<String>, excludeWorkoutId: Long = -1): Map<String, List<SetEntity>>
 

@@ -18,31 +18,30 @@ const val DEFAULT_NEW_EXERCISE_SETS = 3
 private fun SetEntity.isWarmup(): Boolean = type == SET_TYPE_WARMUP
 
 /**
- * Last session's completed sets of one exercise ([previous], as the previousPerformance query
- * returns them: slot order, then set order), split into one group per slot, in slot order.
+ * Last session's completed sets of one exercise ([previous]) split into one group per slot of
+ * that session ([slotIds], in slot order), so a slot where nothing was ticked is an empty group
+ * and keeps its place: the next slot's sets don't slide up into it.
  */
-fun previousGroups(previous: List<SetEntity>): List<List<SetEntity>> =
-    previous.groupBy { it.workoutExerciseId }.values.map { group -> group.sortedBy { it.position } }
+fun previousGroups(previous: List<SetEntity>, slotIds: List<Long>): List<List<SetEntity>> {
+    val bySlot = previous.groupBy { it.workoutExerciseId }
+    return slotIds.map { slotId -> bySlot[slotId].orEmpty().sortedBy { it.position } }
+}
 
 /**
  * Last session's sets for each of today's [slots], keyed by slot id. Slots are matched by
  * occurrence: the k-th slot of an exercise (in position order) gets the k-th slot group from last
- * time, so a back-off Bench slot is compared with last week's back-off sets, not the top sets.
- * A slot last time had no counterpart for gets an empty list.
+ * time ([groupsByExercise], from [previousGroups]), so a back-off Bench slot is compared with last
+ * week's back-off sets, not the top sets. A slot last time had no counterpart for gets an empty list.
  */
 fun previousForSlots(
     slots: List<WorkoutExerciseEntity>,
-    previousByExercise: Map<String, List<SetEntity>>,
+    groupsByExercise: Map<String, List<List<SetEntity>>>,
 ): Map<Long, List<SetEntity>> {
-    val groupsByExercise = HashMap<String, List<List<SetEntity>>>()
     val seen = HashMap<String, Int>()
     return slots.sortedBy { it.position }.associate { slot ->
         val occurrence = seen[slot.exerciseId] ?: 0
         seen[slot.exerciseId] = occurrence + 1
-        val groups = groupsByExercise.getOrPut(slot.exerciseId) {
-            previousGroups(previousByExercise[slot.exerciseId].orEmpty())
-        }
-        slot.id to groups.getOrElse(occurrence) { emptyList() }
+        slot.id to groupsByExercise[slot.exerciseId].orEmpty().getOrElse(occurrence) { emptyList() }
     }
 }
 
@@ -137,18 +136,18 @@ data class PlannedSlot(val exerciseId: String, val types: List<String>)
 /**
  * The slots a workout started from [templateExercises] begins with: one per template exercise in
  * position order, each with [prefillTypes] from its occurrence's slot group last session
- * ([previousByExercise]). ActiveSession.startFromTemplate creates exactly these, and [isUntouched]
- * compares against them, so the two can't drift apart.
+ * ([groupsByExercise], from [previousGroups]). ActiveSession.startFromTemplate creates exactly
+ * these, and [isUntouched] compares against them, so the two can't drift apart.
  */
 fun planTemplate(
     templateExercises: List<TemplateExerciseEntity>,
-    previousByExercise: Map<String, List<SetEntity>>,
+    groupsByExercise: Map<String, List<List<SetEntity>>>,
 ): List<PlannedSlot> {
     val seen = HashMap<String, Int>()
     return templateExercises.sortedBy { it.position }.map { planned ->
         val occurrence = seen[planned.exerciseId] ?: 0
         seen[planned.exerciseId] = occurrence + 1
-        val lastTime = previousGroups(previousByExercise[planned.exerciseId].orEmpty()).getOrElse(occurrence) { emptyList() }
+        val lastTime = groupsByExercise[planned.exerciseId].orEmpty().getOrElse(occurrence) { emptyList() }
         PlannedSlot(planned.exerciseId, prefillTypes(lastTime, targetWorkSets = planned.targetSets))
     }
 }

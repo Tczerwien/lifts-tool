@@ -23,7 +23,20 @@ class PreviousTest {
             set(2, slot = 11, position = 0, weightKg = 70.0, reps = 8),
             set(3, slot = 11, position = 1, weightKg = 70.0, reps = 8),
         )
-        assertEquals(listOf(listOf(1L), listOf(2L, 3L)), previousGroups(previous).map { g -> g.map { it.id } })
+        assertEquals(listOf(listOf(1L), listOf(2L, 3L)), previousGroups(previous, listOf(10, 11)).map { g -> g.map { it.id } })
+    }
+
+    @Test
+    fun `a slot skipped last time keeps its place`() {
+        // Last week: Bench top slot 10 skipped (nothing ticked), back-off slot 11 done.
+        val previous = listOf(
+            set(2, slot = 11, position = 0, weightKg = 70.0, reps = 8),
+            set(3, slot = 11, position = 1, weightKg = 70.0, reps = 8),
+        )
+        val groups = mapOf("bench" to previousGroups(previous, slotIds = listOf(10, 11)))
+        val bySlot = previousForSlots(listOf(slot(20, "bench", 0), slot(21, "bench", 1)), groups)
+        assertEquals(emptyList(), bySlot.getValue(20), "the top slot has no PREVIOUS")
+        assertEquals(listOf(2L, 3L), bySlot.getValue(21).map { it.id }, "the back-off slot still gets the back-off sets")
     }
 
     @Test
@@ -42,7 +55,7 @@ class PreviousTest {
             slot(22, "bench", 2),
             slot(23, "bench", 3),
         )
-        val bySlot = previousForSlots(today, lastWeek)
+        val bySlot = previousForSlots(today, groups(lastWeek))
         assertEquals(listOf(1L), bySlot.getValue(20).map { it.id })
         assertEquals(listOf(4L), bySlot.getValue(21).map { it.id })
         assertEquals(listOf(2L, 3L), bySlot.getValue(22).map { it.id })
@@ -205,7 +218,7 @@ class PreviousTest {
                 PlannedSlot("bench", listOf(n, n, n)),
                 PlannedSlot("rdl", listOf(w, w, n, n, n)),
             ),
-            planTemplate(template, lastTime),
+            planTemplate(template, groups(lastTime)),
         )
     }
 
@@ -249,6 +262,10 @@ class PreviousTest {
     }
 
     // --- Fixtures ---
+
+    /** Last session's sets per exercise, grouped per slot in the order the slots first appear. */
+    private fun groups(byExercise: Map<String, List<SetEntity>>): Map<String, List<List<SetEntity>>> =
+        byExercise.mapValues { (_, sets) -> previousGroups(sets, sets.map { it.workoutExerciseId }.distinct()) }
 
     private fun rows(vararg types: String): List<SetEntity> =
         types.mapIndexed { index, type -> set(100L + index, position = index, type = type) }
