@@ -259,6 +259,7 @@ class PreviousTest {
         val allDone = squatDone.map { it.copy(completedAt = 9L) }
         assertEquals(RestNext.AllDone, restNextContext(slots, allDone, currentSlotId = 1))
         assertEquals(RestNext.NoExercises, restNextContext(emptyList(), emptyList(), currentSlotId = null))
+        assertEquals(RestNext.NoSets, restNextContext(slots, emptyList(), currentSlotId = 1), "every row removed")
     }
 
     // --- Fixtures ---

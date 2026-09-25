@@ -168,6 +168,9 @@ sealed interface RestNext {
     /** The workout has no exercises yet. */
     data object NoExercises : RestNext
 
+    /** It has exercises, but every one of them has had all its rows removed. */
+    data object NoSets : RestNext
+
     /** Every row is ticked. */
     data object AllDone : RestNext
 }
@@ -182,6 +185,8 @@ fun restNextContext(
     currentSlotId: Long?,
 ): RestNext {
     if (slots.isEmpty()) return RestNext.NoExercises
+    val slotIds = slots.mapTo(HashSet()) { it.id }
+    if (sets.none { it.workoutExerciseId in slotIds }) return RestNext.NoSets
     val current = slots.firstOrNull { it.id == currentSlotId }
     if (current != null) {
         val rows = sets.filter { it.workoutExerciseId == current.id }.sortedBy { it.position }

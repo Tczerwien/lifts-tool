@@ -19,6 +19,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RestNext
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.nextSetLabel
@@ -107,6 +108,9 @@ class RestTimerViewModel(
                     else -> _uiState.value.endMillis
                 }
                 initialized = true
+                // Read behind any save still queued (a stepper tap just before opening the timer),
+                // so NEXT shows what a tick would log now.
+                LiftsIo.write {}.join()
                 val (nextLine, nextContext) = loadNextContext()
                 _uiState.update {
                     it.copy(
@@ -154,6 +158,7 @@ class RestTimerViewModel(
         val sets = repository.setsForWorkout(workout.id)
         val next = when (val context = restNextContext(slots, sets, slotId)) {
             RestNext.NoExercises -> return "NO EXERCISES YET" to "Add an exercise"
+            RestNext.NoSets -> return "NO SETS YET" to "Add a set"
             RestNext.AllDone -> return "ALL SETS DONE" to "Finish or add an exercise"
             is RestNext.Next -> context
         }
@@ -162,7 +167,8 @@ class RestTimerViewModel(
         val aligned = alignPrevious(next.rows, lastTime)
         val units = settingsStore.snapshot().units
         val seed = seedFor(next.rows, next.index, aligned, units)
-        val rpe = next.rows[next.index].rpe ?: aligned[next.index]?.rpe
+        // Only the row's own RPE: a tick logs that, never last session's.
+        val rpe = next.rows[next.index].rpe
         val summary = when {
             seed.weightKg != null && seed.reps != null -> Format.setSummary(seed.weightKg, seed.reps, units)
             seed.reps != null -> "× ${seed.reps}"
