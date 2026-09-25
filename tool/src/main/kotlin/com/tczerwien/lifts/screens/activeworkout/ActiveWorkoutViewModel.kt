@@ -10,9 +10,13 @@ import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
+import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.nextPendingSet
 import com.tczerwien.lifts.session.prSetIds
+import com.tczerwien.lifts.session.previousForSlots
+import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
@@ -20,11 +24,16 @@ import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SimpleLightScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** How long "SET WEIGHT OR REPS FIRST" shows after a tick on a row with nothing to log. */
+private const val EMPTY_TICK_HINT_MILLIS = 2_500L
 
 class ActiveWorkoutViewModel(
     private val repository: LiftsRepository,
@@ -34,16 +43,24 @@ class ActiveWorkoutViewModel(
     private val templateId: Long?,
 ) : LightViewModel<Unit>() {
 
-    /** One exercise of the session with its sets and previous-per-index lookup. */
+    /** One exercise of the session: its rows, and what last session did in the matching slot. */
     data class ExerciseBlock(
         val slot: WorkoutExerciseEntity,
         val name: String,
         val baseName: String,
         val detailLine: String,
         val cue: String?,
+        /** Today's rows in position order. */
         val sets: List<SetEntity>,
-        val previous: List<SetEntity>,
-    )
+        /** Last session's sets for this slot ([previousForSlots]). */
+        val lastTime: List<SetEntity>,
+    ) {
+        /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
+        val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
+
+        /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
+        val seeds: List<RowValues> = seedRows(sets, previous)
+    }
 
     data class UiState(
         val loaded: Boolean = false,
@@ -70,6 +87,8 @@ class ActiveWorkoutViewModel(
         val completeOpen: Boolean = false,
         /** Nothing left to show (discarded, finished, or gone): Content leaves the screen. */
         val leave: Boolean = false,
+        /** A tick on a row with nothing to log: "SET WEIGHT OR REPS FIRST" shows for a moment. */
+        val emptyTickHint: Boolean = false,
     )
 
     /**
@@ -91,9 +110,19 @@ class ActiveWorkoutViewModel(
     @Volatile
     private var resolvedWorkoutId: Long? = null
 
-    /** Prior sets per exercise from other workouts; cached per refresh for PR replay. */
+    /**
+     * Per exercise, from other workouts, fetched once for the life of this screen: no other workout
+     * can change while this one is open. [lastTimeByExercise] is previousPerformance (for PREVIOUS
+     * and starting values); [priorHistoryByExercise] is every completed set (for PR stars). With
+     * these cached, a reload is four queries, not a scan of the whole history.
+     */
+    @Volatile
+    private var lastTimeByExercise: Map<String, List<SetEntity>> = emptyMap()
+
     @Volatile
     private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
+
+    private var emptyTickHintJob: Job? = null
 
     /** Top-bar Finish takes two taps; see [tapFinish]. */
     val finishArm = ArmedAction(viewModelScope)
@@ -191,9 +220,10 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * Checkbox toggle. Completing autofills missing values from previous performance
-     * (a row with nothing to log is ignored), advances the active row, and starts rest
-     * per the completion result. Uncompleting keeps the logged values.
+     * Checkbox toggle. Completing logs exactly what the row shows: its starting value ([seedRows])
+     * wherever it has none of its own. A row with nothing to log shows a hint instead. Completing
+     * advances the active row and starts rest per the completion result. Uncompleting keeps the
+     * logged values.
      */
     fun toggleComplete(setId: Long) {
         if (locked) return
@@ -204,24 +234,32 @@ class ActiveWorkoutViewModel(
             LiftsIo.write { session.uncompleteSet(set) }
             return
         }
-        val previous = located.block.previous.getOrNull(located.index)
-        val weightKg = set.weightKg ?: previous?.weightKg
-        val reps = set.reps ?: previous?.reps
-        if (weightKg == null && reps == null) return
+        val seed = located.block.seeds[located.index]
+        if (seed.weightKg == null && seed.reps == null) {
+            showEmptyTickHint()
+            return
+        }
         val now = System.currentTimeMillis()
-        applySetChange(setId) { it.copy(weightKg = weightKg, reps = reps, completedAt = now) }
+        applySetChange(setId) { it.copy(weightKg = seed.weightKg, reps = seed.reps, completedAt = now) } ?: return
         _uiState.update { state ->
             val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
         val workoutId = _uiState.value.workoutId
-        LiftsIo.write({ session.completeSet(workoutId, set, weightKg, reps, set.type, now) }) { completion ->
+        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { completion ->
             _uiState.update {
-                it.copy(
-                    restEndMillis = completion.restEndMillis,
-                    restTotalSec = completion.restDurationSec,
-                )
+                it.copy(restEndMillis = completion.restEndMillis, restTotalSec = completion.restDurationSec)
             }
+        }
+    }
+
+    /** "SET WEIGHT OR REPS FIRST" for a couple of seconds, instead of a tick that does nothing. */
+    private fun showEmptyTickHint() {
+        emptyTickHintJob?.cancel()
+        _uiState.update { it.copy(emptyTickHint = true) }
+        emptyTickHintJob = viewModelScope.launch {
+            delay(EMPTY_TICK_HINT_MILLIS)
+            _uiState.update { it.copy(emptyTickHint = false) }
         }
     }
 
@@ -245,7 +283,7 @@ class ActiveWorkoutViewModel(
         if (locked) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
-        val next = (currentReps(state, set) + direction).coerceAtLeast(0)
+        val next = (currentReps(set) + direction).coerceAtLeast(0)
         val changed = applySetChange(set.id) { it.copy(reps = next) } ?: return
         persistSet(changed)
     }
@@ -257,7 +295,7 @@ class ActiveWorkoutViewModel(
 
     fun repsDecrementEnabled(state: UiState): Boolean {
         val set = activeSet(state) ?: return false
-        return currentReps(state, set) > 0
+        return currentReps(set) > 0
     }
 
     fun activeSet(state: UiState): SetEntity? {
@@ -265,21 +303,17 @@ class ActiveWorkoutViewModel(
         return state.exercises.getOrNull(state.currentIndex)?.sets?.firstOrNull { it.id == id }
     }
 
-    /** Active row's display weight; empty rows seed from this session's earlier rows, else previous performance. */
+    /** The active row's weight in display units as it shows: its own, else its starting value, else 0. */
     private fun currentWeightDisplay(state: UiState, set: SetEntity): Double {
-        set.weightKg?.let { return Format.roundWeight(Format.kgToDisplay(it, state.units)) }
-        val located = locate(set.id) ?: return 0.0
-        val seedKg = located.block.sets.take(located.index).lastOrNull { it.weightKg != null }?.weightKg
-            ?: located.block.previous.getOrNull(located.index)?.weightKg
-        return seedKg?.let { Format.roundWeight(Format.kgToDisplay(it, state.units)) } ?: 0.0
+        val located = locate(set.id)
+        val kg = set.weightKg ?: located?.block?.seeds?.getOrNull(located.index)?.weightKg ?: return 0.0
+        return Format.roundWeight(Format.kgToDisplay(kg, state.units))
     }
 
-    private fun currentReps(state: UiState, set: SetEntity): Int {
-        set.reps?.let { return it }
-        val located = locate(set.id) ?: return 0
-        return located.block.sets.take(located.index).lastOrNull { it.reps != null }?.reps
-            ?: located.block.previous.getOrNull(located.index)?.reps
-            ?: 0
+    /** The active row's reps as they show: its own, else its starting value, else 0. */
+    private fun currentReps(set: SetEntity): Int {
+        val located = locate(set.id)
+        return set.reps ?: located?.block?.seeds?.getOrNull(located.index)?.reps ?: 0
     }
 
     // --- Structure ---
@@ -467,7 +501,21 @@ class ActiveWorkoutViewModel(
         }
     }
 
-    /** Full reload from the database — call from Dispatchers.IO. */
+    /**
+     * Last session and PR history for exercises not seen yet on this screen; one previousPerformance
+     * query per new exercise plus one history query for all of them.
+     */
+    private fun cacheHistory(exerciseIds: List<String>, workoutId: Long) {
+        val missing = exerciseIds.filterNot { it in lastTimeByExercise }
+        if (missing.isEmpty()) return
+        lastTimeByExercise = lastTimeByExercise + session.previousByExercise(missing)
+        priorHistoryByExercise = priorHistoryByExercise + session.priorHistory(missing, workoutId)
+    }
+
+    /**
+     * Full reload from the database, call from Dispatchers.IO: the workout, its slots, its sets and
+     * their catalog rows (four queries), plus history for any exercise new to this screen.
+     */
     private fun refresh(focusLastExercise: Boolean = false) {
         val workoutId = resolvedWorkoutId ?: return
         val ticket = synchronized(refreshLock) { ++refreshesStarted }
@@ -481,25 +529,29 @@ class ActiveWorkoutViewModel(
         }
         val settings = settingsStore.snapshot()
         val slots = repository.exercisesForWorkout(workoutId)
-        val sets = repository.setsForWorkout(workoutId)
-        val setsBySlot = sets.groupBy { it.workoutExerciseId }
-        val blocks = slots.map { slot ->
-            val exercise = repository.exerciseById(slot.exerciseId)
-            val name = exercise?.name ?: slot.exerciseId
-            ExerciseBlock(
-                slot = slot,
-                name = name,
-                baseName = name.substringBefore(" ("),
-                detailLine = detailLine(exercise),
-                cue = exercise?.pinnedNote?.takeIf { it.isNotBlank() },
-                sets = setsBySlot[slot.id].orEmpty().sortedBy { it.position },
-                previous = session.previousPerformance(slot.exerciseId),
-            )
-        }
-        priorHistoryByExercise = session.priorHistory(slots.map { it.exerciseId }.distinct(), workoutId)
-        val prIds = prSetIds(slots, sets, priorHistoryByExercise)
+        val loadedSets = repository.setsForWorkout(workoutId)
+        val exerciseIds = slots.map { it.exerciseId }.distinct()
+        val catalog = repository.exercisesByIds(exerciseIds)
+        cacheHistory(exerciseIds, workoutId)
+        val lastTimeBySlot = previousForSlots(slots, lastTimeByExercise)
         val restState = session.restStateSnapshot()
         applyRefresh(ticket) {
+            val sets = loadedSets
+            val setsBySlot = sets.groupBy { it.workoutExerciseId }
+            val blocks = slots.map { slot ->
+                val exercise = catalog[slot.exerciseId]
+                val name = exercise?.name ?: slot.exerciseId
+                ExerciseBlock(
+                    slot = slot,
+                    name = name,
+                    baseName = name.substringBefore(" ("),
+                    detailLine = detailLine(exercise),
+                    cue = exercise?.pinnedNote?.takeIf { it.isNotBlank() },
+                    sets = setsBySlot[slot.id].orEmpty().sortedBy { it.position },
+                    lastTime = lastTimeBySlot[slot.id].orEmpty(),
+                )
+            }
+            val prIds = prSetIds(slots, sets, priorHistoryByExercise)
             _uiState.update { state ->
                 val lastIndex = (blocks.size - 1).coerceAtLeast(0)
                 val currentIndex = when {

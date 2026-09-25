@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.Stepper
@@ -103,6 +104,8 @@ internal fun StepperStrip(
     viewModel: ActiveWorkoutViewModel,
     uiState: ActiveWorkoutViewModel.UiState,
     activeSet: SetEntity,
+    /** The active row's starting values; shown dimmed where the row has none of its own. */
+    seed: RowValues,
 ) {
     Row(
         modifier = Modifier
@@ -118,8 +121,9 @@ internal fun StepperStrip(
             decrementEnabled = viewModel.weightDecrementEnabled(uiState),
         ) {
             LightText(
-                text = activeSet.weightKg?.let { Format.weight(it, uiState.units) } ?: "—",
+                text = (activeSet.weightKg ?: seed.weightKg)?.let { Format.weight(it, uiState.units) } ?: "—",
                 variant = LightTextVariant.Copy,
+                lighten = activeSet.weightKg == null,
                 monospace = true,
                 maxLines = 1,
             )
@@ -131,8 +135,9 @@ internal fun StepperStrip(
             decrementEnabled = viewModel.repsDecrementEnabled(uiState),
         ) {
             LightText(
-                text = activeSet.reps?.toString() ?: "—",
+                text = (activeSet.reps ?: seed.reps)?.toString() ?: "—",
                 variant = LightTextVariant.Copy,
+                lighten = activeSet.reps == null,
                 monospace = true,
                 maxLines = 1,
             )

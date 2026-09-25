@@ -28,6 +28,9 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE id = :id")
     fun byId(id: String): ExerciseEntity?
 
+    @Query("SELECT * FROM exercises WHERE id IN (:ids)")
+    fun byIds(ids: List<String>): List<ExerciseEntity>
+
     /** Caller supplies LIKE wildcards, e.g. "%bench%". */
     @Query("SELECT * FROM exercises WHERE name LIKE :pattern ORDER BY name COLLATE NOCASE")
     fun searchByName(pattern: String): List<ExerciseEntity>

@@ -174,12 +174,16 @@ class ActiveWorkoutScreen(
                             val markers = buildMarkers(current.sets)
                             itemsIndexed(current.sets, key = { _, set -> set.id }) { index, set ->
                                 val previous = current.previous.getOrNull(index)
+                                // What a tick logs: the row's own values, else its starting values (dimmed).
+                                val seed = current.seeds[index]
                                 SetRow(
                                     state = SetRowState(
                                         marker = markers[index],
                                         previous = previousSummary(previous, uiState.units),
-                                        weight = set.weightKg?.let { Format.weight(it, uiState.units) },
-                                        reps = set.reps?.toString(),
+                                        weight = seed.weightKg?.let { Format.weight(it, uiState.units) },
+                                        reps = seed.reps?.toString(),
+                                        weightSeeded = set.weightKg == null && seed.weightKg != null,
+                                        repsSeeded = set.reps == null && seed.reps != null,
                                         active = set.id == uiState.activeSetId,
                                         completed = set.completedAt != null,
                                         warmup = set.type == SET_TYPE_WARMUP,
@@ -205,6 +209,7 @@ class ActiveWorkoutScreen(
                                 viewModel = viewModel,
                                 uiState = uiState,
                                 activeSet = activeSet,
+                                seed = current.seeds[current.sets.indexOf(activeSet)],
                             )
                         }
 
@@ -226,6 +231,8 @@ class ActiveWorkoutScreen(
 
                 if (live && finishArmed) {
                     ArmedHint(text = finishHint(uiState))
+                } else if (live && uiState.emptyTickHint) {
+                    ArmedHint(text = "SET WEIGHT OR REPS FIRST")
                 }
                 LightBottomBar(
                     items = listOf(

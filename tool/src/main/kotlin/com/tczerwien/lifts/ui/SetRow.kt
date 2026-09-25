@@ -39,10 +39,14 @@ data class SetRowState(
     val marker: String,
     /** Previous performance, e.g. "135 × 8" ([Format.setSummary]); null renders blank. */
     val previous: String?,
-    /** Display weight string; null renders an em dash (upcoming). */
+    /** Display weight string; null renders an em dash (nothing to start from). */
     val weight: String?,
-    /** Display reps string; null renders an em dash (upcoming). */
+    /** Display reps string; null renders an em dash (nothing to start from). */
     val reps: String?,
+    /** [weight] is a starting value, not entered: it renders dimmed even on the active row. */
+    val weightSeeded: Boolean = false,
+    /** [reps] is a starting value, not entered: it renders dimmed even on the active row. */
+    val repsSeeded: Boolean = false,
     /** Steppers currently target this row: values render full-contrast. */
     val active: Boolean = false,
     /** Set is logged: checkbox fills. */
@@ -177,7 +181,7 @@ fun SetRow(
             LightText(
                 text = state.weight ?: "—",
                 variant = LightTextVariant.Copy,
-                lighten = valuesLighten || state.weight == null,
+                lighten = valuesLighten || state.weight == null || state.weightSeeded,
                 monospace = true,
                 maxLines = 1,
             )
@@ -192,7 +196,7 @@ fun SetRow(
             LightText(
                 text = state.reps ?: "—",
                 variant = LightTextVariant.Copy,
-                lighten = valuesLighten || state.reps == null,
+                lighten = valuesLighten || state.reps == null || state.repsSeeded,
                 monospace = true,
                 maxLines = 1,
             )
