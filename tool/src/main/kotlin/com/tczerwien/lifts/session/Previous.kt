@@ -3,7 +3,8 @@ package com.tczerwien.lifts.session
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
-import kotlin.math.abs
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
 
 /**
  * PREVIOUS and starting values: which of last session's sets each of today's rows is compared
@@ -66,14 +67,20 @@ data class RowValues(val weightKg: Double?, val reps: Int?)
  * What each of [rows] (one slot, in position order) logs if ticked as it stands, worked out per
  * field, weight and reps separately:
  * 1. the row's own value;
- * 2. the value of today's previous row of the same kind (warm-up or work), if that row moved off
- *    its own PREVIOUS: you put 5 lb on set 1, so set 2 starts there too;
+ * 2. the value of today's previous row of the same kind (warm-up or work), if you changed it from
+ *    last time and last time the two rows matched (straight sets): 5 lb on set 1 carries to set 2,
+ *    but a heavier top set doesn't drag its back-off sets up, nor warm-up 1 the rest of the ramp;
  * 3. this row's PREVIOUS ([aligned], from [alignPrevious]);
  * 4. today's previous row of the same kind, which is how a new exercise carries set 1 forward;
  * 5. nothing.
  * "Today's previous row" means its value as worked out here, so a change carries down the sets.
+ * Weights compare as they show in [unit], so stepping up and back down again is no change.
  */
-fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>): List<RowValues> {
+fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>, unit: WeightUnit): List<RowValues> {
+    val sameWeight = { a: Double?, b: Double? ->
+        a != null && b != null &&
+            Format.roundWeight(Format.kgToDisplay(a, unit)) == Format.roundWeight(Format.kgToDisplay(b, unit))
+    }
     val result = ArrayList<RowValues>(rows.size)
     var lastWarmup: Int? = null
     var lastWork: Int? = null
@@ -83,11 +90,13 @@ fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>): List<RowValues> 
         val earlierPrevious = earlierIndex?.let { aligned.getOrNull(it) }
         val previous = aligned.getOrNull(index)
         val weight = row.weightKg
-            ?: earlier?.weightKg?.takeIf { !sameWeight(it, earlierPrevious?.weightKg) }
+            ?: earlier?.weightKg?.takeIf {
+                carries(it, earlierPrevious?.weightKg, previous?.weightKg, sameWeight)
+            }
             ?: previous?.weightKg
             ?: earlier?.weightKg
         val reps = row.reps
-            ?: earlier?.reps?.takeIf { it != earlierPrevious?.reps }
+            ?: earlier?.reps?.takeIf { carries(it, earlierPrevious?.reps, previous?.reps) { a, b -> a == b } }
             ?: previous?.reps
             ?: earlier?.reps
         result += RowValues(weight, reps)
@@ -96,11 +105,16 @@ fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>): List<RowValues> 
     return result
 }
 
-/** [seedRows] for one row. */
-fun seedFor(rows: List<SetEntity>, index: Int, aligned: List<SetEntity?>): RowValues = seedRows(rows, aligned)[index]
+/**
+ * Rule 2 of [seedRows]: the earlier row's value carries when it was changed from last time and
+ * last time this row had the same value as the earlier one (or neither had a PREVIOUS).
+ */
+private fun <T : Any> carries(earlier: T, earlierPrevious: T?, previous: T?, same: (T?, T?) -> Boolean): Boolean =
+    !same(earlier, earlierPrevious) && (earlierPrevious == null || same(earlierPrevious, previous))
 
-/** Stored kg values count as equal within a microgram, so a lb round trip isn't a "change". */
-private fun sameWeight(a: Double, b: Double?): Boolean = b != null && abs(a - b) < 1e-6
+/** [seedRows] for one row. */
+fun seedFor(rows: List<SetEntity>, index: Int, aligned: List<SetEntity?>, unit: WeightUnit): RowValues =
+    seedRows(rows, aligned, unit)[index]
 
 /**
  * Set types a new slot starts with, from [lastTime] (the matching slot group from last session).

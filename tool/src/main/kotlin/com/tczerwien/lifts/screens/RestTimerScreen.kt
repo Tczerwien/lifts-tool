@@ -160,9 +160,9 @@ class RestTimerViewModel(
         val exerciseId = next.slot.exerciseId
         val lastTime = previousForSlots(slots, session.previousByExercise(listOf(exerciseId)))[next.slot.id].orEmpty()
         val aligned = alignPrevious(next.rows, lastTime)
-        val seed = seedFor(next.rows, next.index, aligned)
-        val rpe = next.rows[next.index].rpe ?: aligned[next.index]?.rpe
         val units = settingsStore.snapshot().units
+        val seed = seedFor(next.rows, next.index, aligned, units)
+        val rpe = next.rows[next.index].rpe ?: aligned[next.index]?.rpe
         val summary = when {
             seed.weightKg != null && seed.reps != null -> Format.setSummary(seed.weightKg, seed.reps, units)
             seed.reps != null -> "× ${seed.reps}"

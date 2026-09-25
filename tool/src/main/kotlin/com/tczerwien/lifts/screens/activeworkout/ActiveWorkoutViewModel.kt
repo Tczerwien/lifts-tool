@@ -54,12 +54,14 @@ class ActiveWorkoutViewModel(
         val sets: List<SetEntity>,
         /** Last session's sets for this slot ([previousForSlots]). */
         val lastTime: List<SetEntity>,
+        /** Display unit; starting weights compare as they show ([seedRows]). */
+        val unit: WeightUnit,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
 
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
-        val seeds: List<RowValues> = seedRows(sets, previous)
+        val seeds: List<RowValues> = seedRows(sets, previous, unit)
     }
 
     data class UiState(
@@ -600,6 +602,7 @@ class ActiveWorkoutViewModel(
                     cue = exercise?.pinnedNote?.takeIf { it.isNotBlank() },
                     sets = setsBySlot[slot.id].orEmpty().sortedBy { it.position },
                     lastTime = lastTimeBySlot[slot.id].orEmpty(),
+                    unit = settings.units,
                 )
             }
             val prIds = prSetIds(slots, sets, priorHistoryByExercise)

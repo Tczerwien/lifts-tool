@@ -4,6 +4,7 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -93,7 +94,7 @@ class PreviousTest {
             set(12, position = 1),
             set(13, position = 2),
         )
-        val seeds = seedRows(today, alignPrevious(today, previous))
+        val seeds = seedRows(today, alignPrevious(today, previous), WeightUnit.LB)
         assertEquals(RowValues(lb140, 8), seeds[1])
         assertEquals(RowValues(lb140, 8), seeds[2], "the change carries down every set")
     }
@@ -106,7 +107,7 @@ class PreviousTest {
             prev(3, n, weightKg = 80.0, reps = 6),
         )
         val today = listOf(set(11, position = 0, weightKg = 60.0, reps = 10, completedAt = 1L), set(12, position = 1), set(13, position = 2))
-        val seeds = seedRows(today, alignPrevious(today, previous))
+        val seeds = seedRows(today, alignPrevious(today, previous), WeightUnit.LB)
         assertEquals(RowValues(70.0, 8), seeds[1])
         assertEquals(RowValues(80.0, 6), seeds[2])
     }
@@ -116,35 +117,56 @@ class PreviousTest {
         val previous = listOf(prev(1, n, weightKg = 60.0, reps = 8), prev(2, n, weightKg = 60.0, reps = 7))
         val today = listOf(set(11, position = 0, weightKg = 62.5, reps = 8, completedAt = 1L), set(12, position = 1))
         // Weight moved, so it carries; reps matched last time, so set 2 takes its own PREVIOUS (7).
-        assertEquals(RowValues(62.5, 7), seedFor(today, 1, alignPrevious(today, previous)))
+        assertEquals(RowValues(62.5, 7), seedFor(today, 1, alignPrevious(today, previous), WeightUnit.KG))
     }
 
     @Test
     fun `with no history, set 1 carries forward`() {
         val today = listOf(set(11, position = 0, weightKg = 30.0, reps = 5, completedAt = 1L), set(12, position = 1))
-        assertEquals(RowValues(30.0, 5), seedFor(today, 1, alignPrevious(today, emptyList())))
+        assertEquals(RowValues(30.0, 5), seedFor(today, 1, alignPrevious(today, emptyList()), WeightUnit.KG))
     }
 
     @Test
     fun `a warm-up never seeds a work set`() {
         val today = listOf(set(11, position = 0, type = w, weightKg = 40.0, reps = 10), set(12, position = 1))
-        assertEquals(RowValues(null, null), seedFor(today, 1, alignPrevious(today, emptyList())))
+        assertEquals(RowValues(null, null), seedFor(today, 1, alignPrevious(today, emptyList()), WeightUnit.KG))
     }
 
     @Test
     fun `a row's own value wins, field by field`() {
         val previous = listOf(prev(1, n, weightKg = 60.0, reps = 8))
         val today = listOf(set(11, position = 0, reps = 5))
-        assertEquals(RowValues(60.0, 5), seedFor(today, 0, alignPrevious(today, previous)))
+        assertEquals(RowValues(60.0, 5), seedFor(today, 0, alignPrevious(today, previous), WeightUnit.KG))
     }
 
     @Test
     fun `a set 1 stepped up and back down again does not count as a change`() {
-        val lb135 = Format.lbToKg(135.0)
-        val previous = listOf(prev(1, n, weightKg = lb135, reps = 8), prev(2, n, weightKg = Format.lbToKg(145.0), reps = 8))
-        val stepped = Format.displayToKg(135.0, com.tczerwien.lifts.ui.WeightUnit.LB)
+        // Last time was logged in kg (60 kg = 132.3 lb). In lb the steppers snap to 132.5, so +5 then
+        // -5 stores 60.10 kg: the same on screen, and it must not carry as if set 1 were raised.
+        val previous = listOf(prev(1, n, weightKg = 60.0, reps = 8), prev(2, n, weightKg = 60.0, reps = 8))
+        val stepped = Format.displayToKg(Format.roundWeight(Format.kgToDisplay(60.0, WeightUnit.LB)), WeightUnit.LB)
         val today = listOf(set(11, position = 0, weightKg = stepped, reps = 8, completedAt = 1L), set(12, position = 1))
-        assertEquals(Format.lbToKg(145.0), seedFor(today, 1, alignPrevious(today, previous)).weightKg)
+        assertEquals(60.0, seedFor(today, 1, alignPrevious(today, previous), WeightUnit.LB).weightKg)
+    }
+
+    @Test
+    fun `a heavier top set does not drag its back-off sets up`() {
+        val previous = listOf(
+            prev(1, n, weightKg = 100.0, reps = 5),
+            prev(2, n, weightKg = 85.0, reps = 8),
+            prev(3, n, weightKg = 85.0, reps = 8),
+        )
+        val today = listOf(set(11, position = 0, weightKg = 102.5, reps = 5, completedAt = 1L), set(12, position = 1), set(13, position = 2))
+        val seeds = seedRows(today, alignPrevious(today, previous), WeightUnit.KG)
+        assertEquals(RowValues(85.0, 8), seeds[1])
+        assertEquals(RowValues(85.0, 8), seeds[2])
+    }
+
+    @Test
+    fun `a heavier first warm-up leaves the rest of the ramp alone`() {
+        val previous = listOf(prev(1, w, weightKg = 43.0, reps = 8), prev(2, w, weightKg = 61.0, reps = 5))
+        val today = listOf(set(11, position = 0, type = w, weightKg = 45.0, reps = 8, completedAt = 1L), set(12, position = 1, type = w))
+        assertEquals(RowValues(61.0, 5), seedFor(today, 1, alignPrevious(today, previous), WeightUnit.KG))
     }
 
     // --- New slots ---
