@@ -197,9 +197,9 @@ class ActiveWorkoutViewModel(
     /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
     fun onMarkerTapped(setId: Long) {
         if (locked) return
-        val changed = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
+        val edit = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
         _uiState.update { it.copy(activeSetId = setId) }
-        persistSet(changed)
+        persistSet(edit)
     }
 
     /**
@@ -212,11 +212,11 @@ class ActiveWorkoutViewModel(
         if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
         if (previous.weightKg == null && previous.reps == null) return
-        val changed = applySetChange(setId) {
+        val edit = applySetChange(setId) {
             it.copy(weightKg = previous.weightKg ?: it.weightKg, reps = previous.reps ?: it.reps)
         } ?: return
         _uiState.update { it.copy(activeSetId = setId) }
-        persistSet(changed)
+        persistSet(edit)
     }
 
     /**
@@ -230,8 +230,8 @@ class ActiveWorkoutViewModel(
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
         if (set.completedAt != null) {
-            applySetChange(setId) { it.copy(completedAt = null) }
-            LiftsIo.write { session.uncompleteSet(set) }
+            val edit = applySetChange(setId) { it.copy(completedAt = null) } ?: return
+            LiftsIo.write({ session.uncompleteSet(set) }) { settle(edit) }
             return
         }
         val seed = located.block.seeds[located.index]
@@ -240,15 +240,19 @@ class ActiveWorkoutViewModel(
             return
         }
         val now = System.currentTimeMillis()
-        applySetChange(setId) { it.copy(weightKg = seed.weightKg, reps = seed.reps, completedAt = now) } ?: return
+        val edit = applySetChange(setId) { it.copy(weightKg = seed.weightKg, reps = seed.reps, completedAt = now) } ?: return
         _uiState.update { state ->
             val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
         val workoutId = _uiState.value.workoutId
         LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { completion ->
-            _uiState.update {
-                it.copy(restEndMillis = completion.restEndMillis, restTotalSec = completion.restDurationSec)
+            synchronized(refreshLock) {
+                edit.savedAt = refreshesStarted
+                restSetAt = refreshesStarted
+                _uiState.update {
+                    it.copy(restEndMillis = completion.restEndMillis, restTotalSec = completion.restDurationSec)
+                }
             }
         }
     }
@@ -273,10 +277,10 @@ class ActiveWorkoutViewModel(
         val next = Format.roundWeight(
             (base + direction * state.units.weightStep).coerceAtLeast(0.0),
         )
-        val changed = applySetChange(set.id) {
+        val edit = applySetChange(set.id) {
             it.copy(weightKg = Format.displayToKg(next, state.units))
         } ?: return
-        persistSet(changed)
+        persistSet(edit)
     }
 
     fun stepReps(direction: Int) {
@@ -284,8 +288,8 @@ class ActiveWorkoutViewModel(
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val next = (currentReps(set) + direction).coerceAtLeast(0)
-        val changed = applySetChange(set.id) { it.copy(reps = next) } ?: return
-        persistSet(changed)
+        val edit = applySetChange(set.id) { it.copy(reps = next) } ?: return
+        persistSet(edit)
     }
 
     fun weightDecrementEnabled(state: UiState): Boolean {
@@ -444,35 +448,57 @@ class ActiveWorkoutViewModel(
         return null
     }
 
-    /** Applies [transform] to one set in local state and re-replays PR flags; returns the new entity. */
-    private fun applySetChange(setId: Long, transform: (SetEntity) -> SetEntity): SetEntity? {
-        var changed: SetEntity? = null
-        _uiState.update { state ->
-            val exercises = state.exercises.map { block ->
-                val index = block.sets.indexOfFirst { it.id == setId }
-                if (index < 0) {
-                    block
-                } else {
-                    val updated = transform(block.sets[index])
-                    changed = updated
-                    block.copy(sets = block.sets.mapIndexed { i, s -> if (i == index) updated else s })
-                }
-            }
-            state.copy(
-                exercises = exercises,
-                prSetIds = prSetIds(
-                    slots = exercises.map { it.slot },
-                    workoutSets = exercises.flatMap { it.sets },
-                    priorHistory = priorHistoryByExercise,
-                ),
-            )
-        }
-        return changed
+    /**
+     * A change to one set that is on screen but may not be in every reload yet. A reload that read
+     * the database before this change was saved puts [set]'s values back over what it read, so it
+     * can't undo a tap made while it ran. Guarded by [refreshLock].
+     */
+    private class PendingEdit(val set: SetEntity) {
+        /** [refreshesStarted] when the save landed; reloads numbered above it read the saved values. */
+        var savedAt: Long? = null
     }
 
-    /** Saves [set] on the app-wide write queue, so pressing Back right after a tap can't drop it. */
-    private fun persistSet(set: SetEntity) {
-        LiftsIo.write { session.updateSet(set) }
+    /** The newest unsettled change per set id. Guarded by [refreshLock]. */
+    private val pendingEdits = HashMap<Long, PendingEdit>()
+
+    /**
+     * Applies [transform] to one set on screen, re-replays PR flags, and records the change as
+     * pending until its save lands ([settle]). Returns null when the set isn't on screen.
+     */
+    private fun applySetChange(setId: Long, transform: (SetEntity) -> SetEntity): PendingEdit? =
+        synchronized(refreshLock) {
+            var changed: SetEntity? = null
+            _uiState.update { state ->
+                val exercises = state.exercises.map { block ->
+                    val index = block.sets.indexOfFirst { it.id == setId }
+                    if (index < 0) {
+                        block
+                    } else {
+                        val updated = transform(block.sets[index])
+                        changed = updated
+                        block.copy(sets = block.sets.mapIndexed { i, s -> if (i == index) updated else s })
+                    }
+                }
+                state.copy(
+                    exercises = exercises,
+                    prSetIds = prSetIds(
+                        slots = exercises.map { it.slot },
+                        workoutSets = exercises.flatMap { it.sets },
+                        priorHistory = priorHistoryByExercise,
+                    ),
+                )
+            }
+            changed?.let { PendingEdit(it).also { edit -> pendingEdits[setId] = edit } }
+        }
+
+    /** Marks [edit]'s save as landed: reloads that start from now on read it from the database. */
+    private fun settle(edit: PendingEdit) {
+        synchronized(refreshLock) { edit.savedAt = refreshesStarted }
+    }
+
+    /** Saves [edit] on the app-wide write queue, so pressing Back right after a tap can't drop it. */
+    private fun persistSet(edit: PendingEdit) {
+        LiftsIo.write({ session.updateSet(edit.set) }) { settle(edit) }
     }
 
     private fun nextType(type: String): String = when (type) {
@@ -481,12 +507,15 @@ class ActiveWorkoutViewModel(
         else -> SET_TYPE_WARMUP
     }
 
-    /** Guards [refreshesStarted] and [refreshApplied]. */
+    /** Guards [refreshesStarted], [refreshApplied], [restSetAt] and [pendingEdits]. */
     private val refreshLock = Any()
     private var refreshesStarted = 0L
 
     /** The newest refresh whose result is on screen. */
     private var refreshApplied = 0L
+
+    /** [refreshesStarted] when a tick last put its rest on screen; older reloads keep that rest. */
+    private var restSetAt = 0L
 
     /**
      * Runs [apply] for refresh number [ticket] unless one that started later has already landed. A
@@ -498,6 +527,28 @@ class ActiveWorkoutViewModel(
             if (ticket < refreshApplied) return
             refreshApplied = ticket
             apply()
+        }
+    }
+
+    /**
+     * [loaded] sets with every pending change a reload numbered [ticket] may have missed put back
+     * on top (values only; the reload's positions stand). Changes the reload read from the database
+     * are settled and dropped. Call under [refreshLock].
+     */
+    private fun overlayPendingEdits(ticket: Long, loaded: List<SetEntity>): List<SetEntity> {
+        val ids = loaded.mapTo(HashSet()) { it.id }
+        pendingEdits.entries.removeAll { (id, edit) -> id !in ids || edit.savedAt?.let { ticket > it } == true }
+        if (pendingEdits.isEmpty()) return loaded
+        return loaded.map { set ->
+            val local = pendingEdits[set.id]?.set ?: return@map set
+            set.copy(
+                type = local.type,
+                weightKg = local.weightKg,
+                reps = local.reps,
+                durationSec = local.durationSec,
+                rpe = local.rpe,
+                completedAt = local.completedAt,
+            )
         }
     }
 
@@ -536,7 +587,7 @@ class ActiveWorkoutViewModel(
         val lastTimeBySlot = previousForSlots(slots, lastTimeByExercise)
         val restState = session.restStateSnapshot()
         applyRefresh(ticket) {
-            val sets = loadedSets
+            val sets = overlayPendingEdits(ticket, loadedSets)
             val setsBySlot = sets.groupBy { it.workoutExerciseId }
             val blocks = slots.map { slot ->
                 val exercise = catalog[slot.exerciseId]
@@ -552,6 +603,8 @@ class ActiveWorkoutViewModel(
                 )
             }
             val prIds = prSetIds(slots, sets, priorHistoryByExercise)
+            // A tick's rest that landed after this reload read the timer stays on screen.
+            val keepRest = restSetAt >= ticket
             _uiState.update { state ->
                 val lastIndex = (blocks.size - 1).coerceAtLeast(0)
                 val currentIndex = when {
@@ -572,8 +625,8 @@ class ActiveWorkoutViewModel(
                     currentIndex = currentIndex,
                     activeSetId = activeSetId,
                     prSetIds = prIds,
-                    restEndMillis = restState?.endMillis,
-                    restTotalSec = restState?.totalSec ?: 0,
+                    restEndMillis = if (keepRest) state.restEndMillis else restState?.endMillis,
+                    restTotalSec = if (keepRest) state.restTotalSec else restState?.totalSec ?: 0,
                     units = settings.units,
                     defaultRestSec = settings.defaultRestSec,
                     warmupRestSec = settings.warmupRestSec,
