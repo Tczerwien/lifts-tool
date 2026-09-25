@@ -5,7 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
-import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
 /**
- * Repository-backed manager for the active workout session: creates sessions from
+ * Store-backed manager for the active workout session: creates sessions from
  * templates, logs sets (PR detection + rest-duration selection), and owns the persisted
  * rest-timer state.
  *
@@ -23,7 +23,7 @@ import kotlinx.coroutines.runBlocking
  * push keys); remaining time is always derived via [restRemainingSec], never counted.
  */
 class ActiveSession(
-    private val repository: LiftsRepository,
+    private val repository: LiftsStore,
     private val settings: SettingsStore,
     private val dataStore: DataStore<Preferences>,
 ) {

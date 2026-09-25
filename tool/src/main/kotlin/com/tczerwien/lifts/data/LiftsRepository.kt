@@ -9,12 +9,12 @@ import com.tczerwien.lifts.seed.Seeder
  */
 class LiftsRepository private constructor(
     private val db: LiftsDatabase,
-) {
+) : LiftsStore {
     /**
      * Runs [block] as one database transaction, so a group of writes lands together or not at all:
      * a process killed halfway leaves nothing half-written.
      */
-    fun <T> inTransaction(block: () -> T): T = db.runInTransaction<T>(block)
+    override fun <T> inTransaction(block: () -> T): T = db.runInTransaction<T>(block)
 
     // --- First run ---
 
@@ -37,7 +37,7 @@ class LiftsRepository private constructor(
 
     fun listExercises(): List<ExerciseEntity> = db.exerciseDao.listAll()
 
-    fun exerciseById(id: String): ExerciseEntity? = db.exerciseDao.byId(id)
+    override fun exerciseById(id: String): ExerciseEntity? = db.exerciseDao.byId(id)
 
     /** [pattern] is a raw LIKE pattern, e.g. "%bench%". */
     fun searchExercisesByName(pattern: String): List<ExerciseEntity> =
@@ -48,47 +48,47 @@ class LiftsRepository private constructor(
 
     // --- Workouts ---
 
-    fun addWorkout(workout: WorkoutEntity): Long = db.workoutDao.insert(workout)
+    override fun addWorkout(workout: WorkoutEntity): Long = db.workoutDao.insert(workout)
 
-    fun updateWorkout(workout: WorkoutEntity): Boolean = db.workoutDao.update(workout) > 0
+    override fun updateWorkout(workout: WorkoutEntity): Boolean = db.workoutDao.update(workout) > 0
 
-    fun workoutById(id: Long): WorkoutEntity? = db.workoutDao.byId(id)
+    override fun workoutById(id: Long): WorkoutEntity? = db.workoutDao.byId(id)
 
     fun listWorkouts(): List<WorkoutEntity> = db.workoutDao.listAll()
 
     fun listRecentWorkouts(limit: Int): List<WorkoutEntity> = db.workoutDao.listRecent(limit)
 
     /** Workouts still in progress, newest first. Normally at most one; see HomeViewModel's cleanup. */
-    fun listOpenWorkouts(): List<WorkoutEntity> = db.workoutDao.listOpen()
+    override fun listOpenWorkouts(): List<WorkoutEntity> = db.workoutDao.listOpen()
 
     /**
      * Deletes the workout with all of its exercise slots and sets, in one transaction. The rows
      * are removed child-first, so nothing is left behind whether or not SQLite's foreign-key
      * cascade is switched on.
      */
-    fun deleteWorkout(id: Long): Boolean = inTransaction {
+    override fun deleteWorkout(id: Long): Boolean = inTransaction {
         db.workoutDao.deleteSetsForWorkout(id)
         db.workoutDao.deleteExercisesForWorkout(id)
         db.workoutDao.delete(id) > 0
     }
 
     /** Clears endedAt, so a workout finished by mistake is in progress again. */
-    fun reopenWorkout(id: Long): Boolean = inTransaction {
+    override fun reopenWorkout(id: Long): Boolean = inTransaction {
         val workout = db.workoutDao.byId(id) ?: return@inTransaction false
         workout.endedAt == null || db.workoutDao.update(workout.copy(endedAt = null)) > 0
     }
 
-    fun addWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Long =
+    override fun addWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Long =
         db.workoutDao.insertWorkoutExercise(workoutExercise)
 
-    fun addSet(set: SetEntity): Long = db.workoutDao.insertSet(set)
+    override fun addSet(set: SetEntity): Long = db.workoutDao.insertSet(set)
 
-    fun updateSet(set: SetEntity): Boolean = db.workoutDao.updateSet(set) > 0
+    override fun updateSet(set: SetEntity): Boolean = db.workoutDao.updateSet(set) > 0
 
-    fun setById(id: Long): SetEntity? = db.workoutDao.setById(id)
+    override fun setById(id: Long): SetEntity? = db.workoutDao.setById(id)
 
     /** Deletes one set and renumbers the rest of its exercise slot 0..n-1, in one transaction. */
-    fun deleteSet(id: Long): Boolean = inTransaction {
+    override fun deleteSet(id: Long): Boolean = inTransaction {
         val set = db.workoutDao.setById(id) ?: return@inTransaction false
         db.workoutDao.deleteSet(id)
         db.workoutDao.setsForWorkoutExercise(set.workoutExerciseId).forEachIndexed { position, remaining ->
@@ -101,7 +101,7 @@ class LiftsRepository private constructor(
      * Deletes one exercise slot with its sets and renumbers the workout's remaining slots 0..n-1,
      * in one transaction.
      */
-    fun deleteSlot(id: Long): Boolean = inTransaction {
+    override fun deleteSlot(id: Long): Boolean = inTransaction {
         val slot = db.workoutDao.workoutExerciseById(id) ?: return@inTransaction false
         db.workoutDao.deleteSetsForWorkoutExercise(id)
         db.workoutDao.deleteWorkoutExercise(id)
@@ -113,20 +113,20 @@ class LiftsRepository private constructor(
         true
     }
 
-    fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
+    override fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
         db.workoutDao.exercisesForWorkout(workoutId)
 
-    fun setsForWorkout(workoutId: Long): List<SetEntity> = db.workoutDao.setsForWorkout(workoutId)
+    override fun setsForWorkout(workoutId: Long): List<SetEntity> = db.workoutDao.setsForWorkout(workoutId)
 
     /** Completed sets of the most recent finished workout where [exerciseId] had a completed set. */
-    fun previousPerformance(exerciseId: String): List<SetEntity> =
+    override fun previousPerformance(exerciseId: String): List<SetEntity> =
         db.workoutDao.previousPerformance(exerciseId)
 
     /**
      * Completed sets of [exerciseIds] from every workout except [excludeWorkoutId], in
      * completion order, grouped by exercise id. One query, whatever the history length.
      */
-    fun completedSetsByExercise(exerciseIds: Collection<String>, excludeWorkoutId: Long = -1): Map<String, List<SetEntity>> {
+    override fun completedSetsByExercise(exerciseIds: Collection<String>, excludeWorkoutId: Long): Map<String, List<SetEntity>> {
         if (exerciseIds.isEmpty()) return emptyMap()
         return db.workoutDao.completedSetsForExercises(exerciseIds.distinct(), excludeWorkoutId)
             .groupBy(keySelector = { it.exerciseId }, valueTransform = { it.set })
@@ -144,7 +144,7 @@ class LiftsRepository private constructor(
         db.templateDao.delete(id) > 0
     }
 
-    fun templateById(id: Long): TemplateEntity? = db.templateDao.byId(id)
+    override fun templateById(id: Long): TemplateEntity? = db.templateDao.byId(id)
 
     fun listTemplates(): List<TemplateEntity> = db.templateDao.listAll()
 
@@ -156,7 +156,7 @@ class LiftsRepository private constructor(
 
     fun deleteTemplateExercise(id: Long): Boolean = db.templateDao.deleteTemplateExercise(id) > 0
 
-    fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity> =
+    override fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity> =
         db.templateDao.exercisesForTemplate(templateId)
 
     // --- Bodyweight ---
