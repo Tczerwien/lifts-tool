@@ -301,46 +301,48 @@ class SessionLogicTest {
 
     @Test
     fun `an empty workout with no exercises is untouched`() {
-        assertTrue(isUntouched(workout(), emptyList(), emptyList(), templateExercises = null))
+        assertTrue(isUntouched(workout(), emptyList(), emptyList(), planned = null))
     }
 
     @Test
     fun `adding an exercise to an empty workout touches it`() {
-        assertFalse(isUntouched(workout(), listOf(slot(id = 1)), listOf(set(id = 1)), templateExercises = null))
+        assertFalse(isUntouched(workout(), listOf(slot(id = 1)), listOf(set(id = 1)), planned = null))
     }
 
     @Test
     fun `a template workout exactly as started is untouched`() {
-        val (slots, sets) = startedFrom(benchAndSquat)
-        assertTrue(isUntouched(workout(templateId = 7), slots, sets, benchAndSquat))
+        // Last session's warm-up is part of the start, so it doesn't make the workout look touched.
+        assertEquals(SET_TYPE_WARMUP, benchAndSquatPlan.first().types.first())
+        val (slots, sets) = startedFrom(benchAndSquatPlan)
+        assertTrue(isUntouched(workout(templateId = 7), slots, sets, benchAndSquatPlan))
     }
 
     @Test
     fun `any value, tick, type change, extra set or note touches a template workout`() {
-        val (slots, sets) = startedFrom(benchAndSquat)
+        val (slots, sets) = startedFrom(benchAndSquatPlan)
         val first = sets.first()
         val changed = listOf(
             first.copy(weightKg = 60.0),
             first.copy(reps = 8),
             first.copy(completedAt = 5L),
-            first.copy(type = SET_TYPE_WARMUP),
+            first.copy(type = SET_TYPE_NORMAL),
         )
         for (edit in changed) {
             val edited = sets.map { if (it.id == first.id) edit else it }
-            assertFalse(isUntouched(workout(templateId = 7), slots, edited, benchAndSquat), "$edit")
+            assertFalse(isUntouched(workout(templateId = 7), slots, edited, benchAndSquatPlan), "$edit")
         }
         val extraSet = sets + set(id = 99, slotId = slots.first().id, position = 3)
-        assertFalse(isUntouched(workout(templateId = 7), slots, extraSet, benchAndSquat))
-        assertFalse(isUntouched(workout(templateId = 7, notes = "felt heavy"), slots, sets, benchAndSquat))
+        assertFalse(isUntouched(workout(templateId = 7), slots, extraSet, benchAndSquatPlan))
+        assertFalse(isUntouched(workout(templateId = 7, notes = "felt heavy"), slots, sets, benchAndSquatPlan))
     }
 
     @Test
     fun `a removed exercise or a template edited since the start counts as touched`() {
-        val (slots, sets) = startedFrom(benchAndSquat)
+        val (slots, sets) = startedFrom(benchAndSquatPlan)
         val withoutSquat = slots.filter { it.exerciseId != "squat" }
-        assertFalse(isUntouched(workout(templateId = 7), withoutSquat, sets, benchAndSquat))
+        assertFalse(isUntouched(workout(templateId = 7), withoutSquat, sets, benchAndSquatPlan))
         val templateNow = benchAndSquat.map { if (it.exerciseId == "squat") it.copy(targetSets = 5) else it }
-        assertFalse(isUntouched(workout(templateId = 7), slots, sets, templateNow))
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets, planTemplate(templateNow, benchLastTime)))
         assertFalse(isUntouched(workout(templateId = 7), slots, sets, emptyList()), "template deleted")
     }
 
@@ -450,16 +452,23 @@ class SessionLogicTest {
         TemplateExerciseEntity(id = 2, templateId = 7, exerciseId = "squat", position = 1, targetSets = 2),
     )
 
-    /** The slots and sets ActiveSession.startFromTemplate would create for [template]. */
-    private fun startedFrom(
-        template: List<TemplateExerciseEntity>,
-    ): Pair<List<WorkoutExerciseEntity>, List<SetEntity>> {
+    /** Last session's Bench: one warm-up, then three work sets. */
+    private val benchLastTime = mapOf(
+        "bench" to listOf(
+            set(id = 50, slotId = 40, position = 0, type = SET_TYPE_WARMUP, weightKg = 40.0, reps = 10, completedAt = 1L),
+        ) + List(3) { set(id = 51L + it, slotId = 40, position = it + 1, weightKg = 60.0, reps = 5, completedAt = 2L + it) },
+    )
+
+    private val benchAndSquatPlan = planTemplate(benchAndSquat, benchLastTime)
+
+    /** The slots and sets ActiveSession.startFromTemplate creates for [plan]: rows with no values. */
+    private fun startedFrom(plan: List<PlannedSlot>): Pair<List<WorkoutExerciseEntity>, List<SetEntity>> {
         var setId = 100L
-        val slots = template.mapIndexed { index, planned ->
+        val slots = plan.mapIndexed { index, planned ->
             slot(id = index + 1L, exerciseId = planned.exerciseId, position = index)
         }
-        val sets = slots.zip(template).flatMap { (slot, planned) ->
-            templateSetTypes(planned).mapIndexed { position, type ->
+        val sets = slots.zip(plan).flatMap { (slot, planned) ->
+            planned.types.mapIndexed { position, type ->
                 set(id = setId++, slotId = slot.id, position = position, type = type)
             }
         }

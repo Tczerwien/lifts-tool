@@ -2,7 +2,6 @@ package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.SetEntity
-import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 
@@ -198,13 +197,6 @@ const val STALE_AFTER_MILLIS = 4 * 60 * 60 * 1000L
 /** On a cold start, Home reopens an open workout straight away if it was used this recently. */
 const val AUTO_RESUME_WITHIN_MILLIS = 2 * 60 * 60 * 1000L
 
-/**
- * The set types a template exercise starts with, one per set. [ActiveSession.startFromTemplate]
- * creates exactly these and [isUntouched] compares against them, so the two can't drift apart.
- */
-fun templateSetTypes(templateExercise: TemplateExerciseEntity): List<String> =
-    List(templateExercise.targetSets.coerceAtLeast(0)) { SET_TYPE_NORMAL }
-
 /** Sets not ticked yet ("3 SETS NOT LOGGED" in the Finish confirmation). */
 fun pendingSetCount(sets: List<SetEntity>): Int = sets.count { it.completedAt == null }
 
@@ -215,15 +207,16 @@ fun lastActivityMillis(startedAt: Long, sets: List<SetEntity>): Long =
 /**
  * True when nothing has changed since the workout was created, so discarding it loses nothing: no
  * notes, no set logged or given a value, and the slots and their set types are exactly what the
- * start made. That is no slots at all for an empty workout, and the template's list for a template
- * workout. [templateExercises] is the template's current list, null for a workout with no template.
+ * start made. That is no slots at all for an empty workout, and [planned] ([planTemplate] from the
+ * template as it is now) for a template workout; [planned] is null for a workout with no template.
  * Any doubt (the template was edited or deleted since) counts as touched, so the workout is kept.
+ * Starting values are only shown, never written at the start, so any stored value means a change.
  */
 fun isUntouched(
     workout: WorkoutEntity,
     slots: List<WorkoutExerciseEntity>,
     sets: List<SetEntity>,
-    templateExercises: List<TemplateExerciseEntity>?,
+    planned: List<PlannedSlot>?,
 ): Boolean {
     if (!workout.notes.isNullOrBlank() || slots.any { !it.notes.isNullOrBlank() }) return false
     val hasValue = sets.any { set ->
@@ -231,14 +224,13 @@ fun isUntouched(
             set.durationSec != null || set.rpe != null
     }
     if (hasValue) return false
-    val planned = templateExercises.orEmpty().sortedBy { it.position }
+    val expected = planned.orEmpty()
     val actual = slots.sortedBy { it.position }
-    if (actual.size != planned.size) return false
+    if (actual.size != expected.size) return false
     val typesBySlot = sets.groupBy { it.workoutExerciseId }
         .mapValues { (_, slotSets) -> slotSets.sortedBy { it.position }.map { it.type } }
-    return actual.zip(planned).all { (slot, templateExercise) ->
-        slot.exerciseId == templateExercise.exerciseId &&
-            typesBySlot[slot.id].orEmpty() == templateSetTypes(templateExercise)
+    return actual.zip(expected).all { (slot, plannedSlot) ->
+        slot.exerciseId == plannedSlot.exerciseId && typesBySlot[slot.id].orEmpty() == plannedSlot.types
     }
 }
 

@@ -31,10 +31,12 @@ class ActiveSession(
     // --- Session lifecycle ---
 
     /**
-     * Creates a workout from [templateId]: one workout_exercises row per template slot
-     * (copying rest overrides), each prefilled with targetSets pending "normal" sets.
-     * A vanished template degrades to an empty workout. All rows are written in one transaction.
-     * A rest left running from an earlier workout is cleared, so the new one never inherits it.
+     * Creates a workout from [templateId]: one workout_exercises row per template slot (copying rest
+     * overrides), each starting with last session's warm-ups for that slot, then targetSets work
+     * sets ([planTemplate]), so PREVIOUS lines up warm-up to warm-up. Rows start empty; their
+     * starting values are only shown ([seedRows]). A vanished template degrades to an empty
+     * workout. All rows are written in one transaction. A rest left running from an earlier
+     * workout is cleared, so the new one never inherits it.
      */
     fun startFromTemplate(templateId: Long, now: Long = System.currentTimeMillis()): Long {
         val workoutId = repository.inTransaction { createFromTemplate(templateId, now) }
@@ -52,7 +54,9 @@ class ActiveSession(
             ),
         )
         template ?: return workoutId
-        repository.exercisesForTemplate(templateId).forEachIndexed { index, templateExercise ->
+        val templateExercises = repository.exercisesForTemplate(templateId).sortedBy { it.position }
+        val plan = planTemplate(templateExercises, previousByExercise(templateExercises.map { it.exerciseId }))
+        templateExercises.zip(plan).forEachIndexed { index, (templateExercise, planned) ->
             val slotId = repository.addWorkoutExercise(
                 WorkoutExerciseEntity(
                     workoutId = workoutId,
@@ -62,12 +66,16 @@ class ActiveSession(
                     restSecWarmup = templateExercise.restSecWarmup,
                 ),
             )
-            templateSetTypes(templateExercise).forEachIndexed { setIndex, type ->
+            planned.types.forEachIndexed { setIndex, type ->
                 repository.addSet(SetEntity(workoutExerciseId = slotId, position = setIndex, type = type))
             }
         }
         return workoutId
     }
+
+    /** Last session's sets of each of [exerciseIds] ([LiftsStore.previousPerformance]), one query each. */
+    fun previousByExercise(exerciseIds: Collection<String>): Map<String, List<SetEntity>> =
+        exerciseIds.distinct().associateWith { repository.previousPerformance(it) }
 
     /** Creates an empty workout; like [startFromTemplate] it clears any leftover rest. */
     fun startEmpty(now: Long = System.currentTimeMillis()): Long {
@@ -77,24 +85,20 @@ class ActiveSession(
     }
 
     /**
-     * Appends an exercise slot. Pending sets are prefilled to mirror the previous
-     * session's completed sets (same count, warm-ups kept as warm-ups) so the
-     * previous-per-index columns line up; with no history, [DEFAULT_NEW_EXERCISE_SETS]
-     * normal sets. The slot and its sets are written in one transaction.
+     * Appends an exercise slot. Its rows mirror the matching slot from last session: the k-th Bench
+     * slot added copies last time's k-th Bench slot (same count, warm-ups kept as warm-ups), so a
+     * second Bench gets the back-off sets, not both blocks. With no such slot last time,
+     * [DEFAULT_NEW_EXERCISE_SETS] work sets. The slot and its sets are written in one transaction.
      */
     fun addExercise(workoutId: Long, exerciseId: String): Long = repository.inTransaction {
-        val position = repository.exercisesForWorkout(workoutId)
-            .maxOfOrNull { it.position + 1 } ?: 0
+        val slots = repository.exercisesForWorkout(workoutId)
+        val position = slots.maxOfOrNull { it.position + 1 } ?: 0
+        val occurrence = slots.count { it.exerciseId == exerciseId }
         val slotId = repository.addWorkoutExercise(
             WorkoutExerciseEntity(workoutId = workoutId, exerciseId = exerciseId, position = position),
         )
-        val previous = repository.previousPerformance(exerciseId)
-        val prefillTypes = if (previous.isNotEmpty()) {
-            previous.map { if (it.type == SET_TYPE_WARMUP) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
-        } else {
-            List(DEFAULT_NEW_EXERCISE_SETS) { SET_TYPE_NORMAL }
-        }
-        prefillTypes.forEachIndexed { index, type ->
+        val lastTime = previousGroups(repository.previousPerformance(exerciseId)).getOrElse(occurrence) { emptyList() }
+        prefillTypes(lastTime).forEachIndexed { index, type ->
             repository.addSet(SetEntity(workoutExerciseId = slotId, position = index, type = type))
         }
         slotId
@@ -275,12 +279,19 @@ class ActiveSession(
     fun lastActivity(workout: WorkoutEntity): Long =
         lastActivityMillis(workout.startedAt, repository.setsForWorkout(workout.id))
 
-    /** [isUntouched] for a stored workout, against the template it came from as it is now. */
+    /**
+     * [isUntouched] for a stored workout, against what its template would start with now
+     * ([planTemplate]). Other workouts can't finish while this one is open, so last session is the
+     * same as at the start; if it somehow isn't, the workout counts as touched and is kept.
+     */
     private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean = isUntouched(
         workout = workout,
         slots = repository.exercisesForWorkout(workout.id),
         sets = sets,
-        templateExercises = workout.templateId?.let { repository.exercisesForTemplate(it) },
+        planned = workout.templateId?.let { templateId ->
+            val templateExercises = repository.exercisesForTemplate(templateId)
+            planTemplate(templateExercises, previousByExercise(templateExercises.map { it.exerciseId }))
+        },
     )
 
     /** Clears endedAt after a Finish the lifter takes back from Workout Complete. */
@@ -357,7 +368,6 @@ class ActiveSession(
 
     companion object {
         const val DEFAULT_WORKOUT_NAME = "Workout"
-        const val DEFAULT_NEW_EXERCISE_SETS = 3
 
         private val REST_END_MILLIS = longPreferencesKey("lifts_rest_end_millis")
         private val REST_TOTAL_SEC = intPreferencesKey("lifts_rest_total_sec")
