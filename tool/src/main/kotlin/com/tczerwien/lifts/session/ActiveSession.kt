@@ -257,6 +257,20 @@ class ActiveSession(
         return kept
     }
 
+    /**
+     * Home's stale rule ([staleAction]) for one open workout, for a lifter who comes back to Active
+     * Workout itself hours later: closed at its last logged set, or deleted with nothing logged.
+     * Returns true when it closed or deleted the workout.
+     */
+    fun closeIfStale(workoutId: Long, now: Long = System.currentTimeMillis()): Boolean {
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return false
+        return when (val action = staleAction(workout.startedAt, repository.setsForWorkout(workoutId), now)) {
+            OpenWorkoutAction.Keep -> false
+            is OpenWorkoutAction.CloseAt -> repository.updateWorkout(workout.copy(endedAt = action.endedAt))
+            OpenWorkoutAction.Delete -> repository.deleteWorkout(workoutId)
+        }
+    }
+
     /** When [workout] was last used: its latest logged set, else its start. */
     fun lastActivity(workout: WorkoutEntity): Long =
         lastActivityMillis(workout.startedAt, repository.setsForWorkout(workout.id))

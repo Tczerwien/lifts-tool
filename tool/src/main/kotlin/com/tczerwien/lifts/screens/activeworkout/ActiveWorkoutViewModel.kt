@@ -116,7 +116,10 @@ class ActiveWorkoutViewModel(
             }
             return
         }
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        // Back after a while (the phone may have slept on this screen overnight): a workout idle past
+        // four hours closes at its last logged set, as Home would close it, and refresh then leaves.
+        // Otherwise a late tick in the morning would make it look active and Finish would stamp now.
+        LiftsIo.write({ resolvedWorkoutId?.let { session.closeIfStale(it) } }) { refresh() }
     }
 
     /**
