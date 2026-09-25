@@ -262,6 +262,26 @@ class PreviousTest {
         assertEquals(RestNext.NoSets, restNextContext(slots, emptyList(), currentSlotId = 1), "every row removed")
     }
 
+    // --- Reopening ---
+
+    @Test
+    fun `a reopened workout lands on the exercise that was on screen while it has sets left`() {
+        val slots = listOf(slot(1, "squat", 0), slot(2, "press", 1))
+        val sets = listOf(
+            set(11, slot = 1, position = 0, completedAt = 5L),
+            set(12, slot = 1, position = 1),
+            set(21, slot = 2, position = 0),
+        )
+        assertEquals(2L, openingSlotId(slots, sets, rememberedSlotId = 2), "moved on to Leg Press after squat set 1")
+        assertEquals(1L, openingSlotId(slots, sets, rememberedSlotId = null), "nothing saved: the last tick's exercise")
+        assertEquals(1L, openingSlotId(slots, sets, rememberedSlotId = 99), "saved slot removed since")
+        val pressDone = sets.map { if (it.id == 21L) it.copy(completedAt = 9L) else it }
+        assertEquals(1L, openingSlotId(slots, pressDone, rememberedSlotId = 2), "saved exercise finished")
+        val allDone = sets.map { it.copy(completedAt = 9L) }
+        assertEquals(1L, openingSlotId(slots, allDone, rememberedSlotId = 2), "everything ticked: the first")
+        assertEquals(null, openingSlotId(emptyList(), emptyList(), rememberedSlotId = 2))
+    }
+
     // --- Fixtures ---
 
     /** Last session's sets per exercise, grouped per slot in the order the slots first appear. */

@@ -160,6 +160,24 @@ fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
     return if (warmup) "Warm-up $number of $count" else "Set $number of $count"
 }
 
+/**
+ * The exercise Active Workout opens on: the one that was on screen ([rememberedSlotId]) while it
+ * still exists and has an unticked row, else the one [nextPendingSet] picks (the last tick's), else
+ * the first. Null only for a workout with no exercises.
+ */
+fun openingSlotId(
+    slots: List<WorkoutExerciseEntity>,
+    sets: List<SetEntity>,
+    rememberedSlotId: Long?,
+): Long? {
+    if (rememberedSlotId != null && slots.any { it.id == rememberedSlotId } &&
+        sets.any { it.workoutExerciseId == rememberedSlotId && it.completedAt == null }
+    ) {
+        return rememberedSlotId
+    }
+    return nextPendingSet(slots, sets)?.slot?.id ?: slots.minByOrNull { it.position }?.id
+}
+
 /** What the Rest Timer's NEXT line is about. */
 sealed interface RestNext {
     /** [rows] is the slot's rows in position order; [index] is the next unticked one. */

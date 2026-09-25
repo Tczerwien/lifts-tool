@@ -13,7 +13,7 @@ import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.alignPrevious
-import com.tczerwien.lifts.session.nextPendingSet
+import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.seedRows
@@ -338,6 +338,20 @@ class ActiveWorkoutViewModel(
                 )
             }
         }
+        rememberCurrentSlot(_uiState.value)
+    }
+
+    /** The slot last saved as on screen, so it is saved again only when it changes. */
+    @Volatile
+    private var rememberedSlotId: Long? = null
+
+    /** Saves the exercise on screen, so reopening after a kill lands on it ([openingSlotId]). */
+    private fun rememberCurrentSlot(state: UiState) {
+        val slotId = state.exercises.getOrNull(state.currentIndex)?.slot?.id ?: return
+        if (slotId == rememberedSlotId) return
+        rememberedSlotId = slotId
+        val workoutId = state.workoutId
+        LiftsIo.write { session.rememberCurrentSlot(workoutId, slotId) }
     }
 
     fun addSet() {
@@ -593,6 +607,8 @@ class ActiveWorkoutViewModel(
         cacheHistory(exerciseIds, workoutId)
         val lastTimeBySlot = previousForSlots(slots, lastTimeByExercise)
         val restState = session.restStateSnapshot()
+        // Only the first load picks the exercise; after that the lifter's choice stands.
+        val savedSlotId = if (_uiState.value.loaded) null else session.currentSlotSnapshot(workoutId)
         applyRefresh(ticket) {
             val sets = overlayPendingEdits(ticket, loadedSets)
             val setsBySlot = sets.groupBy { it.workoutExerciseId }
@@ -618,7 +634,7 @@ class ActiveWorkoutViewModel(
                 val currentIndex = when {
                     focusLastExercise -> lastIndex
                     state.loaded -> state.currentIndex.coerceIn(0, lastIndex)
-                    else -> initialExerciseIndex(slots, sets, blocks)
+                    else -> blocks.indexOfFirst { it.slot.id == openingSlotId(slots, sets, savedSlotId) }.coerceAtLeast(0)
                 }
                 val currentBlock = blocks.getOrNull(currentIndex)
                 val activeSetId = state.activeSetId
@@ -640,17 +656,8 @@ class ActiveWorkoutViewModel(
                     warmupRestSec = settings.warmupRestSec,
                 )
             }
+            rememberCurrentSlot(_uiState.value)
         }
-    }
-
-    /** On first load (fresh or resumed) open the exercise the lifter is actually on. */
-    private fun initialExerciseIndex(
-        slots: List<WorkoutExerciseEntity>,
-        sets: List<SetEntity>,
-        blocks: List<ExerciseBlock>,
-    ): Int {
-        val next = nextPendingSet(slots, sets) ?: return 0
-        return blocks.indexOfFirst { it.slot.id == next.slot.id }.coerceAtLeast(0)
     }
 
     /** "Barbell · Chest — Triceps, Front Delts" from the catalog entity. */

@@ -148,6 +148,16 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `the exercise on screen is remembered across a restart, for its own workout only`() {
+        kotlinx.coroutines.runBlocking { session.rememberCurrentSlot(workoutId = 7, slotId = 42) }
+        scopes.forEach { it.cancel() }
+        dataStore = openDataStore()
+        session = newSession()
+        assertEquals(42L, session.currentSlotSnapshot(workoutId = 7))
+        assertNull(session.currentSlotSnapshot(workoutId = 8))
+    }
+
+    @Test
     fun `starting a new workout clears a rest left running`() {
         val first = session.startEmpty(now = 1_000)
         val slotId = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = first, exerciseId = "bench", position = 0))

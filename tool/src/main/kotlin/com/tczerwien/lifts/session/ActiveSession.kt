@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
@@ -362,6 +363,21 @@ class ActiveSession(
         return newEnd
     }
 
+    /**
+     * Saves which exercise Active Workout shows for [workoutId], so reopening after the app was
+     * killed lands on it ([openingSlotId]) rather than on the last tick's.
+     */
+    suspend fun rememberCurrentSlot(workoutId: Long, slotId: Long) {
+        dataStore.edit { prefs -> prefs[CURRENT_SLOT] = "$workoutId:$slotId" }
+    }
+
+    /** The slot [rememberCurrentSlot] saved for [workoutId], or null. Blocking read. */
+    fun currentSlotSnapshot(workoutId: Long): Long? = runBlocking {
+        val saved = dataStore.data.first()[CURRENT_SLOT]?.split(':') ?: return@runBlocking null
+        if (saved.size != 2 || saved[0].toLongOrNull() != workoutId) return@runBlocking null
+        saved[1].toLongOrNull()
+    }
+
     suspend fun clearRest() {
         dataStore.edit { prefs ->
             prefs.remove(REST_END_MILLIS)
@@ -374,5 +390,8 @@ class ActiveSession(
 
         private val REST_END_MILLIS = longPreferencesKey("lifts_rest_end_millis")
         private val REST_TOTAL_SEC = intPreferencesKey("lifts_rest_total_sec")
+
+        /** "workoutId:slotId" of the exercise last on screen; tied to its workout, so a stale one is ignored. */
+        private val CURRENT_SLOT = stringPreferencesKey("lifts_current_slot")
     }
 }
