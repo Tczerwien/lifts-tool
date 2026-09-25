@@ -125,6 +125,7 @@ object ExportFixtures {
     fun snapshot(
         bodyweight: List<BodyweightEntity> = ExportFixtures.bodyweight,
         bars: List<BarEntity> = ExportFixtures.bars,
+        sets: List<SetEntity> = ExportFixtures.sets,
     ): ExportSnapshot = buildSnapshot(
         exercises = listOf(bench, squat),
         workouts = listOf(workout1, workout2),
