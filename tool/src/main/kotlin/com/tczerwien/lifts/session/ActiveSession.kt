@@ -179,10 +179,6 @@ class ActiveSession(
 
     // --- Lookups ---
 
-    /** Completed sets of the most recent finished workout containing [exerciseId], by position. */
-    fun previousPerformance(exerciseId: String): List<SetEntity> =
-        repository.previousPerformance(exerciseId)
-
     /**
      * Completed sets of each of [exerciseIds] from workouts other than [excludeWorkoutId], in
      * completion order, keyed by exercise id (exercises never performed map to an empty list).

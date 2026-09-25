@@ -19,8 +19,13 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
-import com.tczerwien.lifts.session.nextPendingSet
+import com.tczerwien.lifts.session.RestNext
+import com.tczerwien.lifts.session.alignPrevious
+import com.tczerwien.lifts.session.nextSetLabel
+import com.tczerwien.lifts.session.previousForSlots
+import com.tczerwien.lifts.session.restNextContext
 import com.tczerwien.lifts.session.restRemainingSec
+import com.tczerwien.lifts.session.seedFor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.thelightphone.sdk.LightScreen
@@ -55,15 +60,19 @@ class RestTimerViewModel(
     private val session: ActiveSession,
     private val settingsStore: SettingsStore,
     private val requestedDurationSec: Int,
+    /** The workout resting; null falls back to the open workout. */
+    private val workoutId: Long?,
+    /** The exercise on Active Workout's screen; its next unticked set is the one NEXT names. */
+    private val slotId: Long?,
 ) : LightViewModel<Unit>() {
 
     data class UiState(
         val loaded: Boolean = false,
         /** Wall-clock end; remaining is derived against it every tick. */
         val endMillis: Long = 0,
-        /** "NEXT · 165 × 5 @ 8" — previous performance of the upcoming set. */
+        /** "NEXT · 165 × 5 @ 8": what a tick on the upcoming set would log, or an end-of-workout note. */
         val nextLine: String? = null,
-        /** "Bench Press · Set 3 of 4" */
+        /** "Bench Press · Set 3 of 4", counting work sets only. */
         val nextContext: String? = null,
     )
 
@@ -132,28 +141,36 @@ class RestTimerViewModel(
         session.clearRest()
     }
 
-    /** NEXT-set context from the in-progress workout, target = previous performance. */
+    /**
+     * The NEXT lines: the next unticked set of the exercise on screen ([restNextContext]), with the
+     * values a tick on it would log ([seedFor]) and its number among work sets ([nextSetLabel]).
+     * A workout with no exercises, or with every set ticked, says so instead of showing nothing.
+     */
     private fun loadNextContext(): Pair<String?, String?> {
-        val workout = repository.listWorkouts().firstOrNull { it.endedAt == null }
+        val workout = workoutId?.let { repository.workoutById(it) }
+            ?: repository.listOpenWorkouts().firstOrNull()
             ?: return null to null
         val slots = repository.exercisesForWorkout(workout.id)
         val sets = repository.setsForWorkout(workout.id)
-        val next = nextPendingSet(slots, sets) ?: return null to null
-        val units = settingsStore.snapshot().units
-        val exerciseName = repository.exerciseById(next.slot.exerciseId)?.name ?: next.slot.exerciseId
-        val target = repository.previousPerformance(next.slot.exerciseId)
-            .getOrNull(next.setNumber - 1) ?: next.set
-        val summary = target.weightKg?.let { weight ->
-            target.reps?.let { reps ->
-                buildString {
-                    append(Format.setSummary(weight, reps, units))
-                    target.rpe?.let { append(" @ ${trimRpe(it)}") }
-                }
-            }
+        val next = when (val context = restNextContext(slots, sets, slotId)) {
+            RestNext.NoExercises -> return "NO EXERCISES YET" to "Add an exercise"
+            RestNext.AllDone -> return "ALL SETS DONE" to "Finish or add an exercise"
+            is RestNext.Next -> context
         }
-        val nextLine = summary?.let { "NEXT · $it" }
-        val nextContext = "$exerciseName · Set ${next.setNumber} of ${next.setCount}"
-        return nextLine to nextContext
+        val exerciseId = next.slot.exerciseId
+        val lastTime = previousForSlots(slots, session.previousByExercise(listOf(exerciseId)))[next.slot.id].orEmpty()
+        val aligned = alignPrevious(next.rows, lastTime)
+        val seed = seedFor(next.rows, next.index, aligned)
+        val rpe = next.rows[next.index].rpe ?: aligned[next.index]?.rpe
+        val units = settingsStore.snapshot().units
+        val summary = when {
+            seed.weightKg != null && seed.reps != null -> Format.setSummary(seed.weightKg, seed.reps, units)
+            seed.reps != null -> "× ${seed.reps}"
+            seed.weightKg != null -> Format.weight(seed.weightKg, units)
+            else -> null
+        }?.let { values -> rpe?.let { "$values @ ${trimRpe(it)}" } ?: values }
+        val exerciseName = repository.exerciseById(exerciseId)?.name ?: exerciseId
+        return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
     }
 
     private fun trimRpe(rpe: Double): String =
@@ -173,6 +190,10 @@ class RestTimerScreen(
     sealedActivity: SealedLightActivity,
     /** Requested rest length; the screen owns the wall-clock end timestamp (visual-only alerting). */
     private val durationSec: Int,
+    /** The workout resting; null falls back to the open workout. */
+    private val workoutId: Long? = null,
+    /** The exercise on Active Workout's screen, which NEXT follows; null falls back to the last tick's. */
+    private val slotId: Long? = null,
 ) : LightScreen<Unit, RestTimerViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -185,7 +206,7 @@ class RestTimerScreen(
         get() = RestTimerViewModel::class.java
 
     override fun createViewModel() =
-        RestTimerViewModel(repository, session, settingsStore, durationSec)
+        RestTimerViewModel(repository, session, settingsStore, durationSec, workoutId, slotId)
 
     @Composable
     override fun Content() {

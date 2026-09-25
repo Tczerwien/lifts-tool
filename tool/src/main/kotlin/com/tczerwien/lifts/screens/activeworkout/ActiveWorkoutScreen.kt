@@ -123,7 +123,11 @@ class ActiveWorkoutScreen(
             )
             else -> uiState.defaultRestSec
         }
-        val openTimer = { navigateTo({ RestTimerScreen(it, durationSec = timerDurationSec) }) }
+        val openTimer = {
+            navigateTo({
+                RestTimerScreen(it, durationSec = timerDurationSec, workoutId = uiState.workoutId, slotId = current?.slot?.id)
+            })
+        }
 
         LightTheme(colors = themeColors) {
             Column(
