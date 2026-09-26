@@ -9,14 +9,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.REST_OVER_WINDOW_MS
+import com.tczerwien.lifts.session.restOver
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.Stepper
@@ -99,17 +101,21 @@ internal fun AddSetRow(onClick: () -> Unit) {
 }
 
 /**
- * Fixed strip between the set list and the rest strip; visible while a row is active.
+ * Fixed strip between the set list and the rest slot. With no active row (every set ticked) it
+ * stays at full height with both steppers greyed out, so nothing below the list moves.
  * The weight stepper gets the wider slot so "102.5" fits between its 4gu targets.
  */
 @Composable
 internal fun StepperStrip(
     viewModel: ActiveWorkoutViewModel,
     uiState: ActiveWorkoutViewModel.UiState,
-    activeSet: SetEntity,
+    activeSet: SetEntity?,
     /** The active row's starting values; shown dimmed where the row has none of its own. */
-    seed: RowValues,
+    seed: RowValues?,
 ) {
+    val active = activeSet != null
+    val weightKg = activeSet?.weightKg ?: seed?.weightKg
+    val reps = activeSet?.reps ?: seed?.reps
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -121,12 +127,13 @@ internal fun StepperStrip(
             onStep = viewModel::stepWeight,
             modifier = Modifier.weight(1.3f),
             label = "Weight (${uiState.units.suffix})",
-            decrementEnabled = viewModel.weightDecrementEnabled(uiState),
+            decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),
+            incrementEnabled = active,
         ) {
             LightText(
-                text = (activeSet.weightKg ?: seed.weightKg)?.let { Format.weight(it, uiState.units) } ?: "—",
+                text = weightKg?.let { Format.weight(it, uiState.units) } ?: "—",
                 variant = LightTextVariant.Copy,
-                lighten = activeSet.weightKg == null,
+                lighten = activeSet?.weightKg == null,
                 monospace = true,
                 maxLines = 1,
             )
@@ -135,12 +142,13 @@ internal fun StepperStrip(
             onStep = viewModel::stepReps,
             modifier = Modifier.weight(1f),
             label = "Reps",
-            decrementEnabled = viewModel.repsDecrementEnabled(uiState),
+            decrementEnabled = active && viewModel.repsDecrementEnabled(uiState),
+            incrementEnabled = active,
         ) {
             LightText(
-                text = (activeSet.reps ?: seed.reps)?.toString() ?: "—",
+                text = reps?.toString() ?: "—",
                 variant = LightTextVariant.Copy,
-                lighten = activeSet.reps == null,
+                lighten = activeSet?.reps == null,
                 monospace = true,
                 maxLines = 1,
             )
@@ -180,43 +188,56 @@ internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
 }
 
 /**
- * 2gu rest strip above the bottom bar while the rest ending at [endMillis] runs: remaining
- * countdown, tap opens the timer screen. Its clock ticks here, so only the strip redraws.
+ * The 2gu rest slot above the bottom bar, always the same height so nothing above it moves:
+ * - while the rest ending at [endMillis] runs, the countdown ("Rest 1:23 · TAP FOR TIMER"); a tap
+ *   opens the timer screen;
+ * - for 30 s after it ends, REST OVER ([restOver]);
+ * - otherwise blank.
+ * Only the countdown takes taps. The clock ticks here, so only the slot redraws, and it stops once
+ * REST OVER has passed.
  */
 @Composable
-internal fun RestStrip(endMillis: Long, onClick: () -> Unit) {
-    val nowMillis by rememberSecondClock(endMillis)
-    val remainingSec = restRemainingSec(endMillis, nowMillis)
-    if (remainingSec <= 0) return
+internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
+    val nowMillis = endMillis?.let { end ->
+        rememberSecondClock(anchor = end, stopAt = end + REST_OVER_WINDOW_MS).value
+    }
+    val remainingSec = if (endMillis != null && nowMillis != null) restRemainingSec(endMillis, nowMillis) else 0
+    val over = nowMillis != null && restOver(endMillis, nowMillis)
+    val showing = remainingSec > 0 || over
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(1.dp)
-                .background(LightThemeTokens.colors.contentSecondary),
+                .background(if (showing) LightThemeTokens.colors.contentSecondary else Color.Transparent),
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(2f.gridUnitsAsDp())
-                .lightClickable(onClick = onClick)
+                .let { if (remainingSec > 0) it.lightClickable(onClick = onOpenTimer) else it }
                 .padding(horizontal = 1f.gridUnitsAsDp()),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = if (over) Arrangement.Center else Arrangement.SpaceBetween,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LightText(text = "Rest ", variant = LightTextVariant.Detail)
-                LightText(
-                    text = Format.clock(remainingSec),
-                    variant = LightTextVariant.Detail,
-                    monospace = true,
-                )
+            when {
+                remainingSec > 0 -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LightText(text = "Rest ", variant = LightTextVariant.Detail)
+                        LightText(
+                            text = Format.clock(remainingSec),
+                            variant = LightTextVariant.Detail,
+                            monospace = true,
+                        )
+                    }
+                    LightText(
+                        text = "TAP FOR TIMER",
+                        variant = LightTextVariant.Superfine,
+                        lighten = true,
+                    )
+                }
+                over -> LightText(text = "REST OVER", variant = LightTextVariant.Detail)
             }
-            LightText(
-                text = "TAP FOR TIMER",
-                variant = LightTextVariant.Superfine,
-                lighten = true,
-            )
         }
     }
 }

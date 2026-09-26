@@ -175,14 +175,12 @@ class ActiveWorkoutScreen(
                         }
 
                         val activeSet = viewModel.activeSet(uiState)
-                        if (activeSet != null) {
-                            StepperStrip(
-                                viewModel = viewModel,
-                                uiState = uiState,
-                                activeSet = activeSet,
-                                seed = current.seeds[current.sets.indexOf(activeSet)],
-                            )
-                        }
+                        StepperStrip(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            activeSet = activeSet,
+                            seed = activeSet?.let { current.seeds[current.sets.indexOf(it)] },
+                        )
 
                         if (uiState.exercises.size > 1) {
                             val nextIndex = (uiState.currentIndex + 1) % uiState.exercises.size
@@ -194,7 +192,7 @@ class ActiveWorkoutScreen(
                             )
                         }
 
-                        uiState.restEndMillis?.let { end -> RestStrip(endMillis = end, onClick = openTimer) }
+                        RestSlot(endMillis = uiState.restEndMillis, onOpenTimer = openTimer)
                     }
                 }
 

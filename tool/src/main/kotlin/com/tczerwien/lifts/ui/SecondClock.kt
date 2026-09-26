@@ -20,15 +20,17 @@ fun msUntilNextSecond(anchor: Long, now: Long): Long = 1_000L - Math.floorMod(no
 /**
  * Wall-clock now, updated as each whole second passes since [anchor] ([msUntilNextSecond]), for a
  * small composable that draws a clock: only it redraws, once a second. Frames drive it, so it
- * stops while the app is in the background and catches up when it's back.
+ * stops while the app is in the background and catches up when it's back. It stops for good at
+ * [stopAt], once nothing it draws can change.
  */
 @Composable
-fun rememberSecondClock(anchor: Long): State<Long> {
+fun rememberSecondClock(anchor: Long, stopAt: Long = Long.MAX_VALUE): State<Long> {
     val now = remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(anchor) {
+    LaunchedEffect(anchor, stopAt) {
         while (true) {
             val frameNow = withFrameMillis { System.currentTimeMillis() }
             now.longValue = frameNow
+            if (frameNow >= stopAt) break
             delay(msUntilNextSecond(anchor, frameNow))
         }
     }
