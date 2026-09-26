@@ -106,10 +106,12 @@ fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>, unit: WeightUnit)
 
 /**
  * Rule 2 of [seedRows]: the earlier row's value carries when it was changed from last time and
- * last time this row had the same value as the earlier one (or neither had a PREVIOUS).
+ * last time this row had the same value as the earlier one, or neither had one (a bodyweight set 1
+ * followed by a weighted set 2 is not a match).
  */
 private fun <T : Any> carries(earlier: T, earlierPrevious: T?, previous: T?, same: (T?, T?) -> Boolean): Boolean =
-    !same(earlier, earlierPrevious) && (earlierPrevious == null || same(earlierPrevious, previous))
+    !same(earlier, earlierPrevious) &&
+        (if (earlierPrevious == null) previous == null else same(earlierPrevious, previous))
 
 /** [seedRows] for one row. */
 fun seedFor(rows: List<SetEntity>, index: Int, aligned: List<SetEntity?>, unit: WeightUnit): RowValues =

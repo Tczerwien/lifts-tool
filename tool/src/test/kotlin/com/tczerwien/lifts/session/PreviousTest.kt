@@ -176,6 +176,13 @@ class PreviousTest {
     }
 
     @Test
+    fun `adding weight to a bodyweight set 1 leaves a weighted set 2 on its own PREVIOUS`() {
+        val previous = listOf(prev(1, n, weightKg = null, reps = 10), prev(2, n, weightKg = 10.0, reps = 6))
+        val today = listOf(set(11, position = 0, weightKg = 2.5, reps = 10, completedAt = 1L), set(12, position = 1))
+        assertEquals(RowValues(10.0, 6), seedFor(today, 1, alignPrevious(today, previous), WeightUnit.KG))
+    }
+
+    @Test
     fun `a heavier first warm-up leaves the rest of the ramp alone`() {
         val previous = listOf(prev(1, w, weightKg = 43.0, reps = 8), prev(2, w, weightKg = 61.0, reps = 5))
         val today = listOf(set(11, position = 0, type = w, weightKg = 45.0, reps = 8, completedAt = 1L), set(12, position = 1, type = w))
