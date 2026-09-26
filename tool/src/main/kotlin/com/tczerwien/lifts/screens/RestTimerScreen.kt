@@ -96,6 +96,9 @@ class RestTimerViewModel(
     private fun sync() {
         viewModelScope.launch(Dispatchers.IO) {
             syncMutex.withLock {
+                // Read behind any save still queued: a tick just before opening the timer writes its
+                // own rest end, and a stepper tap changes what NEXT should show.
+                LiftsIo.write {}.join()
                 val now = System.currentTimeMillis()
                 val persisted = session.restStateSnapshot()
                 val endMillis = when {
@@ -108,9 +111,6 @@ class RestTimerViewModel(
                     else -> _uiState.value.endMillis
                 }
                 initialized = true
-                // Read behind any save still queued (a stepper tap just before opening the timer),
-                // so NEXT shows what a tick would log now.
-                LiftsIo.write {}.join()
                 val (nextLine, nextContext) = loadNextContext()
                 _uiState.update {
                     it.copy(
