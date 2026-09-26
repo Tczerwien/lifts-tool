@@ -338,20 +338,27 @@ class ActiveWorkoutViewModel(
                 )
             }
         }
-        rememberCurrentSlot(_uiState.value)
+        rememberCurrentSlot()
     }
 
-    /** The slot last saved as on screen, so it is saved again only when it changes. */
+    /** The slot last saved as on screen, so it is saved again only when it changes. Guarded by [refreshLock]. */
     @Volatile
     private var rememberedSlotId: Long? = null
 
-    /** Saves the exercise on screen, so reopening after a kill lands on it ([openingSlotId]). */
-    private fun rememberCurrentSlot(state: UiState) {
-        val slotId = state.exercises.getOrNull(state.currentIndex)?.slot?.id ?: return
-        if (slotId == rememberedSlotId) return
-        rememberedSlotId = slotId
-        val workoutId = state.workoutId
-        LiftsIo.write { session.rememberCurrentSlot(workoutId, slotId) }
+    /**
+     * Saves the exercise on screen, so reopening after a kill lands on it ([openingSlotId]). Reads
+     * the state and queues the save under [refreshLock], so a reload and a swipe to the next
+     * exercise can't save in the wrong order.
+     */
+    private fun rememberCurrentSlot() {
+        synchronized(refreshLock) {
+            val state = _uiState.value
+            val slotId = state.exercises.getOrNull(state.currentIndex)?.slot?.id ?: return
+            if (slotId == rememberedSlotId) return
+            rememberedSlotId = slotId
+            val workoutId = state.workoutId
+            LiftsIo.write { session.rememberCurrentSlot(workoutId, slotId) }
+        }
     }
 
     fun addSet() {
@@ -656,7 +663,7 @@ class ActiveWorkoutViewModel(
                     warmupRestSec = settings.warmupRestSec,
                 )
             }
-            rememberCurrentSlot(_uiState.value)
+            rememberCurrentSlot()
         }
     }
 
