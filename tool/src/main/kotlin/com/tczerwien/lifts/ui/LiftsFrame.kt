@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ import com.tczerwien.lifts.session.keepAwake
 import com.tczerwien.lifts.session.msToNextPulsePhase
 import com.tczerwien.lifts.session.nextRestCheckMillis
 import com.tczerwien.lifts.session.pulseInverted
+import com.tczerwien.lifts.settings.SettingsStore
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SealedLightContext
 import com.thelightphone.sdk.audio.DefaultLightAudio
@@ -45,7 +47,8 @@ private const val BEEP_TAIL_MS = 150L
 /**
  * Every Lifts screen's outer wrapper, in place of LightTheme: the theme, plus the rest-over alert.
  * - While a rest runs, and for 30 s after it ends, the screen is kept on ([keepAwake]).
- * - When the rest is seen ending ([RestAlarm.check]), the beep plays and the screen invert-pulses.
+ * - When the rest is seen ending ([RestAlarm.check]), the screen invert-pulses, and the beep plays
+ *   unless Settings turned it off.
  *
  * Only the screen on top is composed, so whichever screen is showing alerts, and a rest alerts once.
  * The beep's voice belongs to this screen's composition and is released in `finally`, never in
@@ -60,6 +63,9 @@ fun LiftsFrame(
     val themeColors by LightThemeController.colors.collectAsState()
     val restStore = remember(lightContext) { RestStore(lightContext.dataStore) }
     val restEnd by restStore.endMillis.collectAsState(initial = null)
+    val settingsStore = remember(lightContext) { SettingsStore(lightContext.dataStore) }
+    val beepOn by settingsStore.restBeep.collectAsState(initial = SettingsStore.DEFAULT_REST_BEEP)
+    val latestBeepOn by rememberUpdatedState(beepOn)
     val alarm = RestAlarm.process
     val beepScope = rememberCoroutineScope()
 
@@ -75,7 +81,7 @@ fun LiftsFrame(
             // ends there stays quiet when the app comes back after the grace window.
             val now = withFrameMillis { System.currentTimeMillis() }
             awake = keepAwake(end, now)
-            if (alarm.check(end, now)) {
+            if (alarm.check(end, now) && latestBeepOn) {
                 beepScope.launch { playRestBeep(DefaultLightAudio(sealedActivity)) }
             }
             delay(nextRestCheckMillis(end, now) ?: break)

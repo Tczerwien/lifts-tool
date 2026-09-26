@@ -93,6 +93,14 @@ class SettingsViewModel(
         LiftsIo.write { settingsStore.setUnits(next) }
     }
 
+    /** The rest-over beep on or off; the flash and keep-awake stay either way. */
+    fun toggleRestBeep() {
+        val settings = _uiState.value.settings ?: return
+        val next = !settings.restBeep
+        _uiState.update { it.copy(settings = settings.copy(restBeep = next)) }
+        LiftsIo.write { settingsStore.setRestBeep(next) }
+    }
+
     fun openRestEditor(field: RestField) {
         _uiState.update { it.copy(mode = Mode.EditRest(field)) }
     }
@@ -166,7 +174,8 @@ class SettingsViewModel(
 
 /**
  * Settings (design/screens/settings.html): field rows for Units (tap toggles LB/KG),
- * the two rest durations (tap opens a ±15 s stepper mode), Plate Inventory (tap opens
+ * the two rest durations (tap opens a ±15 s stepper mode), Rest-over Beep (tap toggles
+ * ON/OFF), Plate Inventory (tap opens
  * the SDK text editor with a comma list in display units), Bar Weights and Export
  * (navigate), and a static About row.
  */
@@ -252,6 +261,12 @@ class SettingsScreen(
                     label = "Warm-up Rest",
                     value = Format.clock(settings.warmupRestSec),
                     onClick = { viewModel.openRestEditor(SettingsViewModel.RestField.WARMUP) },
+                    chevron = true,
+                )
+                LiftsFieldRow(
+                    label = "Rest-over Beep",
+                    value = if (settings.restBeep) "ON" else "OFF",
+                    onClick = { viewModel.toggleRestBeep() },
                     chevron = true,
                 )
                 LiftsFieldRow(

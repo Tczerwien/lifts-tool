@@ -2,12 +2,16 @@ package com.tczerwien.lifts.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
@@ -27,7 +31,12 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         val warmupRestSec: Int,
         /** Available plates per side, canonical kg, descending. */
         val plateInventoryKg: List<Double>,
+        /** Beep when a rest ends; the flash and keep-awake don't depend on it. */
+        val restBeep: Boolean,
     )
+
+    /** [Settings.restBeep] as it changes, for the rest-over alert on every screen. */
+    val restBeep: Flow<Boolean> = dataStore.data.map { it[REST_BEEP] ?: DEFAULT_REST_BEEP }.distinctUntilChanged()
 
     /** Blocking read of the current settings — call from Dispatchers.IO. */
     fun snapshot(): Settings = runBlocking {
@@ -40,6 +49,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             warmupRestSec = prefs[WARMUP_REST_SEC] ?: DEFAULT_WARMUP_REST_SEC_VALUE,
             plateInventoryKg = prefs[PLATE_INVENTORY_KG]?.let(::decodePlates)
                 ?: DEFAULT_PLATE_INVENTORY_KG,
+            restBeep = prefs[REST_BEEP] ?: DEFAULT_REST_BEEP,
         )
     }
 
@@ -53,6 +63,10 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setWarmupRestSec(sec: Int) {
         dataStore.edit { prefs -> prefs[WARMUP_REST_SEC] = sec }
+    }
+
+    suspend fun setRestBeep(on: Boolean) {
+        dataStore.edit { prefs -> prefs[REST_BEEP] = on }
     }
 
     suspend fun setPlateInventoryKg(platesKg: List<Double>) {
@@ -70,6 +84,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val DEFAULT_REST_SEC = intPreferencesKey("lifts_default_rest_sec")
         private val WARMUP_REST_SEC = intPreferencesKey("lifts_warmup_rest_sec")
         private val PLATE_INVENTORY_KG = stringPreferencesKey("lifts_plate_inventory_kg")
+        private val REST_BEEP = booleanPreferencesKey("lifts_rest_beep")
 
         private val json = Json
         private val PLATES_SERIALIZER = ListSerializer(Double.serializer())
@@ -77,6 +92,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         val DEFAULT_UNITS = WeightUnit.LB
         const val DEFAULT_REST_SEC_VALUE = 180
         const val DEFAULT_WARMUP_REST_SEC_VALUE = 90
+        const val DEFAULT_REST_BEEP = true
 
         /** lb plate set [45, 25, 10, 5, 2.5] stored canonically in kg. */
         val DEFAULT_PLATE_INVENTORY_KG: List<Double> =

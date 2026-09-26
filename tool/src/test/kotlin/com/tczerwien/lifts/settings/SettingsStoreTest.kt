@@ -9,9 +9,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.ui.WeightUnit
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class SettingsStoreTest {
 
@@ -28,6 +31,7 @@ class SettingsStoreTest {
         val settings = SettingsStore(FakeDataStore(emptyPreferences())).snapshot()
         assertEquals(SettingsStore.DEFAULT_UNITS, settings.units)
         assertEquals(SettingsStore.DEFAULT_PLATE_INVENTORY_KG, settings.plateInventoryKg)
+        assertTrue(settings.restBeep, "the rest-over beep starts on")
     }
 
     @Test
@@ -55,5 +59,18 @@ class SettingsStoreTest {
         val settings = store.snapshot()
         assertEquals(WeightUnit.KG, settings.units)
         assertEquals(listOf(25.0, 1.25), settings.plateInventoryKg)
+    }
+
+    @Test
+    fun restBeepSwitchesOffAndBackOn() {
+        val store = SettingsStore(FakeDataStore(emptyPreferences()))
+        runBlocking {
+            assertTrue(store.restBeep.first())
+            store.setRestBeep(false)
+            assertFalse(store.snapshot().restBeep)
+            assertFalse(store.restBeep.first())
+            store.setRestBeep(true)
+            assertTrue(store.restBeep.first())
+        }
     }
 }
