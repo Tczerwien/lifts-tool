@@ -3,8 +3,6 @@ package com.tczerwien.lifts.session
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
@@ -20,8 +18,8 @@ import kotlinx.coroutines.runBlocking
  * rest-timer state.
  *
  * All non-suspend methods are blocking — call from Dispatchers.IO. The rest timer is a
- * wall-clock end timestamp in DataStore ("lifts_"-prefixed keys, shared file with SDK
- * push keys); remaining time is always derived via [restRemainingSec], never counted.
+ * wall-clock end timestamp kept by [RestStore]; remaining time is always derived via
+ * [restRemainingSec], never counted.
  */
 class ActiveSession(
     private val repository: LiftsStore,
@@ -327,41 +325,17 @@ class ActiveSession(
         )
     }
 
-    // --- Rest timer (persisted wall-clock end) ---
+    // --- Rest timer (persisted wall-clock end, [RestStore]) ---
 
-    /** Persisted rest-timer state; remaining is derived via [restRemainingSec]. */
-    data class RestTimerState(val endMillis: Long, val totalSec: Int)
+    private val rest = RestStore(dataStore)
 
     /** Blocking read — call from Dispatchers.IO. Null when no timer was ever started. */
-    fun restStateSnapshot(): RestTimerState? = runBlocking {
-        val prefs = dataStore.data.first()
-        val endMillis = prefs[REST_END_MILLIS] ?: return@runBlocking null
-        RestTimerState(endMillis = endMillis, totalSec = prefs[REST_TOTAL_SEC] ?: 0)
-    }
+    fun restStateSnapshot(): RestTimerState? = rest.snapshot()
 
-    suspend fun startRest(totalSec: Int, now: Long = System.currentTimeMillis()) {
-        val clamped = totalSec.coerceAtLeast(0)
-        dataStore.edit { prefs ->
-            prefs[REST_END_MILLIS] = now + clamped * 1000L
-            prefs[REST_TOTAL_SEC] = clamped
-        }
-    }
+    suspend fun startRest(totalSec: Int, now: Long = System.currentTimeMillis()) = rest.start(totalSec, now)
 
-    /**
-     * Shifts the persisted end by [deltaSec]; the end never moves before [now] (an
-     * over-subtraction just finishes the rest). Returns the new end, null when no timer
-     * is persisted.
-     */
-    suspend fun adjustRest(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? {
-        var newEnd: Long? = null
-        dataStore.edit { prefs ->
-            val endMillis = prefs[REST_END_MILLIS] ?: return@edit
-            val adjusted = (endMillis + deltaSec * 1000L).coerceAtLeast(now)
-            prefs[REST_END_MILLIS] = adjusted
-            newEnd = adjusted
-        }
-        return newEnd
-    }
+    /** See [RestStore.adjust]. */
+    suspend fun adjustRest(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? = rest.adjust(deltaSec, now)
 
     /**
      * Saves which exercise Active Workout shows for [workoutId], so reopening after the app was
@@ -378,18 +352,10 @@ class ActiveSession(
         saved[1].toLongOrNull()
     }
 
-    suspend fun clearRest() {
-        dataStore.edit { prefs ->
-            prefs.remove(REST_END_MILLIS)
-            prefs.remove(REST_TOTAL_SEC)
-        }
-    }
+    suspend fun clearRest() = rest.clear()
 
     companion object {
         const val DEFAULT_WORKOUT_NAME = "Workout"
-
-        private val REST_END_MILLIS = longPreferencesKey("lifts_rest_end_millis")
-        private val REST_TOTAL_SEC = intPreferencesKey("lifts_rest_total_sec")
 
         /** "workoutId:slotId" of the exercise last on screen; tied to its workout, so a stale one is ignored. */
         private val CURRENT_SLOT = stringPreferencesKey("lifts_current_slot")

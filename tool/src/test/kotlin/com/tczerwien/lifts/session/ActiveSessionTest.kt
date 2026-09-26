@@ -144,7 +144,7 @@ class ActiveSessionTest {
         scopes.forEach { it.cancel() }
         dataStore = openDataStore()
         session = newSession()
-        assertEquals(ActiveSession.RestTimerState(endMillis = 55_000, totalSec = 45), session.restStateSnapshot())
+        assertEquals(RestTimerState(endMillis = 55_000, totalSec = 45), session.restStateSnapshot())
     }
 
     @Test
