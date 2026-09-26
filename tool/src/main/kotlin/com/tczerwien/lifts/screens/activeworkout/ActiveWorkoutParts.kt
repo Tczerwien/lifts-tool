@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -16,9 +17,11 @@ import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.rememberSecondClock
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
@@ -176,9 +179,15 @@ internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
     }
 }
 
-/** 2gu rest strip above the bottom bar: remaining countdown, tap opens the timer screen. */
+/**
+ * 2gu rest strip above the bottom bar while the rest ending at [endMillis] runs: remaining
+ * countdown, tap opens the timer screen. Its clock ticks here, so only the strip redraws.
+ */
 @Composable
-internal fun RestStrip(remainingSec: Int, onClick: () -> Unit) {
+internal fun RestStrip(endMillis: Long, onClick: () -> Unit) {
+    val nowMillis by rememberSecondClock(endMillis)
+    val remainingSec = restRemainingSec(endMillis, nowMillis)
+    if (remainingSec <= 0) return
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier

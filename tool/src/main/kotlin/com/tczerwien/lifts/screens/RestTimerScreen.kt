@@ -10,9 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
@@ -31,6 +28,7 @@ import com.tczerwien.lifts.session.seedFor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.rememberSecondClock
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -212,13 +210,8 @@ class RestTimerScreen(
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
 
-        var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-        LaunchedEffect(Unit) {
-            while (true) {
-                nowMillis = System.currentTimeMillis()
-                delay(TICK_MS)
-            }
-        }
+        // On each second of the countdown, so 0:00 shows as the rest ends.
+        val nowMillis by rememberSecondClock(uiState.endMillis)
 
         val remainingSec = if (uiState.loaded) restRemainingSec(uiState.endMillis, nowMillis) else -1
         val done = uiState.loaded && remainingSec == 0
@@ -317,7 +310,6 @@ class RestTimerScreen(
     }
 
     private companion object {
-        const val TICK_MS = 200L
         const val ADJUST_STEP_SEC = 30
     }
 }

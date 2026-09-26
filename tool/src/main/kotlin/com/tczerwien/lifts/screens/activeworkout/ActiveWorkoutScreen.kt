@@ -10,9 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.ExercisePickerScreen
@@ -32,6 +29,7 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.rememberSecondClock
 import com.tczerwien.lifts.ui.SetRow
 import com.tczerwien.lifts.ui.SetRowHeader
 import com.tczerwien.lifts.ui.SetRowState
@@ -44,7 +42,6 @@ import com.thelightphone.sdk.ui.LightLazyScrollView
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
-import kotlinx.coroutines.delay
 
 /**
  * Active workout (design/screens/active-workout.html): one exercise at a time with its
@@ -52,7 +49,8 @@ import kotlinx.coroutines.delay
  * a collapsed next-exercise row, and the rest strip. Top bar: back / name and clock / Finish,
  * which takes two taps and discards a workout with nothing logged. Bottom bar: rest timer / add
  * exercise / "…" (remove set, remove exercise, discard). The elapsed clock and rest remaining are
- * derived from wall-clock timestamps, ticking only while the screen is shown.
+ * derived from wall-clock timestamps; each ticks in its own small composable, once a second,
+ * and only while the app is in the foreground ([rememberSecondClock]).
  *
  * Constructor contract (FROZEN): [workoutId] resumes; else [templateId] creates the
  * session from a template inside this screen; both null starts an empty workout.
@@ -81,14 +79,6 @@ class ActiveWorkoutScreen(
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
 
-        var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
-        LaunchedEffect(Unit) {
-            while (true) {
-                nowMillis = System.currentTimeMillis()
-                delay(CLOCK_TICK_MS)
-            }
-        }
-
         val finishArmed by viewModel.finishArm.armed.collectAsState()
 
         LaunchedEffect(uiState.pendingCompleteWorkoutId) {
@@ -109,19 +99,20 @@ class ActiveWorkoutScreen(
         }
 
         val current = uiState.exercises.getOrNull(uiState.currentIndex)
-        val restRemaining = uiState.restEndMillis?.let { restRemainingSec(it, nowMillis) } ?: 0
-        val timerDurationSec = when {
-            restRemaining > 0 && uiState.restTotalSec > 0 -> uiState.restTotalSec
-            current != null -> restDurationSec(
-                setType = SET_TYPE_NORMAL,
-                restSecWork = current.slot.restSecWork,
-                restSecWarmup = current.slot.restSecWarmup,
-                defaultRestSec = uiState.defaultRestSec,
-                warmupRestSec = uiState.warmupRestSec,
-            )
-            else -> uiState.defaultRestSec
-        }
         val openTimer = {
+            // Read the clock at the tap: nothing on this screen ticks except the small clocks.
+            val restRemaining = uiState.restEndMillis?.let { restRemainingSec(it, System.currentTimeMillis()) } ?: 0
+            val timerDurationSec = when {
+                restRemaining > 0 && uiState.restTotalSec > 0 -> uiState.restTotalSec
+                current != null -> restDurationSec(
+                    setType = SET_TYPE_NORMAL,
+                    restSecWork = current.slot.restSecWork,
+                    restSecWarmup = current.slot.restSecWarmup,
+                    defaultRestSec = uiState.defaultRestSec,
+                    warmupRestSec = uiState.warmupRestSec,
+                )
+                else -> uiState.defaultRestSec
+            }
             navigateTo({
                 RestTimerScreen(it, durationSec = timerDurationSec, workoutId = uiState.workoutId, slotId = current?.slot?.id)
             })
@@ -134,29 +125,7 @@ class ActiveWorkoutScreen(
                     .background(LightThemeTokens.colors.background),
             ) {
                 val live = uiState.loaded && !uiState.finishing && !uiState.leave
-                LightTopBar(
-                    leftButton = LightBarButton.LightIcon(
-                        icon = LightIcons.BACK,
-                        onClick = { goBack() },
-                    ),
-                    center = if (live) {
-                        LightTopBarCenter.TwoLineDetail(
-                            line1 = uiState.workoutName,
-                            line2 = topBarSubtitle(uiState, nowMillis),
-                        )
-                    } else {
-                        null
-                    },
-                    rightButton = if (live) {
-                        LightBarButton.LightIcon(
-                            icon = LightIcons.ACCEPT,
-                            contentDescription = "finish workout",
-                            onClick = viewModel::tapFinish,
-                        )
-                    } else {
-                        null
-                    },
-                )
+                TopBar(uiState, live)
 
                 when {
                     !live -> Spacer(modifier = Modifier.weight(1f))
@@ -225,9 +194,7 @@ class ActiveWorkoutScreen(
                             )
                         }
 
-                        if (restRemaining > 0) {
-                            RestStrip(remainingSec = restRemaining, onClick = openTimer)
-                        }
+                        uiState.restEndMillis?.let { end -> RestStrip(endMillis = end, onClick = openTimer) }
                     }
                 }
 
@@ -263,6 +230,35 @@ class ActiveWorkoutScreen(
                 )
             }
         }
+    }
+
+    /** Back / name and elapsed clock / Finish. The clock ticks here, so only the top bar redraws each second. */
+    @Composable
+    private fun TopBar(uiState: ActiveWorkoutViewModel.UiState, live: Boolean) {
+        val nowMillis by rememberSecondClock(uiState.startedAt)
+        LightTopBar(
+            leftButton = LightBarButton.LightIcon(
+                icon = LightIcons.BACK,
+                onClick = { goBack() },
+            ),
+            center = if (live) {
+                LightTopBarCenter.TwoLineDetail(
+                    line1 = uiState.workoutName,
+                    line2 = topBarSubtitle(uiState, nowMillis),
+                )
+            } else {
+                null
+            },
+            rightButton = if (live) {
+                LightBarButton.LightIcon(
+                    icon = LightIcons.ACCEPT,
+                    contentDescription = "finish workout",
+                    onClick = viewModel::tapFinish,
+                )
+            } else {
+                null
+            },
+        )
     }
 
     private fun openMenu(uiState: ActiveWorkoutViewModel.UiState) {
@@ -302,7 +298,6 @@ class ActiveWorkoutScreen(
     }
 
     private companion object {
-        const val CLOCK_TICK_MS = 500L
         const val SET_LIST_ROW_UNITS = 3f
     }
 }
