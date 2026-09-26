@@ -197,7 +197,7 @@ class RestTimerViewModel(
  */
 class RestTimerScreen(
     private val sealedActivity: SealedLightActivity,
-    /** Requested rest length; the screen owns the wall-clock end timestamp (visual-only alerting). */
+    /** Rest length for a fresh timer; the end is saved as a wall-clock timestamp (RestStore). */
     private val durationSec: Int,
     /** The workout resting; null falls back to the open workout. */
     private val workoutId: Long? = null,
