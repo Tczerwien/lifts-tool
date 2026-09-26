@@ -10,6 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
@@ -123,8 +126,12 @@ class RestTimerViewModel(
         }
     }
 
-    /** −30 / +30: shift the persisted end (never before now — over-subtracting finishes). */
+    /**
+     * −30 / +30: shift the persisted end (never before now — over-subtracting finishes). At 0:00 the
+     * rest is over and a tap does nothing, here and in the store ([ActiveSession.adjustRest]).
+     */
     fun adjust(deltaSec: Int) {
+        if (restRemainingSec(_uiState.value.endMillis, System.currentTimeMillis()) == 0) return
         viewModelScope.launch(Dispatchers.IO) {
             val newEnd = session.adjustRest(deltaSec) ?: return@launch
             _uiState.update { it.copy(endMillis = newEnd) }
@@ -220,10 +227,13 @@ class RestTimerScreen(
         val nowMillis by rememberSecondClock(uiState.endMillis)
 
         val remainingSec = if (uiState.loaded) restRemainingSec(uiState.endMillis, nowMillis) else -1
-        val done = uiState.loaded && remainingSec == 0
+        // Latched: once 0:00 shows, a late +30 result can't bring the countdown back mid-pulse.
+        var finished by remember { mutableStateOf(false) }
+        val done = finished || (uiState.loaded && remainingSec == 0)
 
         LaunchedEffect(done) {
             if (done) {
+                finished = true
                 // As long as the pulse, which LiftsFrame runs on this screen.
                 delay(REST_PULSE_TOTAL_MS)
                 goBack()
@@ -261,7 +271,7 @@ class RestTimerScreen(
                             verticalArrangement = Arrangement.spacedBy(1f.gridUnitsAsDp()),
                         ) {
                             LightText(
-                                text = Format.clock(remainingSec.coerceAtLeast(0)),
+                                text = Format.clock(if (done) 0 else remainingSec.coerceAtLeast(0)),
                                 variant = LightTextVariant.Title,
                                 monospace = true,
                                 maxLines = 1,
