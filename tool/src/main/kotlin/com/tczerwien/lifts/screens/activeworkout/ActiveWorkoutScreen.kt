@@ -99,7 +99,8 @@ class ActiveWorkoutScreen(
         }
 
         val current = uiState.exercises.getOrNull(uiState.currentIndex)
-        val openTimer = {
+        // resumeOnly from the rest strip: a rest that ends on the way shows REST OVER, not a new rest.
+        val openTimer = { resumeOnly: Boolean ->
             // Read the clock at the tap: nothing on this screen ticks except the small clocks.
             val restRemaining = uiState.restEndMillis?.let { restRemainingSec(it, System.currentTimeMillis()) } ?: 0
             val timerDurationSec = when {
@@ -114,7 +115,13 @@ class ActiveWorkoutScreen(
                 else -> uiState.defaultRestSec
             }
             navigateTo({
-                RestTimerScreen(it, durationSec = timerDurationSec, workoutId = uiState.workoutId, slotId = current?.slot?.id)
+                RestTimerScreen(
+                    it,
+                    durationSec = timerDurationSec,
+                    workoutId = uiState.workoutId,
+                    slotId = current?.slot?.id,
+                    resumeOnly = resumeOnly,
+                )
             })
         }
 
@@ -192,7 +199,7 @@ class ActiveWorkoutScreen(
                             )
                         }
 
-                        RestSlot(endMillis = uiState.restEndMillis, onOpenTimer = openTimer)
+                        RestSlot(endMillis = uiState.restEndMillis, onOpenTimer = { openTimer(true) })
                     }
                 }
 
@@ -206,7 +213,7 @@ class ActiveWorkoutScreen(
                         LightBarButton.LightIcon(
                             icon = LightIcons.ALARM,
                             contentDescription = "rest timer",
-                            onClick = { if (live) openTimer() },
+                            onClick = { if (live) openTimer(false) },
                         ),
                         LightBarButton.LightIcon(
                             icon = LightIcons.ADD,

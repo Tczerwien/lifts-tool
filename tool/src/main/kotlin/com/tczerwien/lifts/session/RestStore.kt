@@ -15,6 +15,18 @@ import kotlinx.coroutines.runBlocking
 data class RestTimerState(val endMillis: Long, val totalSec: Int)
 
 /**
+ * The end the Rest Timer shows when it opens, given the saved end ([savedEnd], null when none), or
+ * null to start a fresh rest. A running rest is resumed. With nothing running, the alarm icon starts
+ * a fresh rest; a tap on the rest strip ([resumeOnly]) never does: the rest ended on the way (a tap
+ * at 0:01), so the timer shows REST OVER instead.
+ */
+fun openingRestEnd(savedEnd: Long?, now: Long, resumeOnly: Boolean): Long? = when {
+    savedEnd != null && savedEnd > now -> savedEnd
+    resumeOnly -> savedEnd ?: now
+    else -> null
+}
+
+/**
  * The rest timer's DataStore keys: a wall-clock end and the length it started with ("lifts_"-prefixed,
  * in the file shared with SDK push keys). Remaining time is always derived from the end, never counted.
  */

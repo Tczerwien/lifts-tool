@@ -21,6 +21,7 @@ import com.tczerwien.lifts.session.REST_PULSE_TOTAL_MS
 import com.tczerwien.lifts.session.RestNext
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.nextSetLabel
+import com.tczerwien.lifts.session.openingRestEnd
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.restNextContext
 import com.tczerwien.lifts.session.restRemainingSec
@@ -62,6 +63,8 @@ class RestTimerViewModel(
     private val workoutId: Long?,
     /** The exercise on Active Workout's screen; its next unticked set is the one NEXT names. */
     private val slotId: Long?,
+    /** Opened from the rest strip: resume the saved rest, never start a fresh one. */
+    private val resumeOnly: Boolean,
 ) : LightViewModel<Unit>() {
 
     data class UiState(
@@ -99,8 +102,7 @@ class RestTimerViewModel(
                 val now = System.currentTimeMillis()
                 val persisted = session.restStateSnapshot()
                 val endMillis = when {
-                    !initialized && (persisted == null || persisted.endMillis <= now) -> {
-                        // Nothing running (or a stale abandoned timer): start fresh.
+                    !initialized -> openingRestEnd(persisted?.endMillis, now, resumeOnly) ?: run {
                         session.startRest(requestedDurationSec, now)
                         now + requestedDurationSec.coerceAtLeast(0) * 1000L
                     }
@@ -183,6 +185,8 @@ class RestTimerViewModel(
  *
  * Constructor contract (FROZEN): [durationSec] starts a fresh timer only when none is
  * already running; a live persisted timer is resumed so the screen can be re-entered.
+ * With [resumeOnly] (a tap on the rest strip) it never starts one: a rest that ended on the
+ * way here shows REST OVER and goes back.
  */
 class RestTimerScreen(
     private val sealedActivity: SealedLightActivity,
@@ -192,6 +196,8 @@ class RestTimerScreen(
     private val workoutId: Long? = null,
     /** The exercise on Active Workout's screen, which NEXT follows; null falls back to the last tick's. */
     private val slotId: Long? = null,
+    /** Resume the saved rest only; true from the rest strip, false from the alarm icon. */
+    private val resumeOnly: Boolean = false,
 ) : LightScreen<Unit, RestTimerViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -204,7 +210,7 @@ class RestTimerScreen(
         get() = RestTimerViewModel::class.java
 
     override fun createViewModel() =
-        RestTimerViewModel(repository, session, settingsStore, durationSec, workoutId, slotId)
+        RestTimerViewModel(repository, session, settingsStore, durationSec, workoutId, slotId, resumeOnly)
 
     @Composable
     override fun Content() {
