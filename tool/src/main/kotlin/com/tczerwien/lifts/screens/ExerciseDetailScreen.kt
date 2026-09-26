@@ -40,6 +40,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.LiftsTabRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -58,8 +59,6 @@ import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -255,7 +254,7 @@ class ExerciseDetailViewModel(
  * Opens on History — the common in-workout question is "what did I do last time".
  */
 class ExerciseDetailScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
     private val exerciseId: String,
 ) : LightScreen<Unit, ExerciseDetailViewModel>(sealedActivity) {
 
@@ -269,11 +268,10 @@ class ExerciseDetailScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             if (uiState.noteOpen) {
                 val textState = remember { TextFieldState(uiState.pinnedNote ?: "") }
                 LightTextInputEditor(

@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.ui.ArmedAction
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.thelightphone.sdk.LightScreen
@@ -21,8 +22,6 @@ import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -49,7 +48,7 @@ class WorkoutMenuViewModel : LightViewModel<WorkoutMenuAction>() {
  * chosen action, which Active Workout carries out; Back returns nothing.
  */
 class WorkoutMenuScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
     /** The active unticked row as its marker names it ("Set 2", "Warm-up"), or null. */
     private val removeSetLabel: String?,
     /** The current exercise's name while none of its sets is ticked, or null. */
@@ -63,10 +62,9 @@ class WorkoutMenuScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val discardArmed by viewModel.discardArm.armed.collectAsState()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

@@ -21,6 +21,7 @@ import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFieldRow
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightScreen
@@ -34,8 +35,6 @@ import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -172,7 +171,7 @@ class SettingsViewModel(
  * (navigate), and a static About row.
  */
 class SettingsScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
 ) : LightScreen<Unit, SettingsViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -186,11 +185,10 @@ class SettingsScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             when (val mode = uiState.mode) {
                 is SettingsViewModel.Mode.FieldList -> FieldList(uiState)
 

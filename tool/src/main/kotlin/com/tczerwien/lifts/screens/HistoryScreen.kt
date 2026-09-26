@@ -15,6 +15,7 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.thelightphone.sdk.LightScreen
@@ -26,8 +27,6 @@ import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -90,7 +89,7 @@ class HistoryViewModel(
  * [WorkoutDetailScreen].
  */
 class HistoryScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
 ) : LightScreen<Unit, HistoryViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -102,10 +101,9 @@ class HistoryScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

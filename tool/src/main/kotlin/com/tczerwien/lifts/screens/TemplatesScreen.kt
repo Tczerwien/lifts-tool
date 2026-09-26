@@ -18,6 +18,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.thelightphone.sdk.LightScreen
@@ -34,8 +35,6 @@ import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -193,7 +192,7 @@ class TemplatesViewModel(
  * Constructor and result type are FROZEN (cross-referenced by other screens).
  */
 class TemplatesScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
 ) : LightScreen<Unit, TemplatesViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -205,11 +204,10 @@ class TemplatesScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

@@ -31,6 +31,7 @@ import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.SetRow
 import com.tczerwien.lifts.ui.SetRowHeader
 import com.tczerwien.lifts.ui.SetRowState
@@ -40,8 +41,6 @@ import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -59,7 +58,7 @@ import kotlinx.coroutines.delay
  * session from a template inside this screen; both null starts an empty workout.
  */
 class ActiveWorkoutScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
     /** Resume this workout when non-null; takes precedence over [templateId]. */
     private val workoutId: Long? = null,
     /** Create a new session from this template; null with null [workoutId] = empty workout. */
@@ -80,7 +79,6 @@ class ActiveWorkoutScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
 
         var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -129,7 +127,7 @@ class ActiveWorkoutScreen(
             })
         }
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

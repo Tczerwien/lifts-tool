@@ -28,6 +28,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -40,8 +41,6 @@ import com.thelightphone.sdk.ui.LightLazyScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -150,7 +149,7 @@ class ExercisePickerViewModel(
  * selection. Tapping a row returns its exerciseId via goBack; plain back cancels.
  */
 class ExercisePickerScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
 ) : LightScreen<String, ExercisePickerViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -162,11 +161,10 @@ class ExercisePickerScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             if (uiState.searchOpen) {
                 val textState = remember { TextFieldState(uiState.searchQuery ?: "") }
                 LightTextInputEditor(

@@ -20,6 +20,7 @@ import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.ui.LiftsFieldRow
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.thelightphone.sdk.LightScreen
@@ -35,8 +36,6 @@ import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -185,7 +184,7 @@ class CustomExerciseViewModel(
  * returns the new exerciseId via goBack.
  */
 class CustomExerciseScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
 ) : LightScreen<String, CustomExerciseViewModel>(sealedActivity) {
 
     override val viewModelClass: Class<CustomExerciseViewModel>
@@ -197,7 +196,6 @@ class CustomExerciseScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
@@ -206,7 +204,7 @@ class CustomExerciseScreen(
             if (createdId != null) goBack(createdId)
         }
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             when (uiState.mode) {
                 CustomExerciseViewModel.Mode.FORM -> FormContent(uiState)
 

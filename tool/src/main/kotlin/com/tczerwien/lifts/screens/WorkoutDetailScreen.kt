@@ -22,6 +22,7 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -35,8 +36,6 @@ import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -195,7 +194,7 @@ class WorkoutDetailViewModel(
  * The bottom-bar trash deletes the whole workout after a second tap.
  */
 class WorkoutDetailScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
     private val workoutId: Long,
 ) : LightScreen<Unit, WorkoutDetailViewModel>(sealedActivity) {
 
@@ -209,12 +208,11 @@ class WorkoutDetailScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
         val deleteArmed by viewModel.deleteArm.armed.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

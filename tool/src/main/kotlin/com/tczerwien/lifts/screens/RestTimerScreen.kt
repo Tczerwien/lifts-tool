@@ -20,6 +20,7 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.REST_PULSE_TOTAL_MS
 import com.tczerwien.lifts.session.RestNext
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.nextSetLabel
@@ -29,18 +30,16 @@ import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.session.seedFor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
-import com.thelightphone.sdk.ui.LightColors
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -140,11 +139,6 @@ class RestTimerViewModel(
         }
     }
 
-    /** Called by the pulse effect at zero so a finished rest never leaves stale keys. */
-    suspend fun clearRestNow() {
-        session.clearRest()
-    }
-
     /**
      * The NEXT lines: the next unticked set of the exercise on screen ([restNextContext]), with the
      * values a tick on it would log ([seedFor]) and its number among work sets ([nextSetLabel]).
@@ -186,14 +180,14 @@ class RestTimerViewModel(
 /**
  * Rest timer (design/screens/rest-timer.html): giant mono countdown recomputed from the
  * persisted wall-clock end each tick, NEXT-set context, bottom bar −30 / Skip / +30.
- * At zero the whole screen invert-pulses three times, clears the persisted timer, and
- * goes back — the platform has no sound/vibration for tools, so alerting is visual only.
+ * At zero it reads REST OVER while the shared alert runs ([LiftsFrame]: beep and invert
+ * pulse), then goes back. The ended rest stays saved, so Active Workout reads REST OVER too.
  *
  * Constructor contract (FROZEN): [durationSec] starts a fresh timer only when none is
  * already running; a live persisted timer is resumed so the screen can be re-entered.
  */
 class RestTimerScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
     /** Requested rest length; the screen owns the wall-clock end timestamp (visual-only alerting). */
     private val durationSec: Int,
     /** The workout resting; null falls back to the open workout. */
@@ -216,7 +210,6 @@ class RestTimerScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
 
         var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -230,22 +223,15 @@ class RestTimerScreen(
         val remainingSec = if (uiState.loaded) restRemainingSec(uiState.endMillis, nowMillis) else -1
         val done = uiState.loaded && remainingSec == 0
 
-        var inverted by remember { mutableStateOf(false) }
         LaunchedEffect(done) {
             if (done) {
-                viewModel.clearRestNow()
-                repeat(PULSE_COUNT) {
-                    inverted = true
-                    delay(PULSE_INTERVAL_MS)
-                    inverted = false
-                    delay(PULSE_INTERVAL_MS)
-                }
+                // As long as the pulse, which LiftsFrame runs on this screen.
+                delay(REST_PULSE_TOTAL_MS)
                 goBack()
             }
         }
 
-        val colors = if (inverted) invertedColors(themeColors) else themeColors
-        LightTheme(colors = colors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -333,14 +319,5 @@ class RestTimerScreen(
     private companion object {
         const val TICK_MS = 200L
         const val ADJUST_STEP_SEC = 30
-        const val PULSE_COUNT = 3
-        const val PULSE_INTERVAL_MS = 300L
     }
 }
-
-/** Swap background and content for the full-screen alert pulse. */
-private fun invertedColors(base: LightColors): LightColors = LightColors(
-    background = base.content,
-    content = base.background,
-    contentSecondary = base.background,
-)

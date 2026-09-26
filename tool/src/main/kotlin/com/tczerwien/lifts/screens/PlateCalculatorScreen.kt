@@ -26,6 +26,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.domain.PlateMath
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
@@ -39,8 +40,6 @@ import com.thelightphone.sdk.ui.LightIconConfiguration
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
-import com.thelightphone.sdk.ui.LightTheme
-import com.thelightphone.sdk.ui.LightThemeController
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -163,7 +162,7 @@ class PlateCalculatorViewModel(
  * and the per-side breakdown from [PlateMath]. Bars and plates come from Settings.
  */
 class PlateCalculatorScreen(
-    sealedActivity: SealedLightActivity,
+    private val sealedActivity: SealedLightActivity,
     /** Optional prefill from the active workout; canonical kg. */
     private val targetWeightKg: Double? = null,
     private val barWeightKg: Double? = null,
@@ -181,10 +180,9 @@ class PlateCalculatorScreen(
 
     @Composable
     override fun Content() {
-        val themeColors by LightThemeController.colors.collectAsState()
         val uiState by viewModel.uiState.collectAsState()
 
-        LightTheme(colors = themeColors) {
+        LiftsFrame(sealedActivity, lightContext) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

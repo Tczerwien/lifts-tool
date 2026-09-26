@@ -5,7 +5,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 
 /** Persisted rest-timer state; remaining is derived via [restRemainingSec]. */
@@ -16,6 +19,9 @@ data class RestTimerState(val endMillis: Long, val totalSec: Int)
  * in the file shared with SDK push keys). Remaining time is always derived from the end, never counted.
  */
 class RestStore(private val dataStore: DataStore<Preferences>) {
+
+    /** The saved end as it changes (tick, ±30, Skip, Finish); null while no timer is saved. */
+    val endMillis: Flow<Long?> = dataStore.data.map { it[REST_END_MILLIS] }.distinctUntilChanged()
 
     /** Blocking read — call from Dispatchers.IO. Null when no timer is saved. */
     fun snapshot(): RestTimerState? = runBlocking {
