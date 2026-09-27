@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.ExercisePickerScreen
@@ -146,44 +148,60 @@ class ActiveWorkoutScreen(
                         ExerciseHeader(current)
                         SetRowHeader(unit = uiState.units)
 
-                        // Inside: the scrollbar floats over the rows' 2gu end padding instead of taking
-                        // 4gu from them once the list overflows, which slid them off their headers.
-                        LightLazyScrollView(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth(),
-                            scrollBarPosition = LightScrollBarPosition.Inside,
-                            uniformItemHeightGridUnits = SET_LIST_ROW_UNITS,
-                        ) {
-                            val markers = buildMarkers(current.sets)
-                            itemsIndexed(current.sets, key = { _, set -> set.id }) { index, set ->
-                                val previous = current.previous.getOrNull(index)
-                                // What a tick logs: the row's own values, else its starting values (dimmed).
-                                val seed = current.seeds[index]
-                                SetRow(
-                                    state = SetRowState(
-                                        marker = markers[index],
-                                        previous = previousSummary(previous, uiState.units),
-                                        weight = seed.weightKg?.let { Format.weight(it, uiState.units) },
-                                        reps = seed.reps?.toString(),
-                                        weightSeeded = set.weightKg == null && seed.weightKg != null,
-                                        repsSeeded = set.reps == null && seed.reps != null,
-                                        active = set.id == uiState.activeSetId,
-                                        completed = set.completedAt != null,
-                                        warmup = set.type == SET_TYPE_WARMUP,
-                                        failure = set.type == SET_TYPE_FAILURE,
-                                        pr = set.id in uiState.prSetIds,
-                                    ),
-                                    onRowClick = { viewModel.onRowTapped(set.id) },
-                                    onMarkerClick = { viewModel.onMarkerTapped(set.id) },
-                                    onPreviousClick = previous
-                                        ?.takeIf { set.completedAt == null }
-                                        ?.let { { viewModel.autofill(set.id) } },
-                                    onCheckToggle = { viewModel.toggleComplete(set.id) },
-                                )
+                        // Each exercise gets its own scroll position, opening with the active row in view: the
+                        // screen is rebuilt from nothing after the Rest Timer, and the next exercise
+                        // must not open where the last one was scrolled to.
+                        key(current.slot.id) {
+                            val activeIndex = current.sets.indexOfFirst { it.id == uiState.activeSetId }
+                            val listState = rememberLazyListState(initialFirstVisibleItemIndex = openingListIndex(activeIndex))
+                            LaunchedEffect(uiState.activeSetId) {
+                                val info = listState.layoutInfo
+                                val fullyVisible = info.visibleItemsInfo.filter {
+                                    it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset
+                                }
+                                activeRowScrollTarget(activeIndex, fullyVisible.firstOrNull()?.index, fullyVisible.lastOrNull()?.index)
+                                    ?.let { listState.animateScrollToItem(it) }
                             }
-                            item(key = "add-set") {
-                                AddSetRow(onClick = { viewModel.addSet() })
+                            // Inside: the scrollbar floats over the rows' 2gu end padding instead of taking
+                            // 4gu from them once the list overflows, which slid them off their headers.
+                            LightLazyScrollView(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                scrollBarPosition = LightScrollBarPosition.Inside,
+                                listState = listState,
+                                uniformItemHeightGridUnits = SET_LIST_ROW_UNITS,
+                            ) {
+                                val markers = buildMarkers(current.sets)
+                                itemsIndexed(current.sets, key = { _, set -> set.id }) { index, set ->
+                                    val previous = current.previous.getOrNull(index)
+                                    // What a tick logs: the row's own values, else its starting values (dimmed).
+                                    val seed = current.seeds[index]
+                                    SetRow(
+                                        state = SetRowState(
+                                            marker = markers[index],
+                                            previous = previousSummary(previous, uiState.units),
+                                            weight = seed.weightKg?.let { Format.weight(it, uiState.units) },
+                                            reps = seed.reps?.toString(),
+                                            weightSeeded = set.weightKg == null && seed.weightKg != null,
+                                            repsSeeded = set.reps == null && seed.reps != null,
+                                            active = set.id == uiState.activeSetId,
+                                            completed = set.completedAt != null,
+                                            warmup = set.type == SET_TYPE_WARMUP,
+                                            failure = set.type == SET_TYPE_FAILURE,
+                                            pr = set.id in uiState.prSetIds,
+                                        ),
+                                        onRowClick = { viewModel.onRowTapped(set.id) },
+                                        onMarkerClick = { viewModel.onMarkerTapped(set.id) },
+                                        onPreviousClick = previous
+                                            ?.takeIf { set.completedAt == null }
+                                            ?.let { { viewModel.autofill(set.id) } },
+                                        onCheckToggle = { viewModel.toggleComplete(set.id) },
+                                    )
+                                }
+                                item(key = "add-set") {
+                                    AddSetRow(onClick = { viewModel.addSet() })
+                                }
                             }
                         }
 

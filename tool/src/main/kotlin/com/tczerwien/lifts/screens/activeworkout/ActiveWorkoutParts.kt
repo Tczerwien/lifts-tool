@@ -51,6 +51,20 @@ internal fun previousSummary(previous: SetEntity?, units: WeightUnit): String? {
     }
 }
 
+/** The row the set list opens at when it is built: the one above the active row, so the set just done shows too. */
+internal fun openingListIndex(activeIndex: Int): Int = (activeIndex - 1).coerceAtLeast(0)
+
+/**
+ * Where the set list scrolls when the active row changes to [activeIndex], or null to stay put.
+ * Null while the row is fully on screen ([firstFullyVisible] to [lastFullyVisible]), so tapping a
+ * row in view never jumps the list; otherwise the row above it goes to the top, as when opening.
+ */
+internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, lastFullyVisible: Int?): Int? = when {
+    activeIndex < 0 -> null
+    firstFullyVisible != null && lastFullyVisible != null && activeIndex in firstFullyVisible..lastFullyVisible -> null
+    else -> openingListIndex(activeIndex)
+}
+
 @Composable
 internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock) {
     Column(
