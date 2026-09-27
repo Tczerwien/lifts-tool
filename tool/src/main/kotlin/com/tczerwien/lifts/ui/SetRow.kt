@@ -49,7 +49,7 @@ data class SetRowState(
     val weightSeeded: Boolean = false,
     /** [reps] is a starting value, not entered: it renders dimmed even on the active row. */
     val repsSeeded: Boolean = false,
-    /** Steppers currently target this row: values render full-contrast. */
+    /** Steppers currently target this row: its marker is inverted and its values render full-contrast. */
     val active: Boolean = false,
     /** Set is logged: checkbox fills. */
     val completed: Boolean = false,
@@ -72,6 +72,7 @@ private const val CHECKBOX_UNITS = 2f
 private const val CHECKMARK_UNITS = 0.9f
 private const val PR_STAR_UNITS = 1.1f
 private const val PAD_START_UNITS = 1f
+private const val MARKER_PAD_UNITS = 0.3f
 
 /** The set list's scrollbar floats over this much of the right edge; nothing tappable goes there. */
 private const val PAD_END_UNITS = 2f
@@ -139,26 +140,36 @@ fun SetRow(
             .padding(start = PAD_START_UNITS.gridUnitsAsDp(), end = PAD_END_UNITS.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Marker (set number / "W", + superfine "F" for failure) — tap to change the set type.
-        Row(
+        // Marker (set number / "W", + superfine "F" for failure) — tap to change the set type. The
+        // active row's marker is inverted, so the set being logged stands out at arm's length.
+        Box(
             modifier = Modifier
                 .width(COL_MARKER_UNITS.gridUnitsAsDp())
                 .let { m -> if (onMarkerClick != null) m.lightClickable(onClick = onMarkerClick) else m },
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+            contentAlignment = Alignment.Center,
         ) {
-            LightText(
-                text = state.marker,
-                variant = LightTextVariant.Detail,
-                lighten = !state.failure,
-                maxLines = 1,
-            )
-            if (state.failure) {
+            val markerColor = if (state.active) colors.background else null
+            Row(
+                modifier = Modifier
+                    .let { m -> if (state.active) m.background(colors.content) else m }
+                    .padding(horizontal = MARKER_PAD_UNITS.gridUnitsAsDp()),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 LightText(
-                    text = " F",
-                    variant = LightTextVariant.Superfine,
+                    text = state.marker,
+                    variant = LightTextVariant.Detail,
+                    lighten = !state.failure,
                     maxLines = 1,
+                    color = markerColor,
                 )
+                if (state.failure) {
+                    LightText(
+                        text = " F",
+                        variant = LightTextVariant.Superfine,
+                        maxLines = 1,
+                        color = markerColor,
+                    )
+                }
             }
         }
 
