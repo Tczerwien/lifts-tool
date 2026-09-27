@@ -25,6 +25,8 @@ class ActiveSession(
     private val repository: LiftsStore,
     private val settings: SettingsStore,
     private val dataStore: DataStore<Preferences>,
+    /** Told of every rest saved or moved here ([RestAlarm.arm]); the process's own outside tests. */
+    private val alarm: RestAlarm = RestAlarm.process,
 ) {
 
     // --- Session lifecycle ---
@@ -337,10 +339,14 @@ class ActiveSession(
      */
     fun restStateSnapshot(): RestTimerState? = rest.snapshot()
 
-    suspend fun startRest(totalSec: Int, now: Long = System.currentTimeMillis()) = rest.start(totalSec, now)
+    /** Saves a rest and arms the alarm for it, so a tick followed at once by power still alerts. */
+    suspend fun startRest(totalSec: Int, now: Long = System.currentTimeMillis()) {
+        alarm.arm(rest.start(totalSec, now), now)
+    }
 
-    /** See [RestStore.adjust]. */
-    suspend fun adjustRest(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? = rest.adjust(deltaSec, now)
+    /** See [RestStore.adjust]; the moved end is armed like a new rest. */
+    suspend fun adjustRest(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? =
+        rest.adjust(deltaSec, now)?.also { alarm.arm(it, now) }
 
     /**
      * Saves which exercise Active Workout shows for [workoutId], so reopening after the app was

@@ -34,6 +34,7 @@ class ActiveSessionTest {
     private val dir: File = Files.createTempDirectory("lifts-session").toFile()
     private val scopes = mutableListOf<CoroutineScope>()
     private val store = InMemoryLiftsStore()
+    private val alarm = RestAlarm()
     private var dataStore = openDataStore()
     private var session = newSession()
 
@@ -48,7 +49,7 @@ class ActiveSessionTest {
         return PreferenceDataStoreFactory.create(scope = scope) { File(dir, "lifts.preferences_pb") }
     }
 
-    private fun newSession() = ActiveSession(store, SettingsStore(dataStore), dataStore)
+    private fun newSession() = ActiveSession(store, SettingsStore(dataStore), dataStore, alarm)
 
     // --- Starting a workout ---
 
@@ -162,6 +163,28 @@ class ActiveSessionTest {
         val completion = session.completeSet(workoutId, store.setById(benchSet)!!, 80.0, 5, n, now = 60_000)
         assertNull(completion.restEndMillis)
         assertNull(session.restStateSnapshot())
+    }
+
+    @Test
+    fun `a rest counts as seen as it is saved, so power pressed right after the tick still flashes later`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "bench", position = 0))
+        val setId = store.addSet(SetEntity(workoutExerciseId = slotId, position = 0, type = n))
+        val end = session.completeSet(workoutId, store.setById(setId)!!, 60.0, 5, n, now = 10_000).restEndMillis!!
+        // No frame ever looked at it: the screen went dark straight after the tick.
+        assertEquals(RestAlert.MISSED, alarm.check(end, end + 60_000))
+    }
+
+    @Test
+    fun `a moved rest is armed at its new end, and a minus 30 past zero stays quiet`() {
+        kotlinx.coroutines.runBlocking {
+            session.startRest(totalSec = 60, now = 0)
+            val later = session.adjustRest(30, now = 1_000)!!
+            assertEquals(RestAlert.MISSED, alarm.check(later, later + 60_000))
+            session.startRest(totalSec = 60, now = 200_000)
+            val clamped = session.adjustRest(-90, now = 210_000)!!
+            assertEquals(RestAlert.NONE, alarm.check(clamped, clamped + 60_000))
+        }
     }
 
     @Test

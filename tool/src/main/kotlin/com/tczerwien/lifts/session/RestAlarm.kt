@@ -106,6 +106,17 @@ class RestAlarm {
     val pulseStartedAt: StateFlow<Long?> = _pulseStartedAt.asStateFlow()
 
     /**
+     * Marks the rest ending at [endMillis] as seen running, as it is saved or moved. A tick followed
+     * at once by the power button still counts as seen, though no frame had looked at it yet. A rest
+     * over as it is saved (a −30 past zero) is armed with nothing left, so it stays quiet.
+     */
+    @Synchronized
+    fun arm(endMillis: Long, nowMillis: Long) {
+        lastSeenEnd = endMillis
+        lastSeenRemainingSec = restRemainingSec(endMillis, nowMillis)
+    }
+
+    /**
      * Looks at the rest ending at [endMillis] ([restAlertFor]): anything but [RestAlert.NONE] comes
      * back exactly once per end, and starts the pulse.
      */

@@ -51,12 +51,15 @@ class RestStore(private val dataStore: DataStore<Preferences>) {
         RestTimerState(endMillis = endMillis, totalSec = prefs[REST_TOTAL_SEC] ?: 0)
     }
 
-    suspend fun start(totalSec: Int, now: Long = System.currentTimeMillis()) {
+    /** Saves a rest of [totalSec] from [now]; returns its end. */
+    suspend fun start(totalSec: Int, now: Long = System.currentTimeMillis()): Long {
         val clamped = totalSec.coerceAtLeast(0)
+        val end = now + clamped * 1000L
         dataStore.edit { prefs ->
-            prefs[REST_END_MILLIS] = now + clamped * 1000L
+            prefs[REST_END_MILLIS] = end
             prefs[REST_TOTAL_SEC] = clamped
         }
+        return end
     }
 
     /**
