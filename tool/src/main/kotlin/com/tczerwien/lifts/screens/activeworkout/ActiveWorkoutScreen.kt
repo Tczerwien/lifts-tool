@@ -14,7 +14,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.screens.ExerciseJumpScreen
 import com.tczerwien.lifts.screens.ExercisePickerScreen
+import com.tczerwien.lifts.screens.JumpEntry
 import com.tczerwien.lifts.screens.RestTimerScreen
 import com.tczerwien.lifts.screens.WorkoutCompleteResult
 import com.tczerwien.lifts.screens.WorkoutCompleteScreen
@@ -136,7 +138,7 @@ class ActiveWorkoutScreen(
                     .background(LightThemeTokens.colors.background),
             ) {
                 val live = uiState.loaded && !uiState.finishing && !uiState.leave
-                TopBar(uiState, live)
+                TopBar(uiState, live, onTitleClick = { openExerciseList(uiState) })
 
                 when {
                     !live -> Spacer(modifier = Modifier.weight(1f))
@@ -262,9 +264,12 @@ class ActiveWorkoutScreen(
         }
     }
 
-    /** Back / name and elapsed clock / Finish. The clock ticks here, so only the top bar redraws each second. */
+    /**
+     * Back / name and elapsed clock / Finish. A tap on the name opens the exercise list. The clock
+     * ticks here, so only the top bar redraws each second.
+     */
     @Composable
-    private fun TopBar(uiState: ActiveWorkoutViewModel.UiState, live: Boolean) {
+    private fun TopBar(uiState: ActiveWorkoutViewModel.UiState, live: Boolean, onTitleClick: () -> Unit) {
         val nowMillis by rememberSecondClock(uiState.startedAt)
         LightTopBar(
             leftButton = LightBarButton.LightIcon(
@@ -275,6 +280,7 @@ class ActiveWorkoutScreen(
                 LightTopBarCenter.TwoLineDetail(
                     line1 = uiState.workoutName,
                     line2 = topBarSubtitle(uiState, nowMillis),
+                    onClick = onTitleClick.takeIf { uiState.exercises.isNotEmpty() },
                 )
             } else {
                 null
@@ -289,6 +295,21 @@ class ActiveWorkoutScreen(
                 null
             },
         )
+    }
+
+    /** The workout's exercises, to jump straight to one ([ExerciseJumpScreen]). */
+    private fun openExerciseList(uiState: ActiveWorkoutViewModel.UiState) {
+        viewModel.finishArm.disarm()
+        val entries = uiState.exercises.map { block ->
+            JumpEntry(
+                slotId = block.slot.id,
+                name = block.name,
+                doneCount = block.sets.count { it.completedAt != null },
+                setCount = block.sets.size,
+            )
+        }
+        val currentSlotId = uiState.exercises.getOrNull(uiState.currentIndex)?.slot?.id
+        navigateTo({ ExerciseJumpScreen(it, entries, currentSlotId) }) { slotId -> viewModel.jumpTo(slotId) }
     }
 
     private fun openMenu(uiState: ActiveWorkoutViewModel.UiState) {

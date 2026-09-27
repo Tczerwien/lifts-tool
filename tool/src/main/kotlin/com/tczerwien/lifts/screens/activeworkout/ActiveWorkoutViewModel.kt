@@ -385,6 +385,12 @@ class ActiveWorkoutViewModel(
         nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
     }
 
+    /** Result of the exercise list: that exercise, on its first unticked set. */
+    fun jumpTo(slotId: Long) {
+        if (!beginAction()) return
+        showExercise(slotId)
+    }
+
     /** Puts exercise [slotId] on screen with the steppers on its first unticked row, and saves it as the one on screen. */
     private fun showExercise(slotId: Long) {
         _uiState.update { state ->
