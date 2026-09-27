@@ -175,9 +175,8 @@ class SettingsViewModel(
 /**
  * Settings (design/screens/settings.html): field rows for Units (tap toggles LB/KG),
  * the two rest durations (tap opens a ±15 s stepper mode), Rest-over Beep (tap toggles
- * ON/OFF), Plate Inventory (tap opens
- * the SDK text editor with a comma list in display units), Bar Weights and Export
- * (navigate), and a static About row.
+ * ON/OFF), Plate Inventory (tap opens the SDK text editor with a comma list in display
+ * units), Bar Weights and Export (navigate), and a static About row.
  */
 class SettingsScreen(
     private val sealedActivity: SealedLightActivity,
