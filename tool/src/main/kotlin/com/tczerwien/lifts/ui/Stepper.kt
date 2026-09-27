@@ -29,6 +29,7 @@ import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.gridUnitsAsDp
+import com.thelightphone.sdk.ui.lightClickable
 
 private const val TARGET_UNITS = 4f
 private const val GLYPH_UNITS = 2.2f
@@ -126,6 +127,9 @@ private fun StepperTarget(
             .size(TARGET_UNITS.gridUnitsAsDp())
             .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .border(1.5.dp, colors.contentSecondary)
+            // The SDK's buzz on finger-down, as on every other control (when LightOS haptics are on).
+            // Only the handler below steps; it sits inside, so it sees each touch first.
+            .lightClickable(enabled = enabled, onClick = {})
             // Steps come from the gesture itself, never from a redraw that might miss a quick tap.
             // Keyed on enabled: reaching a limit restarts the handler, which ends a hold there.
             .pointerInput(enabled) {
