@@ -182,6 +182,9 @@ class ActiveWorkoutViewModel(
             combine(pendingAdvance, session.restState) { pending, rest -> pending to rest?.endMillis }
                 .collectLatest { (pending, restEnd) ->
                     if (pending == null || !pending.restSaved) return@collectLatest
+                    // restEnd is already the tick's rest here: DataStore updates its data before the save
+                    // returns, so the rest emission reaches this collector before restSaved does. If that
+                    // ever changes, a save stuck for 2 s could time the move from an older rest.
                     delay((autoAdvanceAt(pending.tickedAt, restEnd) - System.currentTimeMillis()).coerceAtLeast(0L))
                     autoAdvance(pending)
                 }
