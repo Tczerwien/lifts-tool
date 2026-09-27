@@ -9,7 +9,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
@@ -31,7 +30,9 @@ import com.thelightphone.sdk.ui.LightColors
 import com.thelightphone.sdk.ui.LightTheme
 import com.thelightphone.sdk.ui.LightThemeController
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,14 +46,20 @@ private const val FALLBACK_SAMPLE_RATE = 48_000
 private const val BEEP_TAIL_MS = 150L
 
 /**
+ * Where the beep plays: the process, not the screen that fired it, so a tap that leaves the screen
+ * right after 0:00 doesn't cut it off. The voice is still released within half a second, in finally.
+ */
+private val beepScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+/**
  * Every Lifts screen's outer wrapper, in place of LightTheme: the theme, plus the rest-over alert.
  * - While a rest runs, and for 30 s after it ends, the screen is kept on ([keepAwake]).
  * - When the rest is seen ending ([RestAlarm.check]), the screen invert-pulses, and the beep plays
  *   unless Settings turned it off.
  *
  * Only the screen on top is composed, so whichever screen is showing alerts, and a rest alerts once.
- * The beep's voice belongs to this screen's composition and is released in `finally`, never in
- * onCleared, which the SDK skips when Android rebuilds the window.
+ * The beep's voice lives only as long as the sound and is released in `finally`, never in onCleared,
+ * which the SDK skips when Android rebuilds the window.
  */
 @Composable
 fun LiftsFrame(
@@ -67,7 +74,6 @@ fun LiftsFrame(
     val beepOn by settingsStore.restBeep.collectAsState(initial = SettingsStore.DEFAULT_REST_BEEP)
     val latestBeepOn by rememberUpdatedState(beepOn)
     val alarm = RestAlarm.process
-    val beepScope = rememberCoroutineScope()
 
     var awake by remember { mutableStateOf(false) }
     LaunchedEffect(restEnd) {
@@ -120,8 +126,8 @@ private fun invertedColors(base: LightColors): LightColors = LightColors(
 
 /**
  * Plays [beepPcm] once on the alarm stream (alarm volume; music pauses for about half a second). The
- * voice lives only as long as the sound and is released even if the screen goes away mid-beep. A
- * failure is logged, never thrown: a missing beep must not take the workout down with it.
+ * voice lives only as long as the sound. A failure is logged, never thrown: a missing beep must not
+ * take the workout down with it.
  */
 private suspend fun playRestBeep(audio: LightAudio) = withContext(Dispatchers.Default) {
     try {
