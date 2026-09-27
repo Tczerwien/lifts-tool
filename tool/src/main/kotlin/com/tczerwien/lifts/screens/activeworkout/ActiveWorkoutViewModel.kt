@@ -177,7 +177,7 @@ class ActiveWorkoutViewModel(
         viewModelScope.launch {
             combine(pendingAdvance, session.restState) { pending, rest -> pending to rest?.endMillis }
                 .collectLatest { (pending, restEnd) ->
-                    pending ?: return@collectLatest
+                    if (pending == null || !pending.restSaved) return@collectLatest
                     delay((autoAdvanceAt(pending.tickedAt, restEnd) - System.currentTimeMillis()).coerceAtLeast(0L))
                     autoAdvance(pending)
                 }
@@ -231,8 +231,12 @@ class ActiveWorkoutViewModel(
         pendingAdvance.value = null
     }
 
-    /** The exercise [slotId] was finished by a tick at [tickedAt]; see [pendingAdvance]. */
-    private data class PendingAdvance(val slotId: Long, val tickedAt: Long)
+    /**
+     * The exercise [slotId] was finished by a tick at [tickedAt]; see [pendingAdvance]. [restSaved] once
+     * that tick's rest is saved: until then the rest on record is an older one, and timing the move by
+     * it could move on early (behind a slow write) or late.
+     */
+    private data class PendingAdvance(val slotId: Long, val tickedAt: Long, val restSaved: Boolean = false)
 
     /**
      * Set when a tick finishes the exercise on screen: the screen moves on to the next exercise with
@@ -313,9 +317,14 @@ class ActiveWorkoutViewModel(
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
         // The exercise's last set: move on once the rest that this tick starts is over.
-        if (_uiState.value.activeSetId == null) pendingAdvance.value = PendingAdvance(set.workoutExerciseId, now)
+        val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
+        pending?.let { pendingAdvance.value = it }
         val workoutId = _uiState.value.workoutId
-        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { settle(edit) }
+        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) {
+            settle(edit)
+            // Its rest is saved now, so the move can be timed by it; unless a tap has cancelled it since.
+            pending?.let { pendingAdvance.compareAndSet(it, it.copy(restSaved = true)) }
+        }
     }
 
     /** "SET WEIGHT OR REPS FIRST" for a couple of seconds, instead of a tick that does nothing. */
