@@ -19,10 +19,10 @@ const val REST_PULSE_PHASE_MS = 300L
 const val REST_PULSE_TOTAL_MS = REST_PULSE_COUNT * 2 * REST_PULSE_PHASE_MS
 
 /**
- * True when the rest ending at [endMillis] should alert now: the countdown was last seen running
- * ([lastSeenRemainingSec] above zero), it has now reached zero, no more than [graceMillis] ago, and
- * this end hasn't alerted already ([firedForEnd]). A screen reopened long after the end, or a rest
- * that was never seen running, stays quiet.
+ * True when the rest ending at [endMillis] should alert now: this end's countdown was last seen
+ * running ([lastSeenRemainingSec] above zero), it has now reached zero, no more than [graceMillis]
+ * ago, and this end hasn't alerted already ([firedForEnd]). A screen reopened long after the end, or
+ * a rest never seen running (one that was over as it started), stays quiet.
  */
 fun restAlertDue(
     endMillis: Long,
@@ -76,6 +76,8 @@ fun msToNextPulsePhase(startedAt: Long, nowMillis: Long): Long =
  */
 class RestAlarm {
 
+    /** The end last looked at and what was left of it: a new end (a tick, ±30) starts unseen. */
+    private var lastSeenEnd: Long? = null
     private var lastSeenRemainingSec: Int? = null
     private var firedForEnd: Long? = null
 
@@ -85,7 +87,9 @@ class RestAlarm {
     /** Looks at the rest ending at [endMillis]; true exactly once, when it is seen ending ([restAlertDue]). */
     @Synchronized
     fun check(endMillis: Long, nowMillis: Long): Boolean {
-        val due = restAlertDue(endMillis, lastSeenRemainingSec, nowMillis, firedForEnd)
+        val seenRemaining = lastSeenRemainingSec.takeIf { lastSeenEnd == endMillis }
+        val due = restAlertDue(endMillis, seenRemaining, nowMillis, firedForEnd)
+        lastSeenEnd = endMillis
         lastSeenRemainingSec = restRemainingSec(endMillis, nowMillis)
         if (due) {
             firedForEnd = endMillis

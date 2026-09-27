@@ -121,11 +121,28 @@ class RestAlarmTest {
     }
 
     @Test
-    fun `a minus 30 that finishes the rest alerts`() {
+    fun `a rest that is over as it starts stays quiet, even with another rest running`() {
+        val alarm = RestAlarm()
+        // Row's 2:00 is running with 1:10 left when Bench, which rests 0 s, is ticked.
+        alarm.check(end, end - 70_000)
+        val zeroRest = end - 69_000
+        assertFalse(alarm.check(zeroRest, zeroRest))
+        assertFalse(alarm.check(zeroRest, zeroRest + 250))
+        assertNull(alarm.pulseStartedAt.value)
+    }
+
+    @Test
+    fun `a minus 30 that finishes the rest ends it quietly, one that leaves time alerts at the new end`() {
         val alarm = RestAlarm()
         alarm.check(end, end - 20_000)
-        // −30 with 20 s left clamps the end to now.
+        // −30 with 20 s left clamps the end to now: he ended it himself, on the timer, which says REST OVER.
         val clamped = end - 20_000 + 50
-        assertTrue(alarm.check(clamped, clamped + 30))
+        assertFalse(alarm.check(clamped, clamped + 30))
+        // −30 with 40 s left: the new end is seen running, then alerts.
+        val next = end + 300_000
+        alarm.check(next, next - 40_000)
+        val earlier = next - 30_000
+        assertFalse(alarm.check(earlier, next - 39_900))
+        assertTrue(alarm.check(earlier, earlier + 10))
     }
 }
