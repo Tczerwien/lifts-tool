@@ -31,7 +31,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.exerciseRecords
 import com.tczerwien.lifts.data.LiftsRepository
@@ -46,6 +45,7 @@ import com.tczerwien.lifts.ui.LiftsTabRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -65,11 +65,9 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.designVerticalPxToSp
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 class ExerciseDetailViewModel(
     private val exerciseId: String,
@@ -108,9 +106,12 @@ class ExerciseDetailViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
+    /**
+     * Loads here only: the SDK calls this straight after creating the view model, so init needn't.
+     * Queued behind any write still pending, so a workout deleted a moment ago can't show.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        LiftsIo.write({}) { refresh() }
     }
 
     /**
@@ -176,7 +177,7 @@ class ExerciseDetailViewModel(
         }
 
         _uiState.value = _uiState.value.copy(
-            name = exercise?.name ?: "Exercise",
+            name = exercise?.let { displayName(it.name, it.equipment) } ?: "Exercise",
             pinnedNote = exercise?.pinnedNote,
             instructions = exercise?.instructions ?: emptyList(),
             history = history,
