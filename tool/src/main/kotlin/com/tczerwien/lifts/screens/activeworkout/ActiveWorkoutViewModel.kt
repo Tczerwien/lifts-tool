@@ -143,6 +143,9 @@ class ActiveWorkoutViewModel(
 
     /** Everything loads here, not in init: the SDK calls this straight after creating the view model. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        // Back from another screen (or the screen waking): whatever moved on meanwhile, he sees it now,
+        // so his first taps are meant for it ([tapTooSoonAfterMove] is for a move under his finger).
+        movedOnAt = null
         if (!started) {
             started = true
             start()
