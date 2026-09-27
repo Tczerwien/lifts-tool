@@ -65,8 +65,12 @@ internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, la
     else -> openingListIndex(activeIndex)
 }
 
+/**
+ * The exercise's name, the equipment and muscles under it, and its pinned cue. While a row is being
+ * logged ([logging]) the equipment and muscles line gives its height to the set list; the cue stays.
+ */
 @Composable
-internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock) {
+internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -79,13 +83,15 @@ internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock) {
             maxLines = 1,
             overflow = TextOverflow.MiddleEllipsis,
         )
-        LightText(
-            text = block.detailLine,
-            variant = LightTextVariant.Detail,
-            lighten = true,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        if (!logging && block.detailLine.isNotEmpty()) {
+            LightText(
+                text = block.detailLine,
+                variant = LightTextVariant.Detail,
+                lighten = true,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         block.cue?.let { cue ->
             LightText(
                 text = "CUE: $cue".uppercase(),

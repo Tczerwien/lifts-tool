@@ -144,7 +144,8 @@ class ActiveWorkoutScreen(
                     current == null -> EmptyWorkoutBody(modifier = Modifier.weight(1f))
 
                     else -> {
-                        ExerciseHeader(current)
+                        val activeSet = viewModel.activeSet(uiState)
+                        ExerciseHeader(current, logging = activeSet != null)
                         SetRowHeader(unit = uiState.units)
 
                         // Each exercise gets its own scroll position, opening with the active row in view: the
@@ -204,7 +205,6 @@ class ActiveWorkoutScreen(
                             }
                         }
 
-                        val activeSet = viewModel.activeSet(uiState)
                         StepperStrip(
                             viewModel = viewModel,
                             uiState = uiState,
