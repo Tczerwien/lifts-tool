@@ -2,7 +2,8 @@ package com.tczerwien.lifts.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -10,25 +11,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.gridUnitsAsDp
-import kotlinx.coroutines.delay
 
 private const val TARGET_UNITS = 4f
 private const val GLYPH_UNITS = 2.2f
@@ -38,7 +38,8 @@ private const val DISABLED_ALPHA = 0.4f
 
 /**
  * +/- stepper (design/components/stepper.html): 4gu bordered square targets around a
- * caller-rendered value slot. Tap steps once; press-and-hold auto-repeats after ~400ms
+ * caller-rendered value slot. A tap steps once as the finger lifts; a drag past touch slop (a
+ * scroll that started on a target) steps nothing. Press-and-hold auto-repeats after ~400ms
  * at ~4 steps/s. Disabled targets dim to 40% with contentSecondary glyphs.
  *
  * @param onStep called with +1 or -1 per step; the caller applies the unit-specific
@@ -87,18 +88,6 @@ private fun StepperTarget(
 ) {
     val colors = LightThemeTokens.colors
     val currentOnStep by rememberUpdatedState(onStep)
-    var pressed by remember { mutableStateOf(false) }
-
-    LaunchedEffect(pressed, enabled) {
-        if (pressed && enabled) {
-            currentOnStep(delta)
-            delay(HOLD_INITIAL_DELAY_MS)
-            while (true) {
-                currentOnStep(delta)
-                delay(HOLD_REPEAT_INTERVAL_MS)
-            }
-        }
-    }
 
     val glyphColor = if (enabled) colors.content else colors.contentSecondary
     Box(
@@ -106,17 +95,20 @@ private fun StepperTarget(
             .size(TARGET_UNITS.gridUnitsAsDp())
             .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .border(1.5.dp, colors.contentSecondary)
+            // Steps come from the gesture itself, never from a redraw that might miss a quick tap.
+            // Keyed on enabled: reaching a limit restarts the handler, which ends a hold there.
             .pointerInput(enabled) {
-                detectTapGestures(
-                    onPress = {
-                        pressed = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            pressed = false
-                        }
-                    },
-                )
+                if (!enabled) return@pointerInput
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    when (withTimeoutOrNull(HOLD_INITIAL_DELAY_MS) { awaitPressEnd(down, slopCancels = true) }) {
+                        PressEnd.LIFTED -> currentOnStep(delta)
+                        PressEnd.CANCELLED -> Unit
+                        null -> do {
+                            currentOnStep(delta)
+                        } while (withTimeoutOrNull(HOLD_REPEAT_INTERVAL_MS) { awaitPressEnd(down, slopCancels = false) } == null)
+                    }
+                }
             },
         contentAlignment = Alignment.Center,
     ) {
@@ -125,6 +117,33 @@ private fun StepperTarget(
             plus = plus,
             modifier = Modifier.size(GLYPH_UNITS.gridUnitsAsDp()),
         )
+    }
+}
+
+private enum class PressEnd {
+    /** The finger lifted: a tap, or the end of a hold. */
+    LIFTED,
+
+    /** A drag past touch slop, a scroll that took the pointer, or the finger leaving the target. */
+    CANCELLED,
+}
+
+/**
+ * Waits for the press that started with [down] to end. A drag past touch slop cancels only while
+ * [slopCancels]: once a hold is repeating, a finger drifting on the target keeps it going.
+ */
+private suspend fun AwaitPointerEventScope.awaitPressEnd(down: PointerInputChange, slopCancels: Boolean): PressEnd {
+    while (true) {
+        val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return PressEnd.CANCELLED
+        if (change.isConsumed) return PressEnd.CANCELLED
+        if (!change.pressed) return PressEnd.LIFTED
+        if (change.isOutOfBounds(size, extendedTouchPadding)) return PressEnd.CANCELLED
+        if (slopCancels && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) {
+            return PressEnd.CANCELLED
+        }
+        // A scroll around the stepper takes the pointer after this handler has looked at the event.
+        val afterParents = awaitPointerEvent(PointerEventPass.Final)
+        if (afterParents.changes.any { it.id == down.id && it.isConsumed }) return PressEnd.CANCELLED
     }
 }
 
