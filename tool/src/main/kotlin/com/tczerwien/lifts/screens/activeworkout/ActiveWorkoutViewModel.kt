@@ -222,13 +222,23 @@ class ActiveWorkoutViewModel(
         return true
     }
 
+    /**
+     * He opened a screen about this exercise or workout (Exercise Detail, the exercise list, the "…"
+     * menu, the exercise picker): he is still busy here, so the screen must not move on under him. The
+     * Rest Timer doesn't call this: tick, timer, then the next exercise is the flow it is for.
+     */
+    fun holdPosition() {
+        pendingAdvance.value = null
+    }
+
     /** The exercise [slotId] was finished by a tick at [tickedAt]; see [pendingAdvance]. */
     private data class PendingAdvance(val slotId: Long, val tickedAt: Long)
 
     /**
      * Set when a tick finishes the exercise on screen: the screen moves on to the next exercise with
      * an unticked set as the rest ends ([autoAdvanceAt]), not at the tick, so the tick shows and a
-     * mis-tap can be undone. Any other tap on this screen cancels it ([beginAction]).
+     * mis-tap can be undone. Any other tap on this screen cancels it ([beginAction]), and so does
+     * opening any other screen but the Rest Timer ([holdPosition]).
      */
     private val pendingAdvance = MutableStateFlow<PendingAdvance?>(null)
 

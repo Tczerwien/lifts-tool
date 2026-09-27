@@ -153,6 +153,7 @@ class ActiveWorkoutScreen(
                             logging = activeSet != null,
                             onOpenDetail = {
                                 viewModel.finishArm.disarm()
+                                viewModel.holdPosition()
                                 navigateTo({ ExerciseDetailScreen(it, exerciseId = current.slot.exerciseId) })
                             },
                         )
@@ -255,6 +256,7 @@ class ActiveWorkoutScreen(
                             contentDescription = "add exercise",
                             onClick = {
                                 if (live) {
+                                    viewModel.holdPosition()
                                     navigateTo(::ExercisePickerScreen) { exerciseId ->
                                         viewModel.addExercise(exerciseId)
                                     }
@@ -308,6 +310,7 @@ class ActiveWorkoutScreen(
     /** The workout's exercises, to jump straight to one ([ExerciseJumpScreen]). */
     private fun openExerciseList(uiState: ActiveWorkoutViewModel.UiState) {
         viewModel.finishArm.disarm()
+        viewModel.holdPosition()
         val entries = uiState.exercises.map { block ->
             JumpEntry(
                 slotId = block.slot.id,
@@ -322,6 +325,7 @@ class ActiveWorkoutScreen(
 
     private fun openMenu(uiState: ActiveWorkoutViewModel.UiState) {
         viewModel.finishArm.disarm()
+        viewModel.holdPosition()
         val options = viewModel.menuOptions(uiState)
         navigateTo({
             WorkoutMenuScreen(
