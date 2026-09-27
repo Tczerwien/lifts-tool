@@ -227,6 +227,14 @@ class ActiveWorkoutViewModel(
     }
 
     /**
+     * [beginAction] for a tap on the rows or the next-exercise row, which the screen moving on by itself
+     * can change under his finger: in the second after such a move ([tapTooSoonAfterMove]) the tap was
+     * aimed at what was there before, so it is dropped rather than applied to the new exercise.
+     */
+    private fun beginRowAction(): Boolean =
+        !tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis()) && beginAction()
+
+    /**
      * He opened a screen about this exercise or workout (Exercise Detail, the exercise list, the "…"
      * menu, the exercise picker): he is still busy here, so the screen must not move on under him. The
      * Rest Timer doesn't call this: tick, timer, then the next exercise is the flow it is for.
@@ -269,14 +277,14 @@ class ActiveWorkoutViewModel(
 
     /** A tap on a row targets it with the steppers; tapping the active row again does nothing. */
     fun onRowTapped(setId: Long) {
-        if (!beginAction()) return
+        if (!beginRowAction()) return
         if (_uiState.value.activeSetId == setId) return
         _uiState.update { it.copy(activeSetId = setId) }
     }
 
     /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
     fun onMarkerTapped(setId: Long) {
-        if (!beginAction()) return
+        if (!beginRowAction()) return
         val edit = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
         _uiState.update { it.copy(activeSetId = setId) }
         persistSet(edit)
@@ -287,7 +295,7 @@ class ActiveWorkoutViewModel(
      * set is left alone, so a stray tap can't overwrite what was lifted.
      */
     fun autofill(setId: Long) {
-        if (!beginAction()) return
+        if (!beginRowAction()) return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
@@ -306,7 +314,7 @@ class ActiveWorkoutViewModel(
      * logged values.
      */
     fun toggleComplete(setId: Long) {
-        if (tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis()) || !beginAction()) return
+        if (!beginRowAction()) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
         if (set.completedAt != null) {
@@ -409,7 +417,7 @@ class ActiveWorkoutViewModel(
 
     /** The next-exercise row: moves to the exercise it offers. */
     fun goToNextExercise() {
-        if (tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis()) || !beginAction()) return
+        if (!beginRowAction()) return
         nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
     }
 
@@ -456,7 +464,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun addSet() {
-        if (!beginAction()) return
+        if (!beginRowAction()) return
         val state = _uiState.value
         val block = state.exercises.getOrNull(state.currentIndex) ?: return
         LiftsIo.write({ session.addSet(state.workoutId, block.slot.id) }) { refresh() }
