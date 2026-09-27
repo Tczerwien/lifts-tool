@@ -25,7 +25,8 @@ fun msUntilNextSecond(anchor: Long, now: Long): Long = 1_000L - Math.floorMod(no
  */
 @Composable
 fun rememberSecondClock(anchor: Long, stopAt: Long = Long.MAX_VALUE): State<Long> {
-    val now = remember { mutableLongStateOf(System.currentTimeMillis()) }
+    // Keyed, so a new anchor (the next rest) never draws one frame from the old clock's time.
+    val now = remember(anchor, stopAt) { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(anchor, stopAt) {
         while (true) {
             val frameNow = withFrameMillis { System.currentTimeMillis() }
