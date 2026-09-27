@@ -29,7 +29,14 @@ class RestAlarmTest {
     fun `past the grace window an end is missed, to be flashed when he looks again`() {
         assertEquals(RestAlert.ON_TIME, restAlertFor(end, lastSeenRemainingSec = 45, nowMillis = end + REST_ALERT_GRACE_MS, firedForEnd = null))
         assertEquals(RestAlert.MISSED, restAlertFor(end, lastSeenRemainingSec = 45, nowMillis = end + REST_ALERT_GRACE_MS + 1, firedForEnd = null))
-        assertEquals(RestAlert.MISSED, restAlertFor(end, lastSeenRemainingSec = 45, nowMillis = end + 3_600_000, firedForEnd = null))
+        assertEquals(RestAlert.MISSED, restAlertFor(end, lastSeenRemainingSec = 45, nowMillis = end + REST_MISSED_MAX_MS, firedForEnd = null))
+    }
+
+    @Test
+    fun `a missed end more than 5 minutes back no longer flashes`() {
+        assertEquals(RestAlert.NONE, restAlertFor(end, lastSeenRemainingSec = 45, nowMillis = end + REST_MISSED_MAX_MS + 1, firedForEnd = null))
+        // Left the gym without Finish, the phone dark on Active Workout: next morning, no flash.
+        assertEquals(RestAlert.NONE, restAlertFor(end, lastSeenRemainingSec = 45, nowMillis = end + 10 * 3_600_000L, firedForEnd = null))
     }
 
     @Test
@@ -121,10 +128,10 @@ class RestAlarmTest {
     fun `power pressed mid-rest, woken after the end - one flash, no beep, then nothing`() {
         val alarm = RestAlarm()
         alarm.check(end, end - 45_000)
-        // The screen was dark through the end; the first frame back is 10 minutes later.
-        assertEquals(RestAlert.MISSED, alarm.check(end, end + 600_000))
-        assertEquals(end + 600_000, alarm.pulseStartedAt.value)
-        assertEquals(RestAlert.NONE, alarm.check(end, end + 600_250))
+        // The screen was dark through the end; the first frame back is 2 minutes later.
+        assertEquals(RestAlert.MISSED, alarm.check(end, end + 120_000))
+        assertEquals(end + 120_000, alarm.pulseStartedAt.value)
+        assertEquals(RestAlert.NONE, alarm.check(end, end + 120_250))
     }
 
     @Test

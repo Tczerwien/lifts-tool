@@ -7,6 +7,12 @@ import kotlinx.coroutines.flow.asStateFlow
 /** How late the full alert (beep and flash) may still go off after a rest ends; later is a missed end. */
 const val REST_ALERT_GRACE_MS = 5_000L
 
+/**
+ * How long after the end a missed rest still flashes when he looks again. Past this he has moved on
+ * (or left the gym without Finish), and the slot's "REST OVER · 12:34 AGO" says enough.
+ */
+const val REST_MISSED_MAX_MS = 5 * 60_000L
+
 /** How long after a rest ends the screen stays awake, so the alert is seen. */
 const val REST_KEEP_AWAKE_MS = 30_000L
 
@@ -28,7 +34,8 @@ enum class RestAlert {
 
     /**
      * It ended out of sight (screen off, app in the background) and is seen now, past the grace
-     * window: flash only, the moment he looks again. The countdown kept going; only the screen was dark.
+     * window and within [REST_MISSED_MAX_MS]: flash only, the moment he looks again. The countdown
+     * kept going; only the screen was dark.
      */
     MISSED,
 }
@@ -36,7 +43,7 @@ enum class RestAlert {
 /**
  * What the rest ending at [endMillis] calls for now. It alerts once ([firedForEnd]), and only if this
  * end's countdown was seen running ([lastSeenRemainingSec] above zero): [RestAlert.ON_TIME] up to
- * [graceMillis] after the end, [RestAlert.MISSED] after that.
+ * [graceMillis] after the end, [RestAlert.MISSED] after that up to [missedMaxMillis], then nothing.
  */
 fun restAlertFor(
     endMillis: Long,
@@ -44,10 +51,12 @@ fun restAlertFor(
     nowMillis: Long,
     firedForEnd: Long?,
     graceMillis: Long = REST_ALERT_GRACE_MS,
+    missedMaxMillis: Long = REST_MISSED_MAX_MS,
 ): RestAlert = when {
     endMillis == firedForEnd || (lastSeenRemainingSec ?: 0) <= 0 || nowMillis < endMillis -> RestAlert.NONE
     nowMillis - endMillis <= graceMillis -> RestAlert.ON_TIME
-    else -> RestAlert.MISSED
+    nowMillis - endMillis <= missedMaxMillis -> RestAlert.MISSED
+    else -> RestAlert.NONE
 }
 
 /**
