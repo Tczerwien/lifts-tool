@@ -206,6 +206,8 @@ internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
 
 /**
  * The 2gu rest slot above the bottom bar, always the same height so nothing above it moves:
+ * - a [hint] ("TAP AGAIN TO FINISH · 3 SETS NOT LOGGED", "SET WEIGHT OR REPS FIRST") takes the
+ *   slot for the few seconds it shows;
  * - while the rest ending at [endMillis] runs, the countdown ("Rest 1:23 · TAP FOR TIMER"); a tap
  *   opens the timer screen;
  * - once it has ended, how long ago ("REST OVER · 1:20 AGO", [restOver]), until the next tick, Skip
@@ -214,7 +216,7 @@ internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
  * Only the countdown takes taps. The clock ticks here, so only the slot redraws.
  */
 @Composable
-internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
+internal fun RestSlot(endMillis: Long?, hint: String?, onOpenTimer: () -> Unit) {
     val nowMillis = endMillis?.let { end -> rememberSecondClock(anchor = end).value }
     val remainingSec = if (endMillis != null && nowMillis != null) restRemainingSec(endMillis, nowMillis) else 0
     // Seconds since the end once the rest is over; null while it runs or with none saved.
@@ -223,8 +225,9 @@ internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
     } else {
         null
     }
-    val over = overSec != null
-    val showing = remainingSec > 0 || over
+    val over = overSec != null && hint == null
+    val counting = remainingSec > 0 && hint == null
+    val showing = hint != null || counting || over
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -236,13 +239,14 @@ internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(2f.gridUnitsAsDp())
-                .let { if (remainingSec > 0) it.lightClickable(onClick = onOpenTimer) else it }
+                .let { if (counting) it.lightClickable(onClick = onOpenTimer) else it }
                 .padding(horizontal = 1f.gridUnitsAsDp()),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (over) Arrangement.Center else Arrangement.SpaceBetween,
+            horizontalArrangement = if (counting) Arrangement.SpaceBetween else Arrangement.Center,
         ) {
             when {
-                remainingSec > 0 -> {
+                hint != null -> LightText(text = hint, variant = LightTextVariant.Superfine, maxLines = 1)
+                counting -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         LightText(text = "Rest ", variant = LightTextVariant.Detail)
                         LightText(

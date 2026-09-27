@@ -28,7 +28,6 @@ import com.tczerwien.lifts.session.pendingSetCount
 import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.settings.SettingsStore
-import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.rememberSecondClock
@@ -223,14 +222,17 @@ class ActiveWorkoutScreen(
                             )
                         }
 
-                        RestSlot(endMillis = uiState.restEndMillis, onOpenTimer = { openTimer(true) })
                     }
                 }
 
-                if (live && finishArmed) {
-                    ArmedHint(text = finishHint(uiState))
-                } else if (live && uiState.emptyTickHint) {
-                    ArmedHint(text = "SET WEIGHT OR REPS FIRST")
+                if (live) {
+                    // A confirm or a hint borrows the rest slot for its few seconds, so nothing above moves.
+                    val hint = when {
+                        finishArmed -> finishHint(uiState)
+                        uiState.emptyTickHint -> "SET WEIGHT OR REPS FIRST"
+                        else -> null
+                    }
+                    RestSlot(endMillis = uiState.restEndMillis, hint = hint, onOpenTimer = { openTimer(true) })
                 }
                 LightBottomBar(
                     items = listOf(
