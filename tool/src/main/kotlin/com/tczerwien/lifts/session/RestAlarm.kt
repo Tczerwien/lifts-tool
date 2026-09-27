@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.asStateFlow
 /** How late the full alert (beep and flash) may still go off after a rest ends; later is a missed end. */
 const val REST_ALERT_GRACE_MS = 5_000L
 
-/** How long after a rest ends the screen stays awake and Active Workout reads REST OVER. */
-const val REST_OVER_WINDOW_MS = 30_000L
+/** How long after a rest ends the screen stays awake, so the alert is seen. */
+const val REST_KEEP_AWAKE_MS = 30_000L
 
 /** How often a screen looks at a running rest; it also wakes exactly at the end. */
 const val REST_CHECK_MS = 250L
@@ -54,12 +54,19 @@ fun restAlertFor(
  * Keep the screen on while a rest runs and for [afterMillis] after it ends, so the alert is seen:
  * once the flag clears, the screen's timeout counts from the last touch, which may be minutes back.
  */
-fun keepAwake(endMillis: Long?, nowMillis: Long, afterMillis: Long = REST_OVER_WINDOW_MS): Boolean =
+fun keepAwake(endMillis: Long?, nowMillis: Long, afterMillis: Long = REST_KEEP_AWAKE_MS): Boolean =
     endMillis != null && nowMillis < endMillis + afterMillis
 
-/** The rest ended within the last [REST_OVER_WINDOW_MS]: Active Workout's rest slot reads REST OVER. */
+/**
+ * The saved rest has ended: Active Workout's rest slot reads "REST OVER · 1:20 AGO" ([restOverSec])
+ * until the next tick, Skip, Finish or new workout replaces or clears it.
+ */
 fun restOver(endMillis: Long?, nowMillis: Long): Boolean =
-    endMillis != null && nowMillis >= endMillis && nowMillis < endMillis + REST_OVER_WINDOW_MS
+    endMillis != null && nowMillis >= endMillis
+
+/** Whole seconds since the rest ending at [endMillis] ended; 0 before the end. */
+fun restOverSec(endMillis: Long, nowMillis: Long): Int =
+    ((nowMillis - endMillis) / 1000L).coerceAtLeast(0L).toInt()
 
 /**
  * How long a screen waits before looking at the rest again: every [REST_CHECK_MS] while it runs,
@@ -67,7 +74,7 @@ fun restOver(endMillis: Long?, nowMillis: Long): Boolean =
  */
 fun nextRestCheckMillis(endMillis: Long, nowMillis: Long): Long? = when {
     nowMillis < endMillis -> minOf(REST_CHECK_MS, endMillis - nowMillis)
-    nowMillis < endMillis + REST_OVER_WINDOW_MS -> endMillis + REST_OVER_WINDOW_MS - nowMillis
+    nowMillis < endMillis + REST_KEEP_AWAKE_MS -> endMillis + REST_KEEP_AWAKE_MS - nowMillis
     else -> null
 }
 

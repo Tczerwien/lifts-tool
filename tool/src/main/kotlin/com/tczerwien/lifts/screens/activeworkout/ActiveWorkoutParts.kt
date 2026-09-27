@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
-import com.tczerwien.lifts.session.REST_OVER_WINDOW_MS
 import com.tczerwien.lifts.session.restOver
+import com.tczerwien.lifts.session.restOverSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.Stepper
@@ -191,18 +191,22 @@ internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
  * The 2gu rest slot above the bottom bar, always the same height so nothing above it moves:
  * - while the rest ending at [endMillis] runs, the countdown ("Rest 1:23 · TAP FOR TIMER"); a tap
  *   opens the timer screen;
- * - for 30 s after it ends, REST OVER ([restOver]);
- * - otherwise blank.
- * Only the countdown takes taps. The clock ticks here, so only the slot redraws, and it stops once
- * REST OVER has passed.
+ * - once it has ended, how long ago ("REST OVER · 1:20 AGO", [restOver]), until the next tick, Skip
+ *   or Finish; so a rest that ended with the screen off still says so when he looks;
+ * - with no rest saved, blank.
+ * Only the countdown takes taps. The clock ticks here, so only the slot redraws.
  */
 @Composable
 internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
-    val nowMillis = endMillis?.let { end ->
-        rememberSecondClock(anchor = end, stopAt = end + REST_OVER_WINDOW_MS).value
-    }
+    val nowMillis = endMillis?.let { end -> rememberSecondClock(anchor = end).value }
     val remainingSec = if (endMillis != null && nowMillis != null) restRemainingSec(endMillis, nowMillis) else 0
-    val over = nowMillis != null && restOver(endMillis, nowMillis)
+    // Seconds since the end once the rest is over; null while it runs or with none saved.
+    val overSec = if (endMillis != null && nowMillis != null && restOver(endMillis, nowMillis)) {
+        restOverSec(endMillis, nowMillis)
+    } else {
+        null
+    }
+    val over = overSec != null
     val showing = remainingSec > 0 || over
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -236,7 +240,12 @@ internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
                         lighten = true,
                     )
                 }
-                over -> LightText(text = "REST OVER", variant = LightTextVariant.Detail)
+                overSec != null -> LightText(
+                    text = "REST OVER · ${Format.clock(overSec)} AGO",
+                    variant = LightTextVariant.Detail,
+                    monospace = true,
+                    maxLines = 1,
+                )
             }
         }
     }

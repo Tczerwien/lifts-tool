@@ -45,26 +45,28 @@ class RestAlarmTest {
     fun `the screen stays awake while resting and for 30 s after`() {
         assertFalse(keepAwake(null, end))
         assertTrue(keepAwake(end, end - 180_000))
-        assertTrue(keepAwake(end, end + REST_OVER_WINDOW_MS - 1))
-        assertFalse(keepAwake(end, end + REST_OVER_WINDOW_MS))
+        assertTrue(keepAwake(end, end + REST_KEEP_AWAKE_MS - 1))
+        assertFalse(keepAwake(end, end + REST_KEEP_AWAKE_MS))
     }
 
     @Test
-    fun `REST OVER shows from the end for 30 s`() {
+    fun `REST OVER shows from the end until the rest is replaced, counting up`() {
         assertFalse(restOver(null, end))
         assertFalse(restOver(end, end - 1))
         assertTrue(restOver(end, end))
-        assertTrue(restOver(end, end + REST_OVER_WINDOW_MS - 1))
-        assertFalse(restOver(end, end + REST_OVER_WINDOW_MS))
+        assertTrue(restOver(end, end + 3_600_000))
+        assertEquals(0, restOverSec(end, end - 500))
+        assertEquals(0, restOverSec(end, end + 999))
+        assertEquals(80, restOverSec(end, end + 80_000))
     }
 
     @Test
     fun `checks land on the end, then once more when keep-awake lapses`() {
         assertEquals(REST_CHECK_MS, nextRestCheckMillis(end, end - 60_000))
         assertEquals(40L, nextRestCheckMillis(end, end - 40))
-        assertEquals(REST_OVER_WINDOW_MS, nextRestCheckMillis(end, end))
-        assertEquals(1L, nextRestCheckMillis(end, end + REST_OVER_WINDOW_MS - 1))
-        assertNull(nextRestCheckMillis(end, end + REST_OVER_WINDOW_MS))
+        assertEquals(REST_KEEP_AWAKE_MS, nextRestCheckMillis(end, end))
+        assertEquals(1L, nextRestCheckMillis(end, end + REST_KEEP_AWAKE_MS - 1))
+        assertNull(nextRestCheckMillis(end, end + REST_KEEP_AWAKE_MS))
     }
 
     // --- The pulse ---
