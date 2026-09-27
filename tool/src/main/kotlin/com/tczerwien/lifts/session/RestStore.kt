@@ -44,6 +44,11 @@ class RestStore(private val dataStore: DataStore<Preferences>) {
     /** The saved end as it changes (tick, ±30, Skip, Finish); null while no timer is saved. */
     val endMillis: Flow<Long?> = dataStore.data.map { it[REST_END_MILLIS] }.distinctUntilChanged()
 
+    /** The saved rest, end and length, as it changes; null while no timer is saved. */
+    val state: Flow<RestTimerState?> = dataStore.data.map { prefs ->
+        prefs[REST_END_MILLIS]?.let { RestTimerState(endMillis = it, totalSec = prefs[REST_TOTAL_SEC] ?: 0) }
+    }.distinctUntilChanged()
+
     /** Blocking read — call from Dispatchers.IO. Null when no timer is saved. */
     fun snapshot(): RestTimerState? = runBlocking {
         val prefs = dataStore.data.first()

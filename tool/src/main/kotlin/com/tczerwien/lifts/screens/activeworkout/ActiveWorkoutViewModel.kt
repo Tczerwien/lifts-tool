@@ -75,6 +75,7 @@ class ActiveWorkoutViewModel(
         val currentIndex: Int = 0,
         val activeSetId: Long? = null,
         val prSetIds: Set<Long> = emptySet(),
+        /** The saved rest ([ActiveSession.restState]), kept current as it changes anywhere. */
         val restEndMillis: Long? = null,
         val restTotalSec: Int = 0,
         val units: WeightUnit = SettingsStore.DEFAULT_UNITS,
@@ -160,6 +161,13 @@ class ActiveWorkoutViewModel(
      * a discard queued just before on Home lands first, and the untouched check in [onCleared] after.
      */
     private fun start() {
+        // The rest slot follows the saved rest itself, not a copy taken at the last reload, so a ±30
+        // or Skip on the Rest Timer shows the moment he is back, and a tick's rest the moment it saves.
+        viewModelScope.launch {
+            session.restState.collect { rest ->
+                _uiState.update { it.copy(restEndMillis = rest?.endMillis, restTotalSec = rest?.totalSec ?: 0) }
+            }
+        }
         LiftsIo.write({
             resolvedWorkoutId = when {
                 resumeWorkoutId != null -> resumeWorkoutId
@@ -250,15 +258,7 @@ class ActiveWorkoutViewModel(
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
         val workoutId = _uiState.value.workoutId
-        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { completion ->
-            synchronized(refreshLock) {
-                edit.savedAt = refreshesStarted
-                restSetAt = refreshesStarted
-                _uiState.update {
-                    it.copy(restEndMillis = completion.restEndMillis, restTotalSec = completion.restDurationSec)
-                }
-            }
-        }
+        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { settle(edit) }
     }
 
     /** "SET WEIGHT OR REPS FIRST" for a couple of seconds, instead of a tick that does nothing. */
@@ -394,11 +394,7 @@ class ActiveWorkoutViewModel(
         LiftsIo.write({ session.finishOrDiscard(workoutId) }) { outcome ->
             _uiState.update {
                 when (outcome) {
-                    FinishOutcome.ENDED -> it.copy(
-                        pendingCompleteWorkoutId = workoutId,
-                        restEndMillis = null,
-                        restTotalSec = 0,
-                    )
+                    FinishOutcome.ENDED -> it.copy(pendingCompleteWorkoutId = workoutId)
                     FinishOutcome.DISCARDED, FinishOutcome.MISSING -> it.copy(leave = true)
                 }
             }
@@ -531,15 +527,12 @@ class ActiveWorkoutViewModel(
         else -> SET_TYPE_WARMUP
     }
 
-    /** Guards [refreshesStarted], [refreshApplied], [restSetAt] and [pendingEdits]. */
+    /** Guards [refreshesStarted], [refreshApplied] and [pendingEdits]. */
     private val refreshLock = Any()
     private var refreshesStarted = 0L
 
     /** The newest refresh whose result is on screen. */
     private var refreshApplied = 0L
-
-    /** [refreshesStarted] when a tick last put its rest on screen; older reloads keep that rest. */
-    private var restSetAt = 0L
 
     /**
      * Runs [apply] for refresh number [ticket] unless one that started later has already landed. A
@@ -614,7 +607,6 @@ class ActiveWorkoutViewModel(
         val catalog = repository.exercisesByIds(exerciseIds)
         cacheHistory(exerciseIds, workoutId)
         val lastTimeBySlot = previousForSlots(slots, lastTimeByExercise)
-        val restState = session.restStateSnapshot()
         // Only the first load picks the exercise; after that the lifter's choice stands.
         val savedSlotId = if (_uiState.value.loaded) null else session.currentSlotSnapshot(workoutId)
         applyRefresh(ticket) {
@@ -634,8 +626,6 @@ class ActiveWorkoutViewModel(
                 )
             }
             val prIds = prSetIds(slots, sets, priorHistoryByExercise)
-            // A tick's rest that landed after this reload read the timer stays on screen.
-            val keepRest = restSetAt >= ticket
             _uiState.update { state ->
                 val lastIndex = (blocks.size - 1).coerceAtLeast(0)
                 val currentIndex = when {
@@ -656,8 +646,6 @@ class ActiveWorkoutViewModel(
                     currentIndex = currentIndex,
                     activeSetId = activeSetId,
                     prSetIds = prIds,
-                    restEndMillis = if (keepRest) state.restEndMillis else restState?.endMillis,
-                    restTotalSec = if (keepRest) state.restTotalSec else restState?.totalSec ?: 0,
                     units = settings.units,
                     defaultRestSec = settings.defaultRestSec,
                     warmupRestSec = settings.warmupRestSec,

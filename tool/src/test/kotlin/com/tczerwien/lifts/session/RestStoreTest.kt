@@ -65,6 +65,19 @@ class RestStoreTest {
         assertNull(rest.endMillis.first())
     }
 
+    // --- state (what Active Workout's rest slot shows) ---
+
+    @Test
+    fun `the rest slot sees each save, move and clear of the rest`() = runBlocking {
+        assertNull(rest.state.first())
+        rest.start(totalSec = 90, now = now)
+        assertEquals(RestTimerState(endMillis = now + 90_000, totalSec = 90), rest.state.first())
+        rest.adjust(30, now = now)
+        assertEquals(RestTimerState(endMillis = now + 120_000, totalSec = 90), rest.state.first())
+        rest.clear()
+        assertNull(rest.state.first())
+    }
+
     // --- openingRestEnd ---
 
     @Test

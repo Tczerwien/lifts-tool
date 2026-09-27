@@ -9,6 +9,7 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.settings.SettingsStore
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -338,6 +339,10 @@ class ActiveSession(
      * Skip, Finish, Discard, a 0 s slot or a new workout); an ended rest stays saved until then.
      */
     fun restStateSnapshot(): RestTimerState? = rest.snapshot()
+
+    /** The saved rest as it changes ([RestStore.state]): what Active Workout's rest slot shows. */
+    val restState: Flow<RestTimerState?>
+        get() = rest.state
 
     /** Saves a rest and arms the alarm for it, so a tick followed at once by power still alerts. */
     suspend fun startRest(totalSec: Int, now: Long = System.currentTimeMillis()) {
