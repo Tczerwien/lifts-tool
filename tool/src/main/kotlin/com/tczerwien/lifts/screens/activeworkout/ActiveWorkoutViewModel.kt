@@ -13,6 +13,8 @@ import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.alignPrevious
+import com.tczerwien.lifts.session.autoAdvanceAt
+import com.tczerwien.lifts.session.autoAdvanceSlotId
 import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.prSetIds
@@ -32,6 +34,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -169,6 +173,15 @@ class ActiveWorkoutViewModel(
                 _uiState.update { it.copy(restEndMillis = rest?.endMillis, restTotalSec = rest?.totalSec ?: 0) }
             }
         }
+        // A finished exercise moves on as its rest ends; ±30 moves that moment, and Skip brings it now.
+        viewModelScope.launch {
+            combine(pendingAdvance, session.restState) { pending, rest -> pending to rest?.endMillis }
+                .collectLatest { (pending, restEnd) ->
+                    pending ?: return@collectLatest
+                    delay((autoAdvanceAt(pending.tickedAt, restEnd) - System.currentTimeMillis()).coerceAtLeast(0L))
+                    autoAdvance(pending)
+                }
+        }
         LiftsIo.write({
             resolvedWorkoutId = when {
                 resumeWorkoutId != null -> resumeWorkoutId
@@ -198,18 +211,49 @@ class ActiveWorkoutViewModel(
     private val locked: Boolean
         get() = _uiState.value.finishing
 
+    /**
+     * Every tap that changes the workout or what is on screen starts here. False once Finish is under
+     * way ([locked]). Otherwise it cancels a pending move to the next exercise ([pendingAdvance]): he is
+     * still busy with this one.
+     */
+    private fun beginAction(): Boolean {
+        if (locked) return false
+        pendingAdvance.value = null
+        return true
+    }
+
+    /** The exercise [slotId] was finished by a tick at [tickedAt]; see [pendingAdvance]. */
+    private data class PendingAdvance(val slotId: Long, val tickedAt: Long)
+
+    /**
+     * Set when a tick finishes the exercise on screen: the screen moves on to the next exercise with
+     * an unticked set as the rest ends ([autoAdvanceAt]), not at the tick, so the tick shows and a
+     * mis-tap can be undone. Any other tap on this screen cancels it ([beginAction]).
+     */
+    private val pendingAdvance = MutableStateFlow<PendingAdvance?>(null)
+
+    /** Moves on for [pending] if it still stands, the exercise is still on screen and still finished. */
+    private fun autoAdvance(pending: PendingAdvance) {
+        if (!pendingAdvance.compareAndSet(pending, null) || locked) return
+        val state = _uiState.value
+        val current = state.exercises.getOrNull(state.currentIndex) ?: return
+        if (current.slot.id != pending.slotId) return
+        val target = autoAdvanceSlotId(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id)
+        target?.let(::showExercise)
+    }
+
     // --- Row interactions ---
 
     /** A tap on a row targets it with the steppers; tapping the active row again does nothing. */
     fun onRowTapped(setId: Long) {
-        if (locked) return
+        if (!beginAction()) return
         if (_uiState.value.activeSetId == setId) return
         _uiState.update { it.copy(activeSetId = setId) }
     }
 
     /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
     fun onMarkerTapped(setId: Long) {
-        if (locked) return
+        if (!beginAction()) return
         val edit = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
         _uiState.update { it.copy(activeSetId = setId) }
         persistSet(edit)
@@ -220,7 +264,7 @@ class ActiveWorkoutViewModel(
      * set is left alone, so a stray tap can't overwrite what was lifted.
      */
     fun autofill(setId: Long) {
-        if (locked) return
+        if (!beginAction()) return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
@@ -239,7 +283,7 @@ class ActiveWorkoutViewModel(
      * logged values.
      */
     fun toggleComplete(setId: Long) {
-        if (locked) return
+        if (!beginAction()) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
         if (set.completedAt != null) {
@@ -258,6 +302,8 @@ class ActiveWorkoutViewModel(
             val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
+        // The exercise's last set: move on once the rest that this tick starts is over.
+        if (_uiState.value.activeSetId == null) pendingAdvance.value = PendingAdvance(set.workoutExerciseId, now)
         val workoutId = _uiState.value.workoutId
         LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { settle(edit) }
     }
@@ -276,7 +322,7 @@ class ActiveWorkoutViewModel(
 
     /** Moves the active row's weight [steps] grid steps ([Format.stepWeight]); a long hold sends several. */
     fun stepWeight(steps: Int) {
-        if (locked) return
+        if (!beginAction()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val base = currentWeightDisplay(state, set)
@@ -288,7 +334,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun stepReps(direction: Int) {
-        if (locked) return
+        if (!beginAction()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val next = (currentReps(set) + direction).coerceAtLeast(0)
@@ -335,7 +381,7 @@ class ActiveWorkoutViewModel(
 
     /** The next-exercise row: moves to the exercise it offers. */
     fun goToNextExercise() {
-        if (locked) return
+        if (!beginAction()) return
         nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
     }
 
@@ -376,7 +422,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun addSet() {
-        if (locked) return
+        if (!beginAction()) return
         val state = _uiState.value
         val block = state.exercises.getOrNull(state.currentIndex) ?: return
         LiftsIo.write({ session.addSet(state.workoutId, block.slot.id) }) { refresh() }
@@ -384,7 +430,7 @@ class ActiveWorkoutViewModel(
 
     /** Result of the exercise picker: append the exercise and jump to it. */
     fun addExercise(exerciseId: String) {
-        if (locked) return
+        if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { refresh(focusLastExercise = true) }
     }
@@ -445,7 +491,7 @@ class ActiveWorkoutViewModel(
 
     /** Menu: removes the set it offered, only while it is unticked (the session checks again). */
     fun removeSet(setId: Long) {
-        if (locked) return
+        if (!beginAction()) return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         LiftsIo.write({ session.removeSet(setId) }) { refresh() }
@@ -453,7 +499,7 @@ class ActiveWorkoutViewModel(
 
     /** Menu: removes the exercise it offered, only while none of its sets is ticked. */
     fun removeExercise(slotId: Long) {
-        if (locked) return
+        if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         val block = _uiState.value.exercises.firstOrNull { it.slot.id == slotId } ?: return
         if (block.sets.any { it.completedAt != null }) return

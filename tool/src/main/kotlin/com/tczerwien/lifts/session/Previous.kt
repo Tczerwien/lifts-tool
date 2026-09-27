@@ -197,7 +197,8 @@ sealed interface RestNext {
 
 /**
  * The set the lifter is resting toward: the first unticked row of [currentSlotId] (the exercise on
- * screen) when it has one, otherwise [nextPendingSet]'s pick.
+ * screen) when it has one, otherwise the first of the next exercise with one, where Active Workout
+ * moves on to ([autoAdvanceSlotId]). With no exercise on screen, [nextPendingSet]'s pick.
  */
 fun restNextContext(
     slots: List<WorkoutExerciseEntity>,
@@ -212,6 +213,9 @@ fun restNextContext(
         val rows = sets.filter { it.workoutExerciseId == current.id }.sortedBy { it.position }
         val index = rows.indexOfFirst { it.completedAt == null }
         if (index >= 0) return RestNext.Next(current, rows, index)
+        val next = firstUntickedSlotAfter(slots, sets, current.id) ?: return RestNext.AllDone
+        val nextRows = sets.filter { it.workoutExerciseId == next.id }.sortedBy { it.position }
+        return RestNext.Next(next, nextRows, nextRows.indexOfFirst { it.completedAt == null })
     }
     val next = nextPendingSet(slots, sets) ?: return RestNext.AllDone
     val rows = sets.filter { it.workoutExerciseId == next.slot.id }.sortedBy { it.position }

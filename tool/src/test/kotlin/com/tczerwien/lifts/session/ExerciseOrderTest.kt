@@ -6,7 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** Moving between exercises: the next-exercise row. */
+/** Moving between exercises: the next-exercise row, auto-advance, and the Rest Timer agreeing with both. */
 class ExerciseOrderTest {
 
     // Squat (1), Bench (2), Row (3), Curl (4), in that order.
@@ -28,6 +28,48 @@ class ExerciseOrderTest {
     @Test
     fun `a workout with one exercise has no next`() {
         assertNull(nextExerciseSlotId(listOf(slot(1, 0)), listOf(row(11, 1)), currentSlotId = 1))
+    }
+
+    @Test
+    fun `it moves on only once every row of the exercise on screen is ticked`() {
+        val midway = listOf(row(11, 1, done = true), row(12, 1), row(21, 2))
+        assertNull(autoAdvanceSlotId(slots, midway, currentSlotId = 1))
+        val done = midway.map { if (it.id == 12L) it.copy(completedAt = 9L) else it }
+        assertEquals(2L, autoAdvanceSlotId(slots, done, currentSlotId = 1))
+    }
+
+    @Test
+    fun `it skips finished exercises, and stays when everything is done`() {
+        val sets = listOf(row(11, 1, done = true), row(21, 2, done = true), row(41, 4))
+        assertEquals(4L, autoAdvanceSlotId(slots, sets, currentSlotId = 1), "Row has no rows, Bench is done")
+        assertNull(autoAdvanceSlotId(slots, sets.map { it.copy(completedAt = 9L) }, currentSlotId = 1))
+    }
+
+    @Test
+    fun `an exercise with every row removed is not done`() {
+        assertNull(autoAdvanceSlotId(slots, listOf(row(21, 2)), currentSlotId = 1))
+    }
+
+    @Test
+    fun `the Rest Timer's NEXT names the exercise it moves on to, wherever the last tick was`() {
+        // Squat finished on screen, but the latest tick was a Curl set: NEXT used to follow the Curl.
+        val sets = listOf(
+            row(11, 1, done = true, at = 5L),
+            row(21, 2),
+            row(41, 4, done = true, at = 9L),
+            row(42, 4),
+        )
+        val next = restNextContext(slots, sets, currentSlotId = 1) as RestNext.Next
+        assertEquals(2L, next.slot.id)
+        assertEquals(autoAdvanceSlotId(slots, sets, currentSlotId = 1), next.slot.id)
+    }
+
+    @Test
+    fun `it moves on as the rest ends, or two seconds after the tick with none running`() {
+        val tick = 1_000_000L
+        assertEquals(tick + 90_000, autoAdvanceAt(tick, restEndMillis = tick + 90_000))
+        assertEquals(tick + AUTO_ADVANCE_NO_REST_MS, autoAdvanceAt(tick, restEndMillis = null), "a 0 s slot, or Skip")
+        assertEquals(tick + AUTO_ADVANCE_NO_REST_MS, autoAdvanceAt(tick, restEndMillis = tick - 30_000), "an older rest, over")
     }
 
     private fun slot(id: Long, position: Int) =
