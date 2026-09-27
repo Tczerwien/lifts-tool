@@ -105,13 +105,15 @@ class ActiveWorkoutScreen(
             val restRemaining = uiState.restEndMillis?.let { restRemainingSec(it, System.currentTimeMillis()) } ?: 0
             val timerDurationSec = when {
                 restRemaining > 0 && uiState.restTotalSec > 0 -> uiState.restTotalSec
+                // A slot that rests 0 s (a superset's first half) has no rest of its own to offer;
+                // the icon is a request for one, so it gets the default.
                 current != null -> restDurationSec(
                     setType = SET_TYPE_NORMAL,
                     restSecWork = current.slot.restSecWork,
                     restSecWarmup = current.slot.restSecWarmup,
                     defaultRestSec = uiState.defaultRestSec,
                     warmupRestSec = uiState.warmupRestSec,
-                )
+                ).takeIf { it > 0 } ?: uiState.defaultRestSec
                 else -> uiState.defaultRestSec
             }
             navigateTo({
