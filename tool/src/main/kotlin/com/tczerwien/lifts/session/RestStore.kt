@@ -15,6 +15,15 @@ import kotlinx.coroutines.runBlocking
 data class RestTimerState(val endMillis: Long, val totalSec: Int)
 
 /**
+ * ±30 is refused this close to the end: the save takes a few milliseconds, and a +30 that lands
+ * after 0:00 has alerted would revive a rest the timer already shows as over.
+ */
+const val REST_ADJUST_CUTOFF_MS = 500L
+
+/** Whether ±30 may still change the rest ending at [endMillis] ([REST_ADJUST_CUTOFF_MS]). */
+fun restAdjustable(endMillis: Long, now: Long): Boolean = endMillis - now > REST_ADJUST_CUTOFF_MS
+
+/**
  * The end the Rest Timer shows when it opens, given the saved end ([savedEnd], null when none), or
  * null to start a fresh rest. A running rest is resumed. With nothing running, the alarm icon starts
  * a fresh rest; a tap on the rest strip ([resumeOnly]) never does: the rest ended on the way (a tap
@@ -52,13 +61,13 @@ class RestStore(private val dataStore: DataStore<Preferences>) {
 
     /**
      * Shifts the saved end by [deltaSec]; the end never moves before [now] (an over-subtraction just
-     * finishes the rest). Returns the new end, null when no rest is running: an ended rest stays
-     * ended, so a +30 that lands just after 0:00 can't revive it.
+     * finishes the rest). Returns the new end, null when no rest is running or it is about to end
+     * ([restAdjustable]): an ended rest stays ended, so a +30 that lands at 0:00 can't revive it.
      */
     suspend fun adjust(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? {
         var newEnd: Long? = null
         dataStore.edit { prefs ->
-            val endMillis = prefs[REST_END_MILLIS]?.takeIf { it > now } ?: return@edit
+            val endMillis = prefs[REST_END_MILLIS]?.takeIf { restAdjustable(it, now) } ?: return@edit
             val adjusted = (endMillis + deltaSec * 1000L).coerceAtLeast(now)
             prefs[REST_END_MILLIS] = adjusted
             newEnd = adjusted

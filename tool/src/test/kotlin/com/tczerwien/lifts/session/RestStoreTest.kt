@@ -50,6 +50,15 @@ class RestStoreTest {
     }
 
     @Test
+    fun `plus 30 in the last half second is refused, just before it is taken`() = runBlocking {
+        rest.start(totalSec = 60, now = now)
+        val end = now + 60_000
+        assertNull(rest.adjust(30, now = end - REST_ADJUST_CUTOFF_MS))
+        assertEquals(end, rest.endMillis.first())
+        assertEquals(end + 30_000, rest.adjust(30, now = end - REST_ADJUST_CUTOFF_MS - 1))
+    }
+
+    @Test
     fun `nothing to adjust without a rest`() = runBlocking {
         assertNull(rest.adjust(30, now = now))
         assertNull(rest.snapshot())

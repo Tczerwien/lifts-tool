@@ -26,6 +26,7 @@ import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.nextSetLabel
 import com.tczerwien.lifts.session.openingRestEnd
 import com.tczerwien.lifts.session.previousForSlots
+import com.tczerwien.lifts.session.restAdjustable
 import com.tczerwien.lifts.session.restNextContext
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.session.seedFor
@@ -127,11 +128,11 @@ class RestTimerViewModel(
     }
 
     /**
-     * −30 / +30: shift the persisted end (never before now — over-subtracting finishes). At 0:00 the
-     * rest is over and a tap does nothing, here and in the store ([ActiveSession.adjustRest]).
+     * −30 / +30: shift the persisted end (never before now — over-subtracting finishes). In the last
+     * half second and at 0:00 a tap does nothing, here and in the store ([restAdjustable]).
      */
     fun adjust(deltaSec: Int) {
-        if (restRemainingSec(_uiState.value.endMillis, System.currentTimeMillis()) == 0) return
+        if (!restAdjustable(_uiState.value.endMillis, System.currentTimeMillis())) return
         viewModelScope.launch(Dispatchers.IO) {
             val newEnd = session.adjustRest(deltaSec) ?: return@launch
             _uiState.update { it.copy(endMillis = newEnd) }
