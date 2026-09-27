@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.keepScreenOn
+import com.tczerwien.lifts.session.RestAlert
 import com.tczerwien.lifts.session.RestAlarm
 import com.tczerwien.lifts.session.RestStore
 import com.tczerwien.lifts.session.keepAwake
@@ -60,7 +61,8 @@ private val beepScope = CoroutineScope(
  * Every Lifts screen's outer wrapper, in place of LightTheme: the theme, plus the rest-over alert.
  * - While a rest runs, and for 30 s after it ends, the screen is kept on ([keepAwake]).
  * - When the rest is seen ending ([RestAlarm.check]), the screen invert-pulses, and the beep plays
- *   unless Settings turned it off.
+ *   unless Settings turned it off. A rest that ended while the screen was off flashes, without the
+ *   beep, the moment the screen is back.
  *
  * Only the screen on top is composed, so whichever screen is showing alerts, and a rest alerts once.
  * The beep's voice lives only as long as the sound and is released in `finally`, never in onCleared,
@@ -86,11 +88,12 @@ fun LiftsFrame(
             return@LaunchedEffect
         }
         while (true) {
-            // A frame, not a timer: frames stop while the app is in the background, so a rest that
-            // ends there stays quiet when the app comes back after the grace window.
+            // A frame, not a timer: frames stop while the screen is off or the app is in the
+            // background, so a rest that ends there is caught on the first frame back.
             val now = withFrameMillis { System.currentTimeMillis() }
             awake = keepAwake(end, now)
-            if (alarm.check(end, now)) {
+            // A missed end (it passed with the screen off) gets the flash only, when he looks again.
+            if (alarm.check(end, now) == RestAlert.ON_TIME) {
                 // The switch as saved now, not as a screen opened a moment ago assumed it.
                 beepScope.launch { if (settingsStore.restBeep.first()) playRestBeep(DefaultLightAudio(sealedActivity)) }
             }

@@ -4,7 +4,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** How late the alert may still go off after a rest ends; a screen shown later than this stays quiet. */
+/** How late the full alert (beep and flash) may still go off after a rest ends; later is a missed end. */
 const val REST_ALERT_GRACE_MS = 5_000L
 
 /** How long after a rest ends the screen stays awake and Active Workout reads REST OVER. */
@@ -18,23 +18,37 @@ const val REST_PULSE_COUNT = 3
 const val REST_PULSE_PHASE_MS = 300L
 const val REST_PULSE_TOTAL_MS = REST_PULSE_COUNT * 2 * REST_PULSE_PHASE_MS
 
+/** What a rest's end calls for when a screen looks at it ([restAlertFor]). */
+enum class RestAlert {
+    /** Nothing: still running, already alerted, or never seen running (over as it started). */
+    NONE,
+
+    /** Seen reaching zero: beep and flash. */
+    ON_TIME,
+
+    /**
+     * It ended out of sight (screen off, app in the background) and is seen now, past the grace
+     * window: flash only, the moment he looks again. The countdown kept going; only the screen was dark.
+     */
+    MISSED,
+}
+
 /**
- * True when the rest ending at [endMillis] should alert now: this end's countdown was last seen
- * running ([lastSeenRemainingSec] above zero), it has now reached zero, no more than [graceMillis]
- * ago, and this end hasn't alerted already ([firedForEnd]). A screen reopened long after the end, or
- * a rest never seen running (one that was over as it started), stays quiet.
+ * What the rest ending at [endMillis] calls for now. It alerts once ([firedForEnd]), and only if this
+ * end's countdown was seen running ([lastSeenRemainingSec] above zero): [RestAlert.ON_TIME] up to
+ * [graceMillis] after the end, [RestAlert.MISSED] after that.
  */
-fun restAlertDue(
+fun restAlertFor(
     endMillis: Long,
     lastSeenRemainingSec: Int?,
     nowMillis: Long,
     firedForEnd: Long?,
     graceMillis: Long = REST_ALERT_GRACE_MS,
-): Boolean =
-    endMillis != firedForEnd &&
-        (lastSeenRemainingSec ?: 0) > 0 &&
-        nowMillis >= endMillis &&
-        nowMillis - endMillis <= graceMillis
+): RestAlert = when {
+    endMillis == firedForEnd || (lastSeenRemainingSec ?: 0) <= 0 || nowMillis < endMillis -> RestAlert.NONE
+    nowMillis - endMillis <= graceMillis -> RestAlert.ON_TIME
+    else -> RestAlert.MISSED
+}
 
 /**
  * Keep the screen on while a rest runs and for [afterMillis] after it ends, so the alert is seen:
@@ -70,9 +84,9 @@ fun msToNextPulsePhase(startedAt: Long, nowMillis: Long): Long =
 
 /**
  * The one owner of the rest-over alert in the process. Every screen's frame calls [check] as it
- * ticks. Only the screen on top is composed, and [check] fires once per rest end, so a rest beeps
+ * ticks. Only the screen on top is composed, and [check] alerts once per rest end, so a rest beeps
  * once whichever screens it runs under. [pulseStartedAt] tells the screen on top to run the invert
- * pulse, or finish it after a navigation mid-pulse.
+ * pulse (on time or missed), or finish it after a navigation mid-pulse.
  */
 class RestAlarm {
 
@@ -84,18 +98,21 @@ class RestAlarm {
     private val _pulseStartedAt = MutableStateFlow<Long?>(null)
     val pulseStartedAt: StateFlow<Long?> = _pulseStartedAt.asStateFlow()
 
-    /** Looks at the rest ending at [endMillis]; true exactly once, when it is seen ending ([restAlertDue]). */
+    /**
+     * Looks at the rest ending at [endMillis] ([restAlertFor]): anything but [RestAlert.NONE] comes
+     * back exactly once per end, and starts the pulse.
+     */
     @Synchronized
-    fun check(endMillis: Long, nowMillis: Long): Boolean {
+    fun check(endMillis: Long, nowMillis: Long): RestAlert {
         val seenRemaining = lastSeenRemainingSec.takeIf { lastSeenEnd == endMillis }
-        val due = restAlertDue(endMillis, seenRemaining, nowMillis, firedForEnd)
+        val alert = restAlertFor(endMillis, seenRemaining, nowMillis, firedForEnd)
         lastSeenEnd = endMillis
         lastSeenRemainingSec = restRemainingSec(endMillis, nowMillis)
-        if (due) {
+        if (alert != RestAlert.NONE) {
             firedForEnd = endMillis
             _pulseStartedAt.value = nowMillis
         }
-        return due
+        return alert
     }
 
     companion object {
