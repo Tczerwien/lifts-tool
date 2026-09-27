@@ -89,10 +89,10 @@ class BodyweightViewModel(
         viewModelScope.launch(Dispatchers.IO) { refresh() }
     }
 
-    /** [delta] is ±1 from the Stepper; the bodyweight increment is ±0.2 lb / ±0.1 kg. */
+    /** Moves [delta] steps of ±0.2 lb / ±0.1 kg along the grid ([Format.stepWeight]), never below one step. */
     fun step(delta: Int) {
         _uiState.update { state ->
-            val stepped = state.valueDisplay + delta * state.unit.bodyweightStep
+            val stepped = Format.stepWeight(state.valueDisplay, delta, state.unit.bodyweightStep)
             state.copy(
                 valueDisplay = Format.roundBodyweight(
                     stepped.coerceAtLeast(state.unit.bodyweightStep),

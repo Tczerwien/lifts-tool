@@ -43,6 +43,59 @@ class FormatTest {
         assertEquals(180.5, Format.roundBodyweight(180.46), 1e-9)
     }
 
+    // --- Stepping ---
+
+    @Test
+    fun `a weight on the grid steps one step each way`() {
+        assertEquals(140.0, Format.stepWeight(135.0, +1, 5.0), 1e-9)
+        assertEquals(130.0, Format.stepWeight(135.0, -1, 5.0), 1e-9)
+        assertEquals(22.5, Format.stepWeight(20.0, +1, 2.5), 1e-9)
+        assertEquals(17.5, Format.stepWeight(20.0, -1, 2.5), 1e-9)
+    }
+
+    @Test
+    fun `an off-grid weight lands on the grid with its first step`() {
+        // The seeded Olympic bar in kg shows 20.5.
+        assertEquals(22.5, Format.stepWeight(20.5, +1, 2.5), 1e-9)
+        assertEquals(20.0, Format.stepWeight(20.5, -1, 2.5), 1e-9)
+        assertEquals(135.0, Format.stepWeight(132.5, +1, 5.0), 1e-9)
+        assertEquals(130.0, Format.stepWeight(132.5, -1, 5.0), 1e-9)
+    }
+
+    @Test
+    fun `60 kg shown in lb never steps back to a weight that stores a sliver off 60 kg`() {
+        val shown = Format.roundWeight(Format.kgToDisplay(60.0, WeightUnit.LB))
+        assertEquals(132.5, shown, 1e-9)
+        val up = Format.stepWeight(shown, +1, WeightUnit.LB.weightStep)
+        val upThenDown = Format.stepWeight(up, -1, WeightUnit.LB.weightStep)
+        assertEquals(130.0, upThenDown, 1e-9)
+        // 130 lb is a whole plate step lighter, not 60.10 kg passing for a new best.
+        assertEquals(58.967, Format.displayToKg(upThenDown, WeightUnit.LB), 1e-3)
+    }
+
+    @Test
+    fun `several steps at once move that many grid steps`() {
+        assertEquals(65.0, Format.stepWeight(40.0, +5, 5.0), 1e-9)
+        assertEquals(20.0, Format.stepWeight(42.0, -5, 5.0), 1e-9)
+        assertEquals(151.0, Format.stepWeight(150.0, +5, 0.2), 1e-9)
+    }
+
+    @Test
+    fun `stepping never goes below zero`() {
+        assertEquals(0.0, Format.stepWeight(3.0, -1, 5.0), 1e-9)
+        assertEquals(0.0, Format.stepWeight(0.0, -1, 5.0), 1e-9)
+        assertEquals(0.0, Format.stepWeight(10.0, -5, 5.0), 1e-9)
+    }
+
+    @Test
+    fun `bodyweight steps stay on the tenth grid despite floating point`() {
+        // 150 / 0.2 is 749.999… in floating point; it is still on the grid.
+        assertEquals(150.2, Format.stepWeight(150.0, +1, 0.2), 1e-9)
+        assertEquals(149.8, Format.stepWeight(150.0, -1, 0.2), 1e-9)
+        assertEquals(80.1, Format.stepWeight(80.0, +1, 0.1), 1e-9)
+        assertEquals(180.6, Format.stepWeight(180.5, +1, 0.2), 1e-9)
+    }
+
     // --- Weight strings ---
 
     @Test

@@ -120,10 +120,10 @@ class PlateCalculatorViewModel(
         return barDisplay + 2 * Format.roundWeight(Format.kgToDisplay(largestPlateKg, settings.units))
     }
 
-    /** Applies a ±1 stepper delta as ±[WeightUnit.weightStep] display units, floored at 0. */
+    /** Moves the target [delta] steps of [WeightUnit.weightStep] along the grid ([Format.stepWeight]). */
     fun stepTarget(delta: Int) {
         _uiState.update { state ->
-            val next = (state.targetDisplay + delta * state.units.weightStep).coerceAtLeast(0.0)
+            val next = Format.stepWeight(state.targetDisplay, delta, state.units.weightStep)
             derive(state.copy(targetDisplay = next))
         }
     }

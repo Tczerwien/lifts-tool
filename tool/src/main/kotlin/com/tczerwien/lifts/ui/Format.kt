@@ -4,6 +4,8 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToLong
 
 /** Display unit for weights. Storage is always kilograms. */
@@ -74,6 +76,22 @@ object Format {
 
     /** Bodyweight renders to the nearest 0.1 display unit. */
     fun roundBodyweight(display: Double): Double = (display * 10).roundToLong() / 10.0
+
+    /**
+     * [display] moved [steps] grid steps of [step] (both in display units), floored at 0. A value off
+     * the grid lands on it with its first step, so the grid is never lost: 20.5 kg steps to 22.5 or
+     * 20, not 23 or 18, and 60 kg shown in lb (132.5) steps to 135 or 130, never back to a 132.5
+     * that stores as 60.1 kg. More than one step (a held stepper speeding up) moves that many.
+     */
+    fun stepWeight(display: Double, steps: Int, step: Double): Double {
+        if (steps == 0) return display
+        val onGrid = display / step
+        val start = if (steps > 0) floor(onGrid + GRID_EPSILON) else ceil(onGrid - GRID_EPSILON)
+        return (((start + steps) * step * 1000).roundToLong() / 1000.0).coerceAtLeast(0.0)
+    }
+
+    /** In grid steps: 150 / 0.2 is 749.999…, which is on the grid. */
+    private const val GRID_EPSILON = 1e-6
 
     // --- Weight strings ---
 

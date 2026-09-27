@@ -276,9 +276,7 @@ class ActiveWorkoutViewModel(
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val base = currentWeightDisplay(state, set)
-        val next = Format.roundWeight(
-            (base + direction * state.units.weightStep).coerceAtLeast(0.0),
-        )
+        val next = Format.roundWeight(Format.stepWeight(base, direction, state.units.weightStep))
         val edit = applySetChange(set.id) {
             it.copy(weightKg = Format.displayToKg(next, state.units))
         } ?: return

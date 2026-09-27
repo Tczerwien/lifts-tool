@@ -123,11 +123,11 @@ class BarWeightsViewModel(
         }
     }
 
-    /** Applies a ±1 stepper delta as ±[WeightUnit.weightStep] display units, floored at 0. */
+    /** Moves the weight [delta] steps of [WeightUnit.weightStep] along the grid ([Format.stepWeight]). */
     fun stepWeight(delta: Int) {
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
-        val next = (mode.displayWeight + delta * state.units.weightStep).coerceAtLeast(0.0)
+        val next = Format.stepWeight(mode.displayWeight, delta, state.units.weightStep)
         _uiState.update { it.copy(mode = mode.copy(displayWeight = next, stepped = true)) }
     }
 
