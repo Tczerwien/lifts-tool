@@ -39,6 +39,7 @@ import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
+import com.thelightphone.sdk.ui.LightScrollBarPosition
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -145,10 +146,13 @@ class ActiveWorkoutScreen(
                         ExerciseHeader(current)
                         SetRowHeader(unit = uiState.units)
 
+                        // Inside: the scrollbar floats over the rows' 2gu end padding instead of taking
+                        // 4gu from them once the list overflows, which slid them off their headers.
                         LightLazyScrollView(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
+                            scrollBarPosition = LightScrollBarPosition.Inside,
                             uniformItemHeightGridUnits = SET_LIST_ROW_UNITS,
                         ) {
                             val markers = buildMarkers(current.sets)

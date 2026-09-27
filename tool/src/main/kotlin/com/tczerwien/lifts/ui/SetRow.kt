@@ -31,8 +31,10 @@ import com.thelightphone.sdk.ui.lightClickable
  * State of one row in the set grid (design/components/set-row.html).
  *
  * Grid columns: 2gu marker | 8gu previous | fill | 5gu weight | 4gu reps | 3gu checkbox,
- * inside 1gu horizontal padding. Row height is exactly 3gu (LightLazyScrollView uniform
- * height contract).
+ * inside 1gu of padding at the start and 2gu at the end, where the list's scrollbar floats
+ * (LightScrollBarPosition.Inside): the rows keep their width whether or not the list scrolls, so
+ * they stay under [SetRowHeader]. Row height is exactly 3gu (LightLazyScrollView uniform height
+ * contract).
  */
 data class SetRowState(
     /** "1".."n" for work sets, "W" for warm-up sets. */
@@ -69,6 +71,10 @@ private const val COL_CHECK_UNITS = 3f
 private const val CHECKBOX_UNITS = 2f
 private const val CHECKMARK_UNITS = 0.9f
 private const val PR_STAR_UNITS = 1.1f
+private const val PAD_START_UNITS = 1f
+
+/** The set list's scrollbar floats over this much of the right edge; nothing tappable goes there. */
+private const val PAD_END_UNITS = 2f
 
 /** Superfine column header, 1.5gu tall. [unit] picks the "Lbs"/"Kg" label. */
 @Composable
@@ -77,7 +83,7 @@ fun SetRowHeader(unit: WeightUnit, modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(HEADER_HEIGHT_UNITS.gridUnitsAsDp())
-            .padding(horizontal = 1f.gridUnitsAsDp()),
+            .padding(start = PAD_START_UNITS.gridUnitsAsDp(), end = PAD_END_UNITS.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.width(COL_MARKER_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.Center) {
@@ -130,7 +136,7 @@ fun SetRow(
             .fillMaxWidth()
             .height(ROW_HEIGHT_UNITS.gridUnitsAsDp())
             .let { m -> if (onRowClick != null) m.lightClickable(onClick = onRowClick) else m }
-            .padding(horizontal = 1f.gridUnitsAsDp()),
+            .padding(start = PAD_START_UNITS.gridUnitsAsDp(), end = PAD_END_UNITS.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Marker (set number / "W", + superfine "F" for failure) — tap to change the set type.
