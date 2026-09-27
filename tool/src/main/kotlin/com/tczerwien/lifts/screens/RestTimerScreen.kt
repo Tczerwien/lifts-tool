@@ -220,6 +220,21 @@ class RestTimerScreen(
     override fun createViewModel() =
         RestTimerViewModel(repository, session, settingsStore, durationSec, workoutId, slotId, resumeOnly)
 
+    /**
+     * False once this screen has been popped. Nothing opens on top of the timer, so hiding means
+     * leaving; a goBack after that would pop Active Workout too.
+     */
+    @Volatile
+    private var onTop = true
+
+    override fun willShow() {
+        onTop = true
+    }
+
+    override fun willHide() {
+        onTop = false
+    }
+
     @Composable
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
@@ -235,9 +250,9 @@ class RestTimerScreen(
         LaunchedEffect(done) {
             if (done) {
                 finished = true
-                // As long as the pulse, which LiftsFrame runs on this screen.
+                // As long as the pulse, which LiftsFrame runs on this screen. Back may have left meanwhile.
                 delay(REST_PULSE_TOTAL_MS)
-                goBack()
+                if (onTop) goBack()
             }
         }
 
