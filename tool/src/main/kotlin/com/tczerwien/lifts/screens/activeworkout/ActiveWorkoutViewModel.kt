@@ -271,12 +271,13 @@ class ActiveWorkoutViewModel(
 
     // --- Steppers (operate on the active row) ---
 
-    fun stepWeight(direction: Int) {
+    /** Moves the active row's weight [steps] grid steps ([Format.stepWeight]); a long hold sends several. */
+    fun stepWeight(steps: Int) {
         if (locked) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val base = currentWeightDisplay(state, set)
-        val next = Format.roundWeight(Format.stepWeight(base, direction, state.units.weightStep))
+        val next = Format.roundWeight(Format.stepWeight(base, steps, state.units.weightStep))
         val edit = applySetChange(set.id) {
             it.copy(weightKg = Format.displayToKg(next, state.units))
         } ?: return

@@ -205,6 +205,7 @@ class BodyweightScreen(
                             Box(modifier = Modifier.width(STEPPER_WIDTH_UNITS.gridUnitsAsDp())) {
                                 Stepper(
                                     onStep = viewModel::step,
+                                    bigSteps = true,
                                     label = "Today",
                                     decrementEnabled = uiState.decrementEnabled,
                                     value = {

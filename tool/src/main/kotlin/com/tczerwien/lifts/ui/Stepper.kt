@@ -32,18 +32,46 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 
 private const val TARGET_UNITS = 4f
 private const val GLYPH_UNITS = 2.2f
-private const val HOLD_INITIAL_DELAY_MS = 400L
-private const val HOLD_REPEAT_INTERVAL_MS = 250L // ~4 steps/s
 private const val DISABLED_ALPHA = 0.4f
+
+/** A press held this long starts repeating; a shorter one is a tap. */
+const val HOLD_INITIAL_DELAY_MS = 400L
+
+/** A hold repeats every [HOLD_SLOW_INTERVAL_MS] (4 a second) for its first [HOLD_SLOW_REPEATS] repeats (to about 1.5 s)… */
+const val HOLD_SLOW_INTERVAL_MS = 250L
+const val HOLD_SLOW_REPEATS = 5
+
+/** …then every [HOLD_FAST_INTERVAL_MS] (12 a second). */
+const val HOLD_FAST_INTERVAL_MS = 80L
+
+/** From repeat [HOLD_BIG_STEPS_FROM] (about 1.9 s in), a stepper that allows it moves [HOLD_BIG_STEPS] steps at a time. */
+const val HOLD_BIG_STEPS_FROM = 8
+const val HOLD_BIG_STEPS = 5
+
+/** One repeat of a held stepper: how many steps it moves, and how long until the next one. */
+data class HoldStep(val steps: Int, val delayMillis: Long)
+
+/**
+ * Repeat number [repeat] of a hold (0 is the first, [HOLD_INITIAL_DELAY_MS] after the press). It
+ * speeds up after about 1.5 s; with [bigSteps] (weights, never reps or rest times) it then also
+ * moves [HOLD_BIG_STEPS] steps at a time, so 0 to 315 lb, or a first bodyweight of 185 from the
+ * 150 start, takes seconds rather than most of a minute.
+ */
+fun holdSchedule(repeat: Int, bigSteps: Boolean = false): HoldStep = HoldStep(
+    steps = if (bigSteps && repeat >= HOLD_BIG_STEPS_FROM) HOLD_BIG_STEPS else 1,
+    delayMillis = if (repeat < HOLD_SLOW_REPEATS) HOLD_SLOW_INTERVAL_MS else HOLD_FAST_INTERVAL_MS,
+)
 
 /**
  * +/- stepper (design/components/stepper.html): 4gu bordered square targets around a
  * caller-rendered value slot. A tap steps once as the finger lifts; a drag past touch slop (a
  * scroll that started on a target) steps nothing. Press-and-hold auto-repeats after ~400ms
- * at ~4 steps/s. Disabled targets dim to 40% with contentSecondary glyphs.
+ * and speeds up as it goes ([holdSchedule]). Disabled targets dim to 40% with contentSecondary glyphs.
  *
- * @param onStep called with +1 or -1 per step; the caller applies the unit-specific
- *   increment ([WeightUnit.weightStep] / [WeightUnit.bodyweightStep] / 1 rep).
+ * @param onStep called with the number of steps to move, +1 or -1 (or ±[HOLD_BIG_STEPS] late in a
+ *   hold with [bigSteps]); the caller applies the unit-specific increment ([WeightUnit.weightStep] /
+ *   [WeightUnit.bodyweightStep] / 1 rep).
+ * @param bigSteps a long hold moves several steps at a time: for weights, never counts or times.
  * @param label optional superfine label centered above the row, e.g. "WEIGHT (LB)".
  * @param value the center slot; typically LightText(variant = Subtitle, monospace = true).
  */
@@ -54,6 +82,7 @@ fun Stepper(
     label: String? = null,
     decrementEnabled: Boolean = true,
     incrementEnabled: Boolean = true,
+    bigSteps: Boolean = false,
     value: @Composable () -> Unit,
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -70,11 +99,11 @@ fun Stepper(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StepperTarget(delta = -1, enabled = decrementEnabled, onStep = onStep, plus = false)
+            StepperTarget(delta = -1, enabled = decrementEnabled, bigSteps = bigSteps, onStep = onStep, plus = false)
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 value()
             }
-            StepperTarget(delta = +1, enabled = incrementEnabled, onStep = onStep, plus = true)
+            StepperTarget(delta = +1, enabled = incrementEnabled, bigSteps = bigSteps, onStep = onStep, plus = true)
         }
     }
 }
@@ -83,11 +112,13 @@ fun Stepper(
 private fun StepperTarget(
     delta: Int,
     enabled: Boolean,
+    bigSteps: Boolean,
     onStep: (Int) -> Unit,
     plus: Boolean,
 ) {
     val colors = LightThemeTokens.colors
     val currentOnStep by rememberUpdatedState(onStep)
+    val currentBigSteps by rememberUpdatedState(bigSteps)
 
     val glyphColor = if (enabled) colors.content else colors.contentSecondary
     Box(
@@ -104,9 +135,13 @@ private fun StepperTarget(
                     when (withTimeoutOrNull(HOLD_INITIAL_DELAY_MS) { awaitPressEnd(down, slopCancels = true) }) {
                         PressEnd.LIFTED -> currentOnStep(delta)
                         PressEnd.CANCELLED -> Unit
-                        null -> do {
-                            currentOnStep(delta)
-                        } while (withTimeoutOrNull(HOLD_REPEAT_INTERVAL_MS) { awaitPressEnd(down, slopCancels = false) } == null)
+                        null -> {
+                            var repeat = 0
+                            do {
+                                val hold = holdSchedule(repeat++, currentBigSteps)
+                                currentOnStep(delta * hold.steps)
+                            } while (withTimeoutOrNull(hold.delayMillis) { awaitPressEnd(down, slopCancels = false) } == null)
+                        }
                     }
                 }
             },

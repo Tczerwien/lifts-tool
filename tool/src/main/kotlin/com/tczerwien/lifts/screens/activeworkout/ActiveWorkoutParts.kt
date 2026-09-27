@@ -125,6 +125,7 @@ internal fun StepperStrip(
     ) {
         Stepper(
             onStep = viewModel::stepWeight,
+            bigSteps = true,
             modifier = Modifier.weight(1.3f),
             label = "Weight (${uiState.units.suffix})",
             decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),

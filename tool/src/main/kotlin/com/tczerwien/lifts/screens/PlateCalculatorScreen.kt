@@ -207,6 +207,7 @@ class PlateCalculatorScreen(
                 )
                 Stepper(
                     onStep = viewModel::stepTarget,
+                    bigSteps = true,
                     decrementEnabled = uiState.targetDisplay > 0.0,
                     modifier = Modifier
                         .fillMaxWidth()
