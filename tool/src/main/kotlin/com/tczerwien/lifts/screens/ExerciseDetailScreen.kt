@@ -82,6 +82,8 @@ class ExerciseDetailViewModel(
         val workoutId: Long,
         val dateLabel: String,
         val segments: List<SetSegment>,
+        /** The workout still in progress: shown, but it doesn't open Workout Detail, whose trash would delete it. */
+        val inProgress: Boolean = false,
     )
 
     data class Stat(val label: String, val value: String, val dateLabel: String)
@@ -159,6 +161,7 @@ class ExerciseDetailViewModel(
             val sets = setsByWorkout[workout.id] ?: return@mapNotNull null
             PerWorkout(
                 workoutId = workout.id,
+                inProgress = workout.endedAt == null,
                 dateMillis = workout.endedAt ?: workout.startedAt,
                 sets = sets.sortedWith(compareBy({ it.slotPosition }, { it.set.position })).map { it.set },
             )
@@ -173,6 +176,7 @@ class ExerciseDetailViewModel(
                 workoutId = entry.workoutId,
                 dateLabel = Format.dateShort(entry.dateMillis),
                 segments = entry.sets.map { set -> set.toSegment(unit, set.id in prSetIds) },
+                inProgress = entry.inProgress,
             )
         }
 
@@ -234,6 +238,7 @@ class ExerciseDetailViewModel(
 
     private data class PerWorkout(
         val workoutId: Long,
+        val inProgress: Boolean,
         val dateMillis: Long,
         val sets: List<SetEntity>,
     )
@@ -384,8 +389,10 @@ class ExerciseDetailScreen(
                 HistoryRow(
                     row = row,
                     showDivider = index < uiState.history.lastIndex,
-                    onClick = {
-                        navigateTo({ WorkoutDetailScreen(it, workoutId = row.workoutId) })
+                    onClick = if (row.inProgress) {
+                        null
+                    } else {
+                        { navigateTo({ WorkoutDetailScreen(it, workoutId = row.workoutId) }) }
                     },
                 )
             }
@@ -458,13 +465,13 @@ private const val HISTORY_ROW_HEIGHT_UNITS = 3f
 private fun HistoryRow(
     row: ExerciseDetailViewModel.HistoryRow,
     showDivider: Boolean,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)?,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(HISTORY_ROW_HEIGHT_UNITS.gridUnitsAsDp())
-            .lightClickable(onClick = onClick),
+            .let { m -> if (onClick != null) m.lightClickable(onClick = onClick) else m },
     ) {
         Row(
             modifier = Modifier
