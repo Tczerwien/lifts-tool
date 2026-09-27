@@ -3,6 +3,7 @@ package com.tczerwien.lifts.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,7 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.LiftsRepository
@@ -24,6 +27,7 @@ import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -40,6 +44,7 @@ import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
+import com.thelightphone.sdk.ui.lightClickable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +63,7 @@ class WorkoutDetailViewModel(
     private val workoutId: Long,
 ) : LightViewModel<Unit>() {
 
-    data class ExerciseBlock(val name: String, val notation: String)
+    data class ExerciseBlock(val exerciseId: String, val name: String, val notation: String)
 
     data class UiState(
         val loaded: Boolean = false,
@@ -157,7 +162,8 @@ class WorkoutDetailViewModel(
             val completed = setsBySlot[slot.id]?.sortedBy { it.position }
                 ?: return@mapNotNull null
             ExerciseBlock(
-                name = repository.exerciseById(slot.exerciseId)?.name ?: slot.exerciseId,
+                exerciseId = slot.exerciseId,
+                name = repository.exerciseById(slot.exerciseId)?.let { displayName(it.name, it.equipment) } ?: slot.exerciseId,
                 notation = completed.joinToString("; ") { set ->
                     setToken(set, unit) + if (set.id in prSetIds) PR_STAR else ""
                 },
@@ -262,21 +268,30 @@ class WorkoutDetailScreen(
                                 )
                             }
 
+                            // Each exercise opens its Exercise Detail (history, records, cue).
                             uiState.blocks.forEach { block ->
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .lightClickable {
+                                            navigateTo({ ExerciseDetailScreen(it, exerciseId = block.exerciseId) })
+                                        }
                                         .padding(
                                             start = 1f.gridUnitsAsDp(),
                                             end = 1f.gridUnitsAsDp(),
                                             top = 0.5f.gridUnitsAsDp(),
                                         ),
                                 ) {
-                                    LightText(
-                                        text = block.name,
-                                        variant = LightTextVariant.Copy,
-                                        maxLines = 1,
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        LightText(
+                                            text = block.name,
+                                            variant = LightTextVariant.Copy,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.MiddleEllipsis,
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
+                                        LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
+                                    }
                                     LightText(
                                         text = block.notation,
                                         variant = LightTextVariant.Detail,

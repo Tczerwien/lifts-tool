@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.screens.ExerciseDetailScreen
 import com.tczerwien.lifts.screens.ExerciseJumpScreen
 import com.tczerwien.lifts.screens.ExercisePickerScreen
 import com.tczerwien.lifts.screens.JumpEntry
@@ -147,7 +148,14 @@ class ActiveWorkoutScreen(
 
                     else -> {
                         val activeSet = viewModel.activeSet(uiState)
-                        ExerciseHeader(current, logging = activeSet != null)
+                        ExerciseHeader(
+                            block = current,
+                            logging = activeSet != null,
+                            onOpenDetail = {
+                                viewModel.finishArm.disarm()
+                                navigateTo({ ExerciseDetailScreen(it, exerciseId = current.slot.exerciseId) })
+                            },
+                        )
                         SetRowHeader(unit = uiState.units)
 
                         // Each exercise gets its own scroll position, opening with the active row in view: the

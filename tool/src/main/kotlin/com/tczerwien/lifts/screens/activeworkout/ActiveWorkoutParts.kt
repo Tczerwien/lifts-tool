@@ -68,21 +68,27 @@ internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, la
 /**
  * The exercise's name, the equipment and muscles under it, and its pinned cue. While a row is being
  * logged ([logging]) the equipment and muscles line gives its height to the set list; the cue stays.
+ * The whole header is one tap target for Exercise Detail ([onOpenDetail]), which the "›" signals.
  */
 @Composable
-internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging: Boolean) {
+internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging: Boolean, onOpenDetail: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .lightClickable(onClick = onOpenDetail)
             .padding(horizontal = 1f.gridUnitsAsDp()),
     ) {
-        // A long name loses its middle, never the words at either end that tell variants apart.
-        LightText(
-            text = block.name,
-            variant = LightTextVariant.Copy,
-            maxLines = 1,
-            overflow = TextOverflow.MiddleEllipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // A long name loses its middle, never the words at either end that tell variants apart.
+            LightText(
+                text = block.name,
+                variant = LightTextVariant.Copy,
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
+        }
         if (!logging && block.detailLine.isNotEmpty()) {
             LightText(
                 text = block.detailLine,
