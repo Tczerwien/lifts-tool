@@ -9,7 +9,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
@@ -34,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -71,8 +71,6 @@ fun LiftsFrame(
     val restStore = remember(lightContext) { RestStore(lightContext.dataStore) }
     val restEnd by restStore.endMillis.collectAsState(initial = null)
     val settingsStore = remember(lightContext) { SettingsStore(lightContext.dataStore) }
-    val beepOn by settingsStore.restBeep.collectAsState(initial = SettingsStore.DEFAULT_REST_BEEP)
-    val latestBeepOn by rememberUpdatedState(beepOn)
     val alarm = RestAlarm.process
 
     var awake by remember { mutableStateOf(false) }
@@ -87,8 +85,9 @@ fun LiftsFrame(
             // ends there stays quiet when the app comes back after the grace window.
             val now = withFrameMillis { System.currentTimeMillis() }
             awake = keepAwake(end, now)
-            if (alarm.check(end, now) && latestBeepOn) {
-                beepScope.launch { playRestBeep(DefaultLightAudio(sealedActivity)) }
+            if (alarm.check(end, now)) {
+                // The switch as saved now, not as a screen opened a moment ago assumed it.
+                beepScope.launch { if (settingsStore.restBeep.first()) playRestBeep(DefaultLightAudio(sealedActivity)) }
             }
             delay(nextRestCheckMillis(end, now) ?: break)
         }
