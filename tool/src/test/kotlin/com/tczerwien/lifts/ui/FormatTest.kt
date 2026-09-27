@@ -73,6 +73,15 @@ class FormatTest {
     // --- Clocks and durations ---
 
     @Test
+    fun `ago reads minutes and seconds under an hour, hours and minutes after`() {
+        assertEquals("0:00", Format.ago(0))
+        assertEquals("1:20", Format.ago(80))
+        assertEquals("59:59", Format.ago(3599))
+        assertEquals("1h 0m", Format.ago(3600))
+        assertEquals("3h 58m", Format.ago(14_310))
+    }
+
+    @Test
     fun `clock formats minutes and padded seconds`() {
         assertEquals("0:00", Format.clock(0))
         assertEquals("1:35", Format.clock(95))

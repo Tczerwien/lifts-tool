@@ -240,12 +240,12 @@ internal fun RestSlot(endMillis: Long?, onOpenTimer: () -> Unit) {
                         lighten = true,
                     )
                 }
-                overSec != null -> LightText(
-                    text = "REST OVER · ${Format.clock(overSec)} AGO",
-                    variant = LightTextVariant.Detail,
-                    monospace = true,
-                    maxLines = 1,
-                )
+                // Only the number is monospace, like the countdown's, so the words hold still.
+                overSec != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    LightText(text = "REST OVER · ", variant = LightTextVariant.Detail, maxLines = 1)
+                    LightText(text = Format.ago(overSec), variant = LightTextVariant.Detail, monospace = true, maxLines = 1)
+                    LightText(text = " AGO", variant = LightTextVariant.Detail, maxLines = 1)
+                }
             }
         }
     }

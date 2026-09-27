@@ -104,6 +104,9 @@ object Format {
         return "%d:%02d".format(Locale.US, sec / 60, sec % 60)
     }
 
+    /** How long ago a rest ended: "1:20" under an hour, "1h 23m" from an hour up. */
+    fun ago(totalSec: Int): String = if (totalSec < 3600) clock(totalSec) else durationHm(totalSec)
+
     /** Seconds -> "1h 23m" (or "43m" under an hour). */
     fun durationHm(totalSec: Int): String {
         val sec = totalSec.coerceAtLeast(0)
