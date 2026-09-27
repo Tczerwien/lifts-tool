@@ -21,6 +21,8 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.displayName
+import com.tczerwien.lifts.ui.namesEquipment
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SimpleLightScreen
 import kotlinx.coroutines.Dispatchers
@@ -46,8 +48,8 @@ class ActiveWorkoutViewModel(
     /** One exercise of the session: its rows, and what last session did in the matching slot. */
     data class ExerciseBlock(
         val slot: WorkoutExerciseEntity,
+        /** As shown everywhere on this screen ([displayName]): "Bench Press - Medium Grip (Barbell)". */
         val name: String,
-        val baseName: String,
         val detailLine: String,
         val cue: String?,
         /** Today's rows in position order. */
@@ -427,7 +429,7 @@ class ActiveWorkoutViewModel(
                 if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${buildMarkers(block.sets)[activeIndex]}"
             },
             removeSetId = removableSet?.id,
-            removeExerciseLabel = block.baseName.takeIf { exerciseRemovable },
+            removeExerciseLabel = block.name.takeIf { exerciseRemovable },
             removeSlotId = block.slot.id.takeIf { exerciseRemovable },
         )
     }
@@ -620,12 +622,11 @@ class ActiveWorkoutViewModel(
             val setsBySlot = sets.groupBy { it.workoutExerciseId }
             val blocks = slots.map { slot ->
                 val exercise = catalog[slot.exerciseId]
-                val name = exercise?.name ?: slot.exerciseId
+                val name = exercise?.let { displayName(it.name, it.equipment) } ?: slot.exerciseId
                 ExerciseBlock(
                     slot = slot,
                     name = name,
-                    baseName = name.substringBefore(" ("),
-                    detailLine = detailLine(exercise),
+                    detailLine = detailLine(exercise, equipmentInName = namesEquipment(name, exercise?.equipment)),
                     cue = exercise?.pinnedNote?.takeIf { it.isNotBlank() },
                     sets = setsBySlot[slot.id].orEmpty().sortedBy { it.position },
                     lastTime = lastTimeBySlot[slot.id].orEmpty(),
@@ -666,11 +667,14 @@ class ActiveWorkoutViewModel(
         }
     }
 
-    /** "Barbell · Chest — Triceps, Front Delts" from the catalog entity. */
-    private fun detailLine(exercise: ExerciseEntity?): String {
+    /**
+     * "Barbell · Chest — Triceps, Front Delts" from the catalog entity; just the muscles when the name
+     * above it already says the equipment ([equipmentInName]).
+     */
+    private fun detailLine(exercise: ExerciseEntity?, equipmentInName: Boolean): String {
         exercise ?: return ""
         val parts = mutableListOf<String>()
-        exercise.equipment?.takeIf { it.isNotBlank() }?.let { parts += titleCase(it) }
+        exercise.equipment?.takeIf { it.isNotBlank() && !equipmentInName }?.let { parts += titleCase(it) }
         val muscles = buildString {
             append(exercise.primaryMuscles.joinToString(", ") { titleCase(it) })
             if (exercise.secondaryMuscles.isNotEmpty()) {

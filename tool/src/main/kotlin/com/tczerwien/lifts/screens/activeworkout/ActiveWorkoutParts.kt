@@ -58,11 +58,12 @@ internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock) {
             .fillMaxWidth()
             .padding(horizontal = 1f.gridUnitsAsDp()),
     ) {
+        // A long name loses its middle, never the words at either end that tell variants apart.
         LightText(
-            text = block.baseName,
+            text = block.name,
             variant = LightTextVariant.Copy,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            overflow = TextOverflow.MiddleEllipsis,
         )
         LightText(
             text = block.detailLine,

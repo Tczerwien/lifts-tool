@@ -33,6 +33,7 @@ import com.tczerwien.lifts.session.seedFor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.rememberSecondClock
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -177,7 +178,7 @@ class RestTimerViewModel(
             seed.weightKg != null -> Format.weight(seed.weightKg, units)
             else -> null
         }?.let { values -> rpe?.let { "$values @ ${trimRpe(it)}" } ?: values }
-        val exerciseName = repository.exerciseById(exerciseId)?.name ?: exerciseId
+        val exerciseName = repository.exerciseById(exerciseId)?.let { displayName(it.name, it.equipment) } ?: exerciseId
         return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
     }
 
