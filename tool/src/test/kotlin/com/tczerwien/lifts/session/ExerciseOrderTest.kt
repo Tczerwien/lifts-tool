@@ -72,6 +72,16 @@ class ExerciseOrderTest {
         assertEquals(tick + AUTO_ADVANCE_NO_REST_MS, autoAdvanceAt(tick, restEndMillis = tick - 30_000), "an older rest, over")
     }
 
+    @Test
+    fun `a tap in the second after the screen moves on is taken as meant for the old one`() {
+        val moved = 5_000_000L
+        assertEquals(true, tapTooSoonAfterMove(moved, moved))
+        assertEquals(true, tapTooSoonAfterMove(moved, moved + 999))
+        assertEquals(false, tapTooSoonAfterMove(moved, moved + 1_000))
+        assertEquals(false, tapTooSoonAfterMove(null, moved), "never moved on by itself")
+        assertEquals(false, tapTooSoonAfterMove(moved, moved - 1), "clock set back")
+    }
+
     private fun slot(id: Long, position: Int) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position)
 

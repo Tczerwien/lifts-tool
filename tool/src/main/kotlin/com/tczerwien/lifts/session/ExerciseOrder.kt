@@ -12,6 +12,16 @@ import com.tczerwien.lifts.data.WorkoutExerciseEntity
 /** With no rest to wait for (a 0 s slot, or Skip), how long an exercise's last tick stays on screen before moving on. */
 const val AUTO_ADVANCE_NO_REST_MS = 2_000L
 
+/**
+ * For this long after Active Workout moves on by itself, a tap on NEXT or a checkbox is taken as meant
+ * for the screen that was there: he looked up at the 0:00 flash and tapped as it changed.
+ */
+const val AUTO_ADVANCE_TAP_GRACE_MS = 1_000L
+
+/** Whether a tap at [now] comes too soon after the screen moved on by itself at [movedOnAt] ([AUTO_ADVANCE_TAP_GRACE_MS]). */
+fun tapTooSoonAfterMove(movedOnAt: Long?, now: Long): Boolean =
+    movedOnAt != null && now - movedOnAt in 0 until AUTO_ADVANCE_TAP_GRACE_MS
+
 /** [slots] in order starting just after [currentSlotId] and wrapping round, without it; all of them when it isn't one. */
 private fun slotsAfter(slots: List<WorkoutExerciseEntity>, currentSlotId: Long?): List<WorkoutExerciseEntity> {
     val ordered = slots.sortedBy { it.position }

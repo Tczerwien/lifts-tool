@@ -20,6 +20,7 @@ import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.seedRows
+import com.tczerwien.lifts.session.tapTooSoonAfterMove
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
@@ -246,14 +247,19 @@ class ActiveWorkoutViewModel(
      */
     private val pendingAdvance = MutableStateFlow<PendingAdvance?>(null)
 
+    /** When the screen last moved on by itself; a NEXT or tick right after is ignored ([tapTooSoonAfterMove]). */
+    @Volatile
+    private var movedOnAt: Long? = null
+
     /** Moves on for [pending] if it still stands, the exercise is still on screen and still finished. */
     private fun autoAdvance(pending: PendingAdvance) {
         if (!pendingAdvance.compareAndSet(pending, null) || locked) return
         val state = _uiState.value
         val current = state.exercises.getOrNull(state.currentIndex) ?: return
         if (current.slot.id != pending.slotId) return
-        val target = autoAdvanceSlotId(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id)
-        target?.let(::showExercise)
+        val target = autoAdvanceSlotId(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id) ?: return
+        movedOnAt = System.currentTimeMillis()
+        showExercise(target)
     }
 
     // --- Row interactions ---
@@ -297,7 +303,7 @@ class ActiveWorkoutViewModel(
      * logged values.
      */
     fun toggleComplete(setId: Long) {
-        if (!beginAction()) return
+        if (tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis()) || !beginAction()) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
         if (set.completedAt != null) {
@@ -400,7 +406,7 @@ class ActiveWorkoutViewModel(
 
     /** The next-exercise row: moves to the exercise it offers. */
     fun goToNextExercise() {
-        if (!beginAction()) return
+        if (tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis()) || !beginAction()) return
         nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
     }
 
