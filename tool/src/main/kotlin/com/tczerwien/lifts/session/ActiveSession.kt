@@ -333,7 +333,7 @@ class ActiveSession(
 
     /**
      * Blocking read — call from Dispatchers.IO. Null when no rest is saved (none yet, or cleared by
-     * Skip, Finish, a 0 s slot or a new workout); an ended rest stays saved until then.
+     * Skip, Finish, Discard, a 0 s slot or a new workout); an ended rest stays saved until then.
      */
     fun restStateSnapshot(): RestTimerState? = rest.snapshot()
 

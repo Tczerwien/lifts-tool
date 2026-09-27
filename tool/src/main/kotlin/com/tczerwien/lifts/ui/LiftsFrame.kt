@@ -29,6 +29,7 @@ import com.thelightphone.sdk.ui.LightColors
 import com.thelightphone.sdk.ui.LightTheme
 import com.thelightphone.sdk.ui.LightThemeController
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,9 +48,13 @@ private const val BEEP_TAIL_MS = 150L
 
 /**
  * Where the beep plays: the process, not the screen that fired it, so a tap that leaves the screen
- * right after 0:00 doesn't cut it off. The voice is still released within half a second, in finally.
+ * right after 0:00 doesn't cut it off. The voice is released in finally once the sound (about half a
+ * second) has played. Anything that fails here, the settings read included, is logged: a missing
+ * beep must not take the workout down with it.
  */
-private val beepScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+private val beepScope = CoroutineScope(
+    SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, failure -> Log.w(TAG, "Rest-over beep failed", failure) },
+)
 
 /**
  * Every Lifts screen's outer wrapper, in place of LightTheme: the theme, plus the rest-over alert.
