@@ -212,13 +212,12 @@ class ActiveWorkoutScreen(
                             seed = activeSet?.let { current.seeds[current.sets.indexOf(it)] },
                         )
 
-                        if (uiState.exercises.size > 1) {
-                            val nextIndex = (uiState.currentIndex + 1) % uiState.exercises.size
-                            val next = uiState.exercises[nextIndex]
+                        viewModel.nextExercise(uiState)?.let { next ->
                             NextExerciseRow(
                                 name = next.name,
+                                doneCount = next.sets.count { it.completedAt != null },
                                 setCount = next.sets.size,
-                                onClick = { viewModel.advanceExercise() },
+                                onClick = viewModel::goToNextExercise,
                             )
                         }
 

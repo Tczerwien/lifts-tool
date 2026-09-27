@@ -179,9 +179,12 @@ internal fun StepperStrip(
     }
 }
 
-/** Collapsed next-exercise row (2gu + 0.5gu top margin); tap advances (wraps around). */
+/**
+ * Collapsed next-exercise row (2gu + 0.5gu top margin), "NEXT › Overhead Press · 0/3": the exercise
+ * it moves to ([ActiveWorkoutViewModel.nextExercise], finished ones skipped) and its sets ticked of all.
+ */
 @Composable
-internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
+internal fun NextExerciseRow(name: String, doneCount: Int, setCount: Int, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -190,23 +193,17 @@ internal fun NextExerciseRow(name: String, setCount: Int, onClick: () -> Unit) {
             .lightClickable(onClick = onClick)
             .padding(horizontal = 1f.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
+        LightText(text = "NEXT › ", variant = LightTextVariant.Detail, lighten = true, maxLines = 1)
         LightText(
             text = name,
             variant = LightTextVariant.Copy,
             lighten = true,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            overflow = TextOverflow.MiddleEllipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
-        LightText(
-            text = "$setCount Sets",
-            variant = LightTextVariant.Detail,
-            lighten = true,
-            maxLines = 1,
-            modifier = Modifier.padding(start = 0.5f.gridUnitsAsDp()),
-        )
+        LightText(text = " · $doneCount/$setCount", variant = LightTextVariant.Detail, lighten = true, maxLines = 1)
     }
 }
 

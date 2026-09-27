@@ -13,6 +13,7 @@ import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.alignPrevious
+import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
@@ -325,17 +326,29 @@ class ActiveWorkoutViewModel(
 
     // --- Structure ---
 
-    /** Collapsed next-exercise row: advance (wrapping), targeting its first pending set. */
-    fun advanceExercise() {
+    /** What the next-exercise row offers ([nextExerciseSlotId]); null with no other exercise. */
+    fun nextExercise(state: UiState): ExerciseBlock? {
+        val current = state.exercises.getOrNull(state.currentIndex) ?: return null
+        val nextSlotId = nextExerciseSlotId(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id)
+        return state.exercises.firstOrNull { it.slot.id == nextSlotId }
+    }
+
+    /** The next-exercise row: moves to the exercise it offers. */
+    fun goToNextExercise() {
         if (locked) return
+        nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
+    }
+
+    /** Puts exercise [slotId] on screen with the steppers on its first unticked row, and saves it as the one on screen. */
+    private fun showExercise(slotId: Long) {
         _uiState.update { state ->
-            if (state.exercises.size < 2) {
+            val index = state.exercises.indexOfFirst { it.slot.id == slotId }
+            if (index < 0) {
                 state
             } else {
-                val next = (state.currentIndex + 1) % state.exercises.size
                 state.copy(
-                    currentIndex = next,
-                    activeSetId = state.exercises[next].sets.firstOrNull { it.completedAt == null }?.id,
+                    currentIndex = index,
+                    activeSetId = state.exercises[index].sets.firstOrNull { it.completedAt == null }?.id,
                 )
             }
         }
