@@ -103,7 +103,8 @@ internal fun AddSetRow(onClick: () -> Unit) {
 /**
  * Fixed strip between the set list and the rest slot. With no active row (every set ticked) it
  * stays at full height with both steppers greyed out, so nothing below the list moves.
- * The weight stepper gets the wider slot so "102.5" fits between its 4gu targets.
+ * The weight stepper gets the wider slot (1.2 to 1) so "102.5" fits between its 4gu targets and
+ * the reps slot still holds "100".
  */
 @Composable
 internal fun StepperStrip(
@@ -126,7 +127,7 @@ internal fun StepperStrip(
         Stepper(
             onStep = viewModel::stepWeight,
             bigSteps = true,
-            modifier = Modifier.weight(1.3f),
+            modifier = Modifier.weight(1.2f),
             label = "Weight (${uiState.units.suffix})",
             decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),
             incrementEnabled = active,

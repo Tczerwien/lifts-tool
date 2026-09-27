@@ -212,8 +212,8 @@ class PlateCalculatorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
-                            start = 6f.gridUnitsAsDp(),
-                            end = 6f.gridUnitsAsDp(),
+                            start = 4f.gridUnitsAsDp(),
+                            end = 4f.gridUnitsAsDp(),
                             top = 0.25f.gridUnitsAsDp(),
                         ),
                     value = {

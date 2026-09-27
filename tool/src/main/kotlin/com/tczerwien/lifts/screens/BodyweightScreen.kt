@@ -49,8 +49,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Stepper row width (design/screens/bodyweight.html .stepper-row). */
-private const val STEPPER_WIDTH_UNITS = 16f
+/** Stepper row width: the design's 16gu left "182.4" 1px short of room between the targets, which hid the last digit. */
+private const val STEPPER_WIDTH_UNITS = 19f
 
 /** Trend copy window; the analytics rate itself is a fixed 28-day least-squares slope. */
 private const val TREND_WEEKS = 4

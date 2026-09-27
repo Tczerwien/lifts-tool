@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -74,7 +75,9 @@ fun holdSchedule(repeat: Int, bigSteps: Boolean = false): HoldStep = HoldStep(
  *   [WeightUnit.bodyweightStep] / 1 rep).
  * @param bigSteps a long hold moves several steps at a time: for weights, never counts or times.
  * @param label optional superfine label centered above the row, e.g. "WEIGHT (LB)".
- * @param value the center slot; typically LightText(variant = Subtitle, monospace = true).
+ * @param value the center slot; typically LightText(variant = Subtitle, monospace = true). Give
+ *   the stepper room for it: five monospace characters ("182.4") need about 8gu between the targets
+ *   at Subtitle, 5gu at Copy.
  */
 @Composable
 fun Stepper(
@@ -102,7 +105,9 @@ fun Stepper(
         ) {
             StepperTarget(delta = -1, enabled = decrementEnabled, bigSteps = bigSteps, onStep = onStep, plus = false)
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                value()
+                // Measured at its own width, so a value too wide for the slot overlaps the targets
+                // rather than wrapping and silently hiding its last digit ("182.4" as "182.").
+                Box(modifier = Modifier.wrapContentWidth(unbounded = true)) { value() }
             }
             StepperTarget(delta = +1, enabled = incrementEnabled, bigSteps = bigSteps, onStep = onStep, plus = true)
         }
