@@ -139,7 +139,7 @@ class ActiveSession(
 
     /**
      * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null when no
-     * rest started because the workout has already ended or was deleted.
+     * rest started: the workout has already ended or was deleted, or the slot rests 0 s.
      */
     data class SetCompletion(
         val set: SetEntity,
@@ -175,11 +175,13 @@ class ActiveSession(
             warmupRestSec = snapshot.warmupRestSec,
         )
         val workoutOpen = repository.workoutById(workoutId)?.let { it.endedAt == null } == true
-        if (workoutOpen) runBlocking { startRest(restSec, now) }
+        // A slot that rests 0 s (a superset's first half) means no rest: the tick still ends any other.
+        val rests = workoutOpen && restSec > 0
+        if (workoutOpen) runBlocking { if (rests) startRest(restSec, now) else clearRest() }
         return SetCompletion(
             set = completed,
             restDurationSec = restSec,
-            restEndMillis = if (workoutOpen) now + restSec * 1000L else null,
+            restEndMillis = if (rests) now + restSec * 1000L else null,
         )
     }
 

@@ -148,6 +148,23 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a slot that rests 0 s ends the running rest instead of starting one`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val row = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "row", position = 0))
+        val bench = store.addWorkoutExercise(
+            WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "bench", position = 1, restSecWork = 0),
+        )
+        val rowSet = store.addSet(SetEntity(workoutExerciseId = row, position = 0, type = n))
+        val benchSet = store.addSet(SetEntity(workoutExerciseId = bench, position = 0, type = n))
+        session.completeSet(workoutId, store.setById(rowSet)!!, 60.0, 8, n, now = 10_000)
+        assertNotNull(session.restStateSnapshot())
+
+        val completion = session.completeSet(workoutId, store.setById(benchSet)!!, 80.0, 5, n, now = 60_000)
+        assertNull(completion.restEndMillis)
+        assertNull(session.restStateSnapshot())
+    }
+
+    @Test
     fun `the exercise on screen is remembered across a restart, for its own workout only`() {
         kotlinx.coroutines.runBlocking { session.rememberCurrentSlot(workoutId = 7, slotId = 42) }
         scopes.forEach { it.cancel() }
