@@ -27,11 +27,28 @@ object BackupPolicy {
 
     private val stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmm", Locale.US)
 
-    private val named = Regex("""(lifts-|pre-restore-)\d{4}-\d{2}-\d{2}-\d{4}\.db""")
+    private val named = Regex("""(lifts-|pre-restore-)\d{4}-\d{2}-\d{2}-\d{4}(-\d+)?\.db""")
 
-    /** "lifts-2026-09-28-1432.db": local time, so names sort by when they were taken. */
+    /** A backup file as the folder holds it: its name and when it was written (its mtime). */
+    data class Stored(val name: String, val writtenAt: Long)
+
+    /** A written backup more than this far in the future came from a wrong clock. */
+    private const val CLOCK_SLACK_MS = 60 * 1000L
+
+    /** "lifts-2026-09-28-1432.db": local time, to the minute. */
     fun fileName(kind: Kind, millis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
         kind.prefix + stamp.format(Instant.ofEpochMilli(millis).atZone(zone)) + ".db"
+
+    /**
+     * [fileName], unless the folder already holds it ([existing]); then "…-1432-2.db", "-3" and so on.
+     * A backup never replaces another: two restores in one minute keep both pre-restore copies.
+     */
+    fun uniqueName(kind: Kind, millis: Long, existing: Collection<String>, zone: ZoneId = ZoneId.systemDefault()): String {
+        val base = fileName(kind, millis, zone)
+        if (base !in existing) return base
+        val stem = base.removeSuffix(".db")
+        return generateSequence(2) { it + 1 }.map { "$stem-$it.db" }.first { it !in existing }
+    }
 
     /** The kind of backup [name] is; null for [LATEST] and for any file Lifts didn't name. */
     fun kindOf(name: String): Kind? {
@@ -40,26 +57,34 @@ object BackupPolicy {
     }
 
     /**
-     * The files of a backups folder listing ([names]) to delete: every dated copy but the newest
-     * [KEEP_DATED] and every pre-restore copy but the newest [KEEP_PRE_RESTORE]. [LATEST] and files
-     * Lifts didn't name are never on the list.
+     * The files of a backups folder ([stored]) to delete: every dated copy but the newest [KEEP_DATED]
+     * and every pre-restore copy but the newest [KEEP_PRE_RESTORE], newest by when they were written.
+     * [justWritten] is never on the list, even when a wrong clock makes it look oldest, and neither
+     * are [LATEST] and files Lifts didn't name.
      */
-    fun toDelete(names: Collection<String>): List<String> {
-        val byKind = names.distinct().groupBy { kindOf(it) }
+    fun toDelete(stored: Collection<Stored>, justWritten: String? = null): List<String> {
+        val byKind = stored.distinctBy { it.name }.filter { it.name != justWritten }.groupBy { kindOf(it.name) }
         return Kind.entries.flatMap { kind ->
             val keep = when (kind) {
                 Kind.DATED -> KEEP_DATED
                 Kind.PRE_RESTORE -> KEEP_PRE_RESTORE
-            }
-            byKind[kind].orEmpty().sortedDescending().drop(keep)
+            } - (if (justWritten != null && kindOf(justWritten) == kind) 1 else 0)
+            byKind[kind].orEmpty()
+                .sortedWith(compareByDescending<Stored> { it.writtenAt }.thenByDescending { it.name })
+                .drop(keep)
+                .map { it.name }
         }
     }
 
     /**
-     * Whether Home should back up now, given when the newest dated backup was written ([lastMillis],
-     * null when there is none). A clock set back by more than a day counts as due too, or the
-     * backups would stop until the clock caught up.
+     * When the newest dated backup in [stored] was written, for [isDue]; null when there is none. A file
+     * written in the future (the clock was wrong, then fixed) doesn't count, or Home would believe a
+     * backup was fresh for as long as the clock had been ahead.
      */
-    fun isDue(lastMillis: Long?, now: Long): Boolean =
-        lastMillis == null || now - lastMillis >= DUE_AFTER_MS || lastMillis - now > DUE_AFTER_MS
+    fun lastDated(stored: Collection<Stored>, now: Long): Long? = stored
+        .filter { kindOf(it.name) == Kind.DATED && it.writtenAt <= now + CLOCK_SLACK_MS }
+        .maxOfOrNull { it.writtenAt }
+
+    /** Whether Home should back up now, given [lastDated]. */
+    fun isDue(lastMillis: Long?, now: Long): Boolean = lastMillis == null || now - lastMillis >= DUE_AFTER_MS
 }

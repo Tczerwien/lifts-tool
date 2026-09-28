@@ -81,10 +81,10 @@ class BackupManager(
             BackupFile.writeSettings(temp, SettingsRows.encode(settings.snapshot()))
             BackupFile.integrityProblem(temp)?.let { throw IOException("the copy failed its check: $it") }
             sync(temp)
-            val target = File(dir, BackupPolicy.fileName(kind, now))
+            val target = File(dir, BackupPolicy.uniqueName(kind, now, dir.list().orEmpty().toList()))
             if (!temp.renameTo(target)) throw IOException("cannot name ${target.name}")
             if (kind == BackupPolicy.Kind.DATED) replaceLatest(target)
-            prune()
+            prune(justWritten = target.name)
             Log.i(TAG, "Backup ${target.name}: ${target.length()} B in ${(System.nanoTime() - started) / 1_000_000} ms")
             return target
         } finally {
@@ -98,8 +98,11 @@ class BackupManager(
         Entry(file, kind, file.length(), file.lastModified())
     }.sortedByDescending { it.writtenAt }
 
-    /** When the newest dated backup was written; null when there is none. */
-    fun lastBackupMillis(): Long? = list().firstOrNull { it.kind == BackupPolicy.Kind.DATED }?.writtenAt
+    /** When the newest dated backup was written ([BackupPolicy.lastDated]); null when there is none. */
+    fun lastBackupMillis(now: Long = System.currentTimeMillis()): Long? = BackupPolicy.lastDated(stored(), now)
+
+    private fun stored(): List<BackupPolicy.Stored> =
+        dir.listFiles().orEmpty().map { BackupPolicy.Stored(it.name, it.lastModified()) }
 
     private fun replaceLatest(source: File) {
         val temp = File(dir, LATEST_TEMP_NAME)
@@ -112,8 +115,8 @@ class BackupManager(
         }
     }
 
-    private fun prune() {
-        BackupPolicy.toDelete(dir.list().orEmpty().toList()).forEach { File(dir, it).delete() }
+    private fun prune(justWritten: String) {
+        BackupPolicy.toDelete(stored(), justWritten).forEach { File(dir, it).delete() }
     }
 
     /** Flushes [file] to storage, so a power cut right after the rename can't leave an empty backup. */
