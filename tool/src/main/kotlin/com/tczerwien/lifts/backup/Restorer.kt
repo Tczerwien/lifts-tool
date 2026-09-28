@@ -49,6 +49,8 @@ class Restorer(
         val settingsRestored: Boolean,
         /** Set when the log was restored but the settings could not be. */
         val settingsProblem: String? = null,
+        /** Set when the restored log could not be saved as the newest backup. */
+        val backupProblem: String? = null,
     )
 
     /**
@@ -96,7 +98,9 @@ class Restorer(
      * Restores [prepared]. Call it on the write lane only (inside a LiftsIo block), so no save lands
      * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. The
      * in-workout keys go next (restored ids can repeat), then every row in one transaction, then
-     * the settings. Throws [NothingChanged] when it stopped before the rows were replaced.
+     * the settings. Last, the restored log is saved as the newest dated backup, so lifts-latest.db
+     * holds it rather than what was replaced (on a new install, an empty log). Throws
+     * [NothingChanged] when it stopped before the rows were replaced.
      */
     suspend fun apply(prepared: Prepared): Outcome {
         val safety = try {
@@ -104,19 +108,35 @@ class Restorer(
         } catch (e: Exception) {
             throw NothingChanged("could not save a copy of this phone's log first (${e.message ?: e})")
         }
+        if (!safety.isFile || safety.length() == 0L) throw NothingChanged("the copy of this phone's log went missing")
         try {
             ActiveSession.forgetWorkoutState(dataStore)
             live.replaceAll(prepared.rows)
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
         }
-        if (prepared.settingsRows.isEmpty()) return Outcome(safety.name, settingsRestored = false)
-        return try {
-            settings.replaceAll(SettingsRows.decode(prepared.settingsRows, current = settings.snapshot()))
-            Outcome(safety.name, settingsRestored = true)
-        } catch (e: Exception) {
-            Outcome(safety.name, settingsRestored = false, settingsProblem = e.message ?: e.toString())
+        val settingsProblem = if (prepared.settingsRows.isEmpty()) {
+            null
+        } else {
+            try {
+                settings.replaceAll(SettingsRows.decode(prepared.settingsRows, current = settings.snapshot()))
+                null
+            } catch (e: Exception) {
+                e.message ?: e.toString()
+            }
         }
+        val backupProblem = try {
+            backups.backUp(BackupPolicy.Kind.DATED)
+            null
+        } catch (e: Exception) {
+            e.message ?: e.toString()
+        }
+        return Outcome(
+            preRestore = safety.name,
+            settingsRestored = prepared.settingsRows.isNotEmpty() && settingsProblem == null,
+            settingsProblem = settingsProblem,
+            backupProblem = backupProblem,
+        )
     }
 
     private fun deleteStaged() {

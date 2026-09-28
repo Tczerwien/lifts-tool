@@ -149,13 +149,17 @@ class RestoreViewModel(
                                     else -> "this phone's settings stay"
                                 },
                             )
+                            add(
+                                outcome.backupProblem?.let { "not backed up yet ($it): tap BACK UP NOW in Backups" }
+                                    ?: "saved as the newest backup",
+                            )
                             add("What was here before is in Backups as ${outcome.preRestore}.")
                         },
                     )
                 },
                 onFailure = { failure ->
                     val why = failure.message ?: failure.toString()
-                    Phase.Failed(if (failure is Restorer.NothingChanged) "$why. Nothing on this phone changed." else why)
+                    Phase.Failed(if (failure is Restorer.NothingChanged) "$why. Your log and settings are as they were." else why)
                 },
             )
             _uiState.update { it.copy(phase = phase) }
