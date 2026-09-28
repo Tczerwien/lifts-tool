@@ -43,7 +43,7 @@ class BackupsViewModel(
     private val backups: BackupManager,
 ) : LightViewModel<Unit>() {
 
-    data class Row(val name: String, val detail: String)
+    data class Row(val name: String, val detail: String, val path: String)
 
     data class UiState(
         val rows: List<Row> = emptyList(),
@@ -77,6 +77,7 @@ class BackupsViewModel(
         val rows = backups.list().map { entry ->
             val detail = "${Format.dateTime(entry.writtenAt)} · ${Format.fileSize(entry.sizeBytes)}"
             Row(
+                path = entry.file.absolutePath,
                 name = entry.file.name,
                 detail = when (entry.kind) {
                     BackupPolicy.Kind.DATED -> detail
@@ -156,6 +157,7 @@ class BackupsScreen(
                     uiState.rows.forEachIndexed { index, row ->
                         if (index > 0) RowDivider()
                         LiftsListRow(
+                            onClick = { navigateTo({ RestoreScreen(it, row.path, fromUpload = false) }) },
                             left = {
                                 Column {
                                     LightText(
@@ -178,7 +180,7 @@ class BackupsScreen(
                     SectionLabel("Tool Manager")
                     LightText(
                         text = "Download them on a computer: Tool Manager › Lifts › Backups. " +
-                            "Each one is the whole log and your settings.",
+                            "Each one is the whole log and your settings; tap one to restore it.",
                         variant = LightTextVariant.Detail,
                         lighten = true,
                         modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp()),

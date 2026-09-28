@@ -13,6 +13,8 @@ internal object BackupFile {
     /** Settings rows ([com.tczerwien.lifts.settings.SettingsRows]) ride along in the copy. */
     const val SETTINGS_TABLE = "lifts_settings"
 
+    private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
+
     private fun open(file: File, writable: Boolean): SQLiteDatabase {
         val params = SQLiteDatabase.OpenParams.Builder()
             .setOpenFlags(if (writable) SQLiteDatabase.OPEN_READWRITE else SQLiteDatabase.OPEN_READONLY)
@@ -40,15 +42,29 @@ internal object BackupFile {
     }
 
     /** The settings rows in [file]; empty when it has none (a database pulled over adb, say). */
-    fun readSettings(file: File): Map<String, String> = open(file, writable = false).use { db ->
-        val exists = db.rawQuery(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
-            arrayOf(SETTINGS_TABLE),
-        ).use { it.moveToFirst() }
-        if (!exists) return@use emptyMap()
-        db.rawQuery("SELECT key, value FROM $SETTINGS_TABLE", null).use { cursor ->
-            buildMap { while (cursor.moveToNext()) put(cursor.getString(0), cursor.getString(1)) }
+    fun readSettings(file: File): Map<String, String> {
+        if (!hasTable(file, SETTINGS_TABLE)) return emptyMap()
+        return open(file, writable = false).use { db ->
+            db.rawQuery("SELECT key, value FROM $SETTINGS_TABLE", null).use { cursor ->
+                buildMap { while (cursor.moveToNext()) put(cursor.getString(0), cursor.getString(1)) }
+            }
         }
+    }
+
+    /** Whether [file] starts like an SQLite database, checked before SQLite is asked to open it. */
+    fun looksLikeSqlite(file: File): Boolean {
+        val header = ByteArray(SQLITE_HEADER.size)
+        val read = file.inputStream().use { it.read(header) }
+        return read == header.size && header.contentEquals(SQLITE_HEADER)
+    }
+
+    /** PRAGMA user_version: the Room schema version that wrote [file], 0 for a database Room never opened. */
+    fun userVersion(file: File): Int = open(file, writable = false).use { db ->
+        db.rawQuery("PRAGMA user_version", null).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+    }
+
+    fun hasTable(file: File, table: String): Boolean = open(file, writable = false).use { db ->
+        db.rawQuery("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", arrayOf(table)).use { it.moveToFirst() }
     }
 
     /** SQLite's own check of every page and index; null when [file] is sound, else what it found. */

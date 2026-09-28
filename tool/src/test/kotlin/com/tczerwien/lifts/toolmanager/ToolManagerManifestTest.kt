@@ -36,9 +36,16 @@ class ToolManagerManifestTest {
             listOf(
                 Folder("FileBrowserSpec", "Exports", LiftsToolManager.EXPORTS, readOnly = true),
                 Folder("FileBrowserSpec", "Backups", LiftsToolManager.BACKUPS, readOnly = true),
+                Folder("DropboxSpec", "Restore", LiftsToolManager.RESTORE, readOnly = false),
             ),
             folders,
         )
+    }
+
+    @Test
+    fun `the Restore box takes uploads under a button`() {
+        val restore = json.getValue("roots").jsonArray.last().jsonObject.getValue("spec").jsonObject
+        assertEquals("Upload backup", restore.getValue("buttonText").jsonPrimitive.content)
     }
 
     @Test

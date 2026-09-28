@@ -1,0 +1,130 @@
+package com.tczerwien.lifts.backup
+
+import android.database.sqlite.SQLiteException
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import com.tczerwien.lifts.data.LiftsDatabase
+import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.LiftsRows
+import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.settings.SettingsRows
+import com.tczerwien.lifts.settings.SettingsStore
+import java.io.File
+
+/**
+ * Puts a backup's log and settings in place of what is on the phone, in two steps. [prepare] reads
+ * a private copy of the file and says what it holds; nothing on the phone changes. [apply], after
+ * the lifter has confirmed, saves a pre-restore backup first, then replaces every row in one
+ * transaction and restores the settings.
+ */
+class Restorer(
+    /** Private (not under files/shared): where the copy is read. */
+    private val stagingDir: File,
+    /** Opens a file with Room by absolute path, so a backup from an older schema is migrated first. */
+    private val openStaged: (File) -> LiftsDatabase,
+    private val live: LiftsRepository,
+    private val settings: SettingsStore,
+    private val dataStore: DataStore<Preferences>,
+    private val backups: BackupManager,
+) {
+    /** A backup read and checked, held in memory until it is applied or dropped. */
+    class Prepared internal constructor(
+        val source: File,
+        val rows: LiftsRows,
+        /** Empty when the file carries no settings (a database pulled over adb): the phone's stay. */
+        val settingsRows: Map<String, String>,
+    ) {
+        val summary: RestorePlan.Summary = RestorePlan.summarize(rows)
+    }
+
+    /** [prepare] turned the file down; the message says why, in words a lifter can act on. */
+    class Refused(message: String) : Exception(message)
+
+    /** [apply] stopped before replacing anything: the log and the settings are as they were. */
+    class NothingChanged(message: String) : Exception(message)
+
+    data class Outcome(
+        /** The pre-restore backup's file name. */
+        val preRestore: String,
+        val settingsRestored: Boolean,
+        /** Set when the log was restored but the settings could not be. */
+        val settingsProblem: String? = null,
+    )
+
+    /**
+     * Copies [source] aside, checks it and reads every row; throws [Refused]. Touches only the copy,
+     * so it needn't wait for the write lane; one prepare runs at a time.
+     */
+    @Synchronized
+    fun prepare(source: File): Prepared {
+        val staged = File(stagingDir, STAGED_NAME)
+        try {
+            deleteStaged()
+            if (!source.isFile) throw Refused("the file is gone")
+            if (!stagingDir.isDirectory && !stagingDir.mkdirs()) throw Refused("no room to read it")
+            source.copyTo(staged, overwrite = true)
+            if (!BackupFile.looksLikeSqlite(staged)) throw Refused("it isn't a Lifts backup (not a database file)")
+            val settingsRows = try {
+                BackupFile.integrityProblem(staged)?.let { throw Refused("the file is damaged: $it") }
+                val version = BackupFile.userVersion(staged)
+                if (version <= 0 || !BackupFile.hasTable(staged, ROOM_TABLE)) throw Refused("it isn't a Lifts backup")
+                if (version > LiftsDatabase.VERSION) throw Refused("a newer Lifts made it; update Lifts first")
+                BackupFile.readSettings(staged)
+            } catch (e: SQLiteException) {
+                // SQLite can't even read it: typically a copy that was cut short.
+                throw Refused("the file is damaged or incomplete")
+            }
+            val rows = try {
+                val db = openStaged(staged)
+                try {
+                    LiftsRepository.readAll(db)
+                } finally {
+                    db.close()
+                }
+            } catch (e: Exception) {
+                throw Refused("Lifts can't read it (${e.message ?: e})")
+            }
+            val problems = RestorePlan.problems(rows)
+            if (problems.isNotEmpty()) throw Refused("it is damaged: ${problems.joinToString("; ")}")
+            return Prepared(source, rows, settingsRows)
+        } finally {
+            deleteStaged()
+        }
+    }
+
+    /**
+     * Restores [prepared]. Call it on the write lane only (inside a LiftsIo block), so no save lands
+     * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. The
+     * in-workout keys go next (restored ids can repeat), then every row in one transaction, then
+     * the settings. Throws [NothingChanged] when it stopped before the rows were replaced.
+     */
+    suspend fun apply(prepared: Prepared): Outcome {
+        val safety = try {
+            backups.backUp(BackupPolicy.Kind.PRE_RESTORE)
+        } catch (e: Exception) {
+            throw NothingChanged("could not save a copy of this phone's log first (${e.message ?: e})")
+        }
+        try {
+            ActiveSession.forgetWorkoutState(dataStore)
+            live.replaceAll(prepared.rows)
+        } catch (e: Exception) {
+            throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
+        }
+        if (prepared.settingsRows.isEmpty()) return Outcome(safety.name, settingsRestored = false)
+        return try {
+            settings.replaceAll(SettingsRows.decode(prepared.settingsRows, current = settings.snapshot()))
+            Outcome(safety.name, settingsRestored = true)
+        } catch (e: Exception) {
+            Outcome(safety.name, settingsRestored = false, settingsProblem = e.message ?: e.toString())
+        }
+    }
+
+    private fun deleteStaged() {
+        listOf("", "-journal", "-wal", "-shm").forEach { File(stagingDir, STAGED_NAME + it).delete() }
+    }
+
+    private companion object {
+        const val STAGED_NAME = "incoming.db"
+        const val ROOM_TABLE = "room_master_table"
+    }
+}

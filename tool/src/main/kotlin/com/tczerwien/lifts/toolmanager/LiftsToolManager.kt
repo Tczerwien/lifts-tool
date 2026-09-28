@@ -2,6 +2,7 @@ package com.tczerwien.lifts.toolmanager
 
 import com.thelightphone.toolmanager.ClientLeafNode
 import com.thelightphone.toolmanager.ClientToolManifest
+import com.thelightphone.toolmanager.DropboxSpec
 import com.thelightphone.toolmanager.FileBrowserSpec
 
 /**
@@ -15,6 +16,9 @@ object LiftsToolManager {
 
     /** files/shared/backups: whole-log backups, written by BackupManager. */
     const val BACKUPS = "backups"
+
+    /** files/shared/restore: where a backup is uploaded to be restored. */
+    const val RESTORE = "restore"
 
     fun manifest(): ClientToolManifest = ClientToolManifest(
         title = "Lifts",
@@ -36,6 +40,15 @@ object LiftsToolManager {
                         "lifts-latest.db is always the newest. To bring one back, upload it to Restore.",
                 ),
                 readOnly = true,
+            ),
+            ClientLeafNode(
+                spec = DropboxSpec(
+                    label = "Restore",
+                    path = RESTORE,
+                    headerText = "Upload a Lifts backup (.db) here, then open Lifts: it shows what the file holds " +
+                        "and asks before replacing anything. What is on the phone is saved first.",
+                    buttonText = "Upload backup",
+                ),
             ),
         ),
     )

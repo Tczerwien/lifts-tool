@@ -19,6 +19,7 @@ import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.shouldAutoResume
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsEntryPoint
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.ArmedAction
@@ -45,10 +46,13 @@ import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class HomeViewModel(
     private val repository: LiftsRepository,
@@ -62,6 +66,9 @@ class HomeViewModel(
 
     data class RecentRow(val workoutId: Long, val name: String, val dateMillis: Long, val setCount: Int)
 
+    /** A file uploaded to Tool Manager › Lifts › Restore, waiting to be checked. */
+    data class RestoreWaiting(val name: String, val path: String)
+
     /** A Start row tapped while a workout is open; [templateId] null is Empty Workout. */
     data class StartChoice(val templateId: Long?)
 
@@ -71,6 +78,7 @@ class HomeViewModel(
         val recent: List<RecentRow> = emptyList(),
         /** Expanded under its Start row: "Resume <open workout>" or "Discard and start". */
         val startChoice: StartChoice? = null,
+        val restoreWaiting: RestoreWaiting? = null,
         /** One-shot: Content opens this workout straight away (a cold start mid-workout). */
         val autoResumeWorkoutId: Long? = null,
         /**
@@ -100,6 +108,18 @@ class HomeViewModel(
     /** Guards [appliedLoad], the newest load on screen. */
     private val loadLock = Any()
     private var appliedLoad = 0L
+
+    init {
+        // An upload through Tool Manager while Home is on screen shows up without leaving Home.
+        viewModelScope.launch(Dispatchers.IO) {
+            LiftsEntryPoint.inbox.drop(1).collect {
+                if (showing) {
+                    val waiting = share.waitingRestore()?.let { RestoreWaiting(it.name, it.absolutePath) }
+                    _uiState.update { it.copy(restoreWaiting = waiting) }
+                }
+            }
+        }
+    }
 
     /**
      * Loads on every show, on the write lane: that orders it after anything Active Workout queued on
@@ -195,6 +215,7 @@ class HomeViewModel(
             )
         }
         return UiState(
+            restoreWaiting = share.waitingRestore()?.let { RestoreWaiting(it.name, it.absolutePath) },
             templates = templates,
             unfinished = open?.let { UnfinishedRow(workoutId = it.id, name = it.name, startedAt = it.startedAt) },
             recent = recent,
@@ -280,6 +301,29 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                         .weight(1f)
                         .fillMaxWidth(),
                 ) {
+                    uiState.restoreWaiting?.let { waiting ->
+                        SectionLabel("Restore")
+                        LiftsListRow(
+                            onClick = { navigateTo({ RestoreScreen(it, waiting.path, fromUpload = true) }) },
+                            left = {
+                                LightText(
+                                    text = waiting.name,
+                                    variant = LightTextVariant.Copy,
+                                    monospace = true,
+                                    maxLines = 1,
+                                )
+                            },
+                            right = {
+                                LightText(
+                                    text = "Check",
+                                    variant = LightTextVariant.Detail,
+                                    lighten = true,
+                                    maxLines = 1,
+                                )
+                            },
+                        )
+                    }
+
                     uiState.unfinished?.let { unfinished ->
                         SectionLabel("In Progress")
                         LiftsListRow(
