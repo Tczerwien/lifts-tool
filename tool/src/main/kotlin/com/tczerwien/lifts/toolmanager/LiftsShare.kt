@@ -8,6 +8,7 @@ import com.tczerwien.lifts.session.LiftsIo
 import com.thelightphone.sdk.SealedLightContext
 import com.thelightphone.toolmanager.LightFileProvider
 import java.io.File
+import kotlinx.coroutines.launch
 
 /**
  * The folders Tool Manager serves (files/shared/<folder>) and the one writer for each. Like the
@@ -30,8 +31,11 @@ class LiftsShare private constructor(root: File, repository: LiftsRepository) {
             }
         }
 
-        internal fun create(filesDir: File, repository: LiftsRepository) =
-            LiftsShare(File(filesDir, LightFileProvider.SHARED_DIR), repository)
+        internal fun create(filesDir: File, repository: LiftsRepository): LiftsShare {
+            // The Wi-Fi share server (removed in 0.7.0) wrote its copies to the private files/exports.
+            LiftsIo.scope.launch { File(filesDir, "exports").deleteRecursively() }
+            return LiftsShare(File(filesDir, LightFileProvider.SHARED_DIR), repository)
+        }
     }
 }
 

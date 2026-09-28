@@ -51,7 +51,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "src/main/assets/r8/lifts-rules.txt")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
             signingConfig = signingConfigs.getByName("lightsdkDev")
         }
     }
@@ -81,9 +81,6 @@ ksp {
 
 dependencies {
     implementation(project(":sdk:client"))
-    // Wi-Fi share server for the Export screen; io.ktor is allowlisted by prefix.
-    implementation(libs.ktor.server.core)
-    implementation("io.ktor:ktor-server-cio:${libs.versions.ktor.get()}")
     testImplementation(libs.kotlin.test)
     ksp(libs.androidx.room.compiler)
 }

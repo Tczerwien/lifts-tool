@@ -1,7 +1,0 @@
-# R8 rules for the release build. This lives under src/main/assets because Light's builder copies
-# only src/main (a proguard-rules.pro next to build.gradle.kts would never reach it).
-#
-# ktor's debugger detector references desktop-only JMX classes that Android lacks. Temporary: the
-# ktor Wi-Fi export server is being replaced by Tool Manager, and this file goes with it.
--dontwarn java.lang.management.ManagementFactory
--dontwarn java.lang.management.RuntimeMXBean
