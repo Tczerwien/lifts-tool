@@ -41,4 +41,13 @@ object LiftsIo {
 
     /** [write] without a follow-up. */
     fun write(block: suspend () -> Unit): Job = write(block, after = {})
+
+    /**
+     * Runs [block] on the write lane, after every write already queued, and returns its result to a
+     * caller that waits for it. For reads that must see a consistent picture (a snapshot of every
+     * table, a backup) and for work that must not interleave with saves. Never call it from inside a
+     * lane block: the lane is not re-entrant.
+     */
+    suspend fun <T> inLane(block: suspend () -> T): T =
+        writeLane.withLock { withContext(Dispatchers.IO) { block() } }
 }

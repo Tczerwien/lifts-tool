@@ -27,4 +27,13 @@ class LiftsIoTest {
         runBlocking { jobs.joinAll() }
         assertEquals((1..200).toList(), order)
     }
+
+    @Test
+    fun `inLane runs after the writes queued before it and returns its result`() {
+        val order = Collections.synchronizedList(mutableListOf<Int>())
+        val jobs = (1..50).map { i -> LiftsIo.write { order += i } }
+        val seen = runBlocking { LiftsIo.inLane { order.toList() } }
+        runBlocking { jobs.joinAll() }
+        assertEquals((1..50).toList(), seen)
+    }
 }

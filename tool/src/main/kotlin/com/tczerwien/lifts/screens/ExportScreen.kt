@@ -2,25 +2,16 @@ package com.tczerwien.lifts.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.lifecycle.viewModelScope
-import com.tczerwien.lifts.data.LiftsRepository
-import com.tczerwien.lifts.data.liftsRepository
-import com.tczerwien.lifts.export.CsvExport
-import com.tczerwien.lifts.export.JsonExport
-import com.tczerwien.lifts.export.MarkdownExport
-import com.tczerwien.lifts.export.buildSnapshot
-import com.tczerwien.lifts.server.ExportServer
+import com.tczerwien.lifts.export.ExportWriter
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -41,18 +32,16 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import java.io.File
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import kotlin.math.roundToLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ExportViewModel(
-    private val repository: LiftsRepository,
+    private val writer: ExportWriter,
     private val exportsDir: File,
 ) : LightViewModel<Unit>() {
 
@@ -60,156 +49,78 @@ class ExportViewModel(
 
     data class UiState(
         val files: List<FileRow> = emptyList(),
-        val running: Boolean = false,
-        /** LAN IPv4 while the server runs, e.g. "192.168.1.42". */
-        val host: String? = null,
-        /** contentSecondary status/error line shown while the server is off. */
-        val message: String? = null,
+        /** A run is going or queued: "preparing files…", REGENERATE off. */
+        val preparing: Boolean = false,
+        /** Why the latest run failed; the files listed are the ones from the run before. */
+        val error: String? = null,
     )
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** Guarded by synchronized(this); non-null exactly while a share session is live. */
-    private var server: ExportServer? = null
-
-    @Volatile
-    private var foreground = false
+    init {
+        // The file rows follow the writer: each run that ends (or fails) re-reads them.
+        viewModelScope.launch(Dispatchers.IO) {
+            writer.status.collect { status ->
+                val rows = fileRows()
+                _uiState.update {
+                    it.copy(
+                        files = rows,
+                        preparing = status is ExportWriter.Status.Preparing,
+                        error = (status as? ExportWriter.Status.Failed)?.message,
+                    )
+                }
+            }
+        }
+    }
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        foreground = true
         viewModelScope.launch(Dispatchers.IO) {
-            if (ExportServer.FILE_NAMES.any { !File(exportsDir, it).isFile }) {
-                writeExportFiles()
-            }
-            refreshFiles()
+            if (ExportWriter.FILE_NAMES.any { !File(exportsDir, it).isFile }) writer.request()
+            val rows = fileRows()
+            _uiState.update { it.copy(files = rows) }
         }
     }
 
-    // The share server is strictly foreground-only: LightOS tools have no background
-    // execution, so leaving the screen or pausing the app (screen off, home) ends the
-    // session. Shutdown must be synchronous here: on the back path the SDK destroys the
-    // screen right after hiding it, cancelling viewModelScope before a launched coroutine
-    // would get to run.
-    override fun onScreenHide(screen: SimpleLightScreen<Unit>) {
-        foreground = false
-        shutdownServer()
+    /** REGENERATE: rewrites every file from the data as it is now. Taps during a run fold into one. */
+    fun regenerate() {
+        writer.request()
     }
 
-    override fun onAppPause() {
-        foreground = false
-        shutdownServer()
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        foreground = false
-        shutdownServer()
-    }
-
-    /** START — regenerates all export files, then serves them (design-card caption). */
-    fun startSharing() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val host = ExportServer.siteLocalAddress()
-            if (host == null) {
-                _uiState.update {
-                    it.copy(message = "no wi-fi connection · join a network and try again")
-                }
-                return@launch
-            }
-            writeExportFiles()
-            refreshFiles()
-            val candidate = ExportServer(exportsDir)
-            val claimed = synchronized(this@ExportViewModel) {
-                if (server == null) {
-                    server = candidate
-                    true
-                } else {
-                    false
-                }
-            }
-            if (!claimed) return@launch
-            runCatching { candidate.start() }
-                .onSuccess {
-                    _uiState.update { it.copy(running = true, host = host, message = null) }
-                    // Hidden/paused while the port was binding — do not keep serving.
-                    if (!foreground) shutdownServer()
-                }
-                .onFailure {
-                    synchronized(this@ExportViewModel) { if (server === candidate) server = null }
-                    _uiState.update { it.copy(message = "could not start the server · try again") }
-                }
-        }
-    }
-
-    /** STOP bottom-bar button. */
-    fun stopSharing() {
-        viewModelScope.launch(Dispatchers.IO) { shutdownServer() }
-    }
-
-    private fun shutdownServer() {
-        val live = synchronized(this) { server?.also { server = null } }
-        live?.stop()
-        _uiState.update { it.copy(running = false, host = null) }
-    }
-
-    /**
-     * Builds one snapshot from the full repository and writes all four export files into
-     * [exportsDir]. Storage is canonical kg; the generators own all formatting.
-     */
-    private suspend fun writeExportFiles() = withContext(Dispatchers.IO) {
-        val workouts = repository.listWorkouts()
-        val snapshot = buildSnapshot(
-            exercises = repository.listExercises(),
-            workouts = workouts,
-            workoutExercises = repository.listAllWorkoutExercises(),
-            sets = repository.listAllSets(),
-            bodyweight = repository.listBodyweight(),
-            bars = repository.listBars(),
-            exportedAtIso = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
-            goals = null,
-            injuries = emptyList(),
+    private fun fileRows(): List<FileRow> = ExportWriter.FILE_NAMES.map { name ->
+        val file = File(exportsDir, name)
+        FileRow(
+            name = name,
+            detail = if (file.isFile) {
+                "updated ${Format.dateTime(file.lastModified())} · ${sizeLabel(file.length())}"
+            } else {
+                "not written yet"
+            },
         )
-        exportsDir.mkdirs()
-        File(exportsDir, ExportServer.FILE_TRAINING_LOG).writeText(MarkdownExport.render(snapshot))
-        File(exportsDir, ExportServer.FILE_WORKOUTS_JSON).writeText(JsonExport.render(snapshot))
-        File(exportsDir, ExportServer.FILE_STRONG_CSV).writeText(CsvExport.render(snapshot))
-        File(exportsDir, ExportServer.FILE_BODYWEIGHT_CSV).writeText(CsvExport.renderBodyweight(snapshot))
     }
 
-    private fun refreshFiles() {
-        val rows = ExportServer.FILE_NAMES.map { name ->
-            val file = File(exportsDir, name)
-            FileRow(
-                name = name,
-                detail = if (file.isFile) {
-                    "updated ${Format.dateShort(file.lastModified())} · ${ExportServer.sizeLabel(file.length())}"
-                } else {
-                    "not generated yet"
-                },
-            )
-        }
-        _uiState.update { it.copy(files = rows) }
+    companion object {
+        /** "412 B" under a KB, otherwise rounded to whole KB ("48 KB"). */
+        fun sizeLabel(bytes: Long): String =
+            if (bytes < 1024) "$bytes B" else "${(bytes / 1024.0).roundToLong()} KB"
     }
 }
 
 /**
- * Export (design/screens/export.html): one row per generated export file, then a Wi-Fi
- * Share section. OFF shows a hint (or a no-wi-fi message) and a START bottom-bar button;
- * ON shows the http:// address, a hint and "server running", with STOP in the bottom bar.
- * Files regenerate on every START.
+ * Export (design/screens/export.html): one row per export file, then where to get them. The files
+ * live in files/shared/exports, which Tool Manager serves as Lifts › Exports; they are rewritten
+ * after every workout, and REGENERATE rewrites them now.
  */
 class ExportScreen(
     private val sealedActivity: SealedLightActivity,
 ) : LightScreen<Unit, ExportViewModel>(sealedActivity) {
 
-    private val repository = lightContext.liftsRepository()
+    private val share = lightContext.liftsShare()
 
     override val viewModelClass: Class<ExportViewModel>
         get() = ExportViewModel::class.java
 
-    override fun createViewModel() =
-        ExportViewModel(repository, File(lightContext.filesDir, ExportServer.EXPORTS_DIR_NAME))
+    override fun createViewModel() = ExportViewModel(share.exports, share.exportsDir)
 
     @Composable
     override fun Content() {
@@ -256,65 +167,39 @@ class ExportScreen(
                         )
                     }
 
-                    SectionLabel("Wi-Fi Share")
-
-                    val host = uiState.host
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 0.5f.gridUnitsAsDp()),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        if (uiState.running && host != null) {
-                            LightText(
-                                text = "http://",
-                                variant = LightTextVariant.Detail,
-                                lighten = true,
-                            )
-                            LightText(
-                                text = "$host:${ExportServer.PORT}",
-                                variant = LightTextVariant.Heading,
-                                monospace = true,
-                                maxLines = 1,
-                            )
-                            Spacer(modifier = Modifier.height(0.75f.gridUnitsAsDp()))
-                            LightText(
-                                text = "open on a device on the same network",
-                                variant = LightTextVariant.Detail,
-                                lighten = true,
-                                align = TextAlign.Center,
-                            )
-                            Spacer(modifier = Modifier.height(0.75f.gridUnitsAsDp()))
-                            LightText(
-                                text = "SERVER RUNNING",
-                                variant = LightTextVariant.Superfine,
-                                lighten = true,
-                            )
-                        } else {
-                            LightText(
-                                text = uiState.message ?: "start the server to share over wi-fi",
-                                variant = LightTextVariant.Detail,
-                                lighten = true,
-                                align = TextAlign.Center,
-                                modifier = Modifier.padding(horizontal = 2f.gridUnitsAsDp()),
-                            )
-                            Spacer(modifier = Modifier.height(0.75f.gridUnitsAsDp()))
-                            LightText(
-                                text = "SERVER OFF",
-                                variant = LightTextVariant.Superfine,
-                                lighten = true,
-                            )
-                        }
+                    SectionLabel("Tool Manager")
+                    LightText(
+                        text = "Download them on a computer: Tool Manager › Lifts › Exports. " +
+                            "They are rewritten after every workout.",
+                        variant = LightTextVariant.Detail,
+                        lighten = true,
+                        modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp()),
+                    )
+                    val status = when {
+                        uiState.preparing -> "preparing files…"
+                        uiState.error != null -> "could not write the files · ${uiState.error}"
+                        else -> null
+                    }
+                    if (status != null) {
+                        LightText(
+                            text = status,
+                            variant = LightTextVariant.Detail,
+                            lighten = true,
+                            modifier = Modifier.padding(
+                                start = 1f.gridUnitsAsDp(),
+                                end = 1f.gridUnitsAsDp(),
+                                top = 0.75f.gridUnitsAsDp(),
+                            ),
+                        )
                     }
                 }
 
                 LightBottomBar(
                     items = listOf(
-                        if (uiState.running) {
-                            LightBarButton.Text(text = "STOP", onClick = { viewModel.stopSharing() })
-                        } else {
-                            LightBarButton.Text(text = "START", onClick = { viewModel.startSharing() })
-                        },
+                        LightBarButton.Text(
+                            text = "REGENERATE",
+                            onClick = if (uiState.preparing) null else ({ viewModel.regenerate() }),
+                        ),
                     ),
                 )
             }

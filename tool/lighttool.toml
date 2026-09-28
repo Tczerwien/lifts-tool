@@ -4,7 +4,7 @@ label = "Lifts"
 versionCode = 6
 versionName = "0.6.0"
 permissions = ["android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
-capabilities = []
+capabilities = ["tool-manager-provider"]
 orientation = "portrait"
 # Real LP3. For the LightOS emulator app use "com.thelightphone.sdk.emulator" instead.
 serverPackage = "com.lightos"

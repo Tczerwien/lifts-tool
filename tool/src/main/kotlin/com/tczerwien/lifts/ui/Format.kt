@@ -150,10 +150,15 @@ object Format {
 
     private val dateShortFormatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
     private val dateWithYearFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
+    private val dateTimeFormatter = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.US)
 
     /** "Jul 18" */
     fun dateShort(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
         dateShortFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
+
+    /** "Jul 18 14:05", for files rewritten several times a day (exports, backups). */
+    fun dateTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+        dateTimeFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
 
     /** "Jul 18, 2026" */
     fun dateWithYear(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =

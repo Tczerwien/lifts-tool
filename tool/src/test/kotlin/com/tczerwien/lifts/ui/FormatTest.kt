@@ -166,6 +166,13 @@ class FormatTest {
     }
 
     @Test
+    fun `dateTime adds a 24-hour clock in the given zone`() {
+        assertEquals("Jul 18 14:05", Format.dateTime(millis("2026-07-18T14:05:59Z"), utc))
+        assertEquals("Jan 5 00:00", Format.dateTime(millis("2026-01-05T00:00:00Z"), utc))
+        assertEquals("Jul 19 01:30", Format.dateTime(millis("2026-07-18T23:30:00Z"), ZoneId.of("UTC+2")))
+    }
+
+    @Test
     fun `date with year appends the year`() {
         assertEquals("Jul 18, 2026", Format.dateWithYear(millis("2026-07-18T12:00:00Z"), utc))
     }
