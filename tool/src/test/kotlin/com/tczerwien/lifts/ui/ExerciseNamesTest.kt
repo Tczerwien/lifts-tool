@@ -4,6 +4,7 @@ import com.tczerwien.lifts.seed.SeedParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ExerciseNamesTest {
@@ -61,6 +62,43 @@ class ExerciseNamesTest {
         val shownNames = catalog.values.map(::displayName)
         val clashes = shownNames.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
         assertTrue(clashes.isEmpty(), "shown twice: $clashes")
+    }
+
+    // --- Renaming ---
+
+    private val bench get() = catalog.getValue("barbell-bench-press-medium-grip")
+    private val benchCatalogName = "Barbell Bench Press - Medium Grip"
+
+    @Test
+    fun `a rename stores the typed name, on one line with single spaces`() {
+        assertEquals("Flat Bench", renameTarget(bench, "Flat Bench", shown = "Bench Press") { benchCatalogName })
+        assertEquals("Flat Bench", renameTarget(bench, "  Flat \n Bench\n", shown = "Bench Press") { benchCatalogName })
+    }
+
+    @Test
+    fun `submitting the name the editor showed changes nothing`() {
+        assertNull(renameTarget(bench, "Bench Press", shown = "Bench Press") { benchCatalogName })
+        assertNull(renameTarget(bench, " Bench Press ", shown = "Bench Press") { benchCatalogName })
+    }
+
+    @Test
+    fun `blank puts a renamed catalog lift back, and leaves a custom one alone`() {
+        val renamed = bench.copy(name = "Flat Bench")
+        assertEquals(benchCatalogName, renameTarget(renamed, "  ", shown = "Flat Bench") { benchCatalogName })
+        // Never renamed: blank has nothing to undo.
+        assertNull(renameTarget(bench, "", shown = "Bench Press") { benchCatalogName })
+        val custom = bench.copy(id = "custom-1", name = "My Press", isCustom = true)
+        assertNull(renameTarget(custom, "", shown = "My Press") { error("a custom lift has no catalog name") })
+    }
+
+    @Test
+    fun `the catalog is read only for a blank reset`() {
+        var asked = 0
+        renameTarget(bench, "Flat Bench", shown = "Bench Press") { asked++; benchCatalogName }
+        renameTarget(bench, "Bench Press", shown = "Bench Press") { asked++; benchCatalogName }
+        assertEquals(0, asked)
+        assertEquals(benchCatalogName, knownCatalogName("barbell-bench-press-medium-grip"))
+        assertNull(knownCatalogName("barbell-guillotine-bench-press"))
     }
 
     @Test

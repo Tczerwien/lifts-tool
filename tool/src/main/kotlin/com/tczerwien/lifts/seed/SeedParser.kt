@@ -55,13 +55,17 @@ internal object SeedParser {
     }
 
     /**
+     * The catalog's own name for exercise [id] (an app id, as [parse] makes them); null for none.
+     * Parses the whole catalog: call it off the main thread, and only when [knownCatalogName] can't
+     * answer.
+     */
+    fun catalogName(id: String): String? = parse().firstOrNull { it.id == id }?.name
+
+    /**
      * Which numbers a seeded exercise records by default. The dataset has no such field, so this
      * is inferred: holds, stretches and cardio are timed; bodyweight moves count reps only; a few
      * known ids are weighted or assisted bodyweight; everything else is weight x reps.
      */
-    /** The catalog's own name for exercise [id] (an app id, as [parse] makes them); null for none. Parses the catalog: call off the main thread. */
-    fun catalogName(id: String): String? = parse().firstOrNull { it.id == id }?.name
-
     internal fun defaultTrackingType(slug: String, category: String, equipment: String?): String = when {
         slug in DURATION_IDS || category == "stretching" || category == "cardio" -> TRACKING_DURATION
         slug in ASSISTED_IDS -> TRACKING_ASSISTED_BODYWEIGHT

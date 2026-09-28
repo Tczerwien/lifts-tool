@@ -104,6 +104,26 @@ fun displayName(exercise: ExerciseEntity): String =
         ?.short
         ?: exercise.name.trim()
 
+/** The catalog name of a lift with a short name, without reading the catalog; null for the others. */
+fun knownCatalogName(id: String): String? = SHORT_NAMES[id]?.catalogName
+
+/**
+ * What a rename submitted as [typed] should store for [exercise], or null to leave it alone.
+ * Whitespace runs (a Return included) collapse to single spaces. Submitting [shown], the name the
+ * editor opened with, changes nothing. Blank puts a catalog exercise back to its catalog name
+ * ([catalogName], asked only then) and so back to its short name; a custom exercise keeps its name.
+ */
+fun renameTarget(exercise: ExerciseEntity, typed: String, shown: String, catalogName: () -> String?): String? {
+    val name = typed.replace(Regex("\\s+"), " ").trim()
+    if (name == shown.trim()) return null
+    val target = when {
+        name.isNotEmpty() -> name
+        exercise.isCustom -> return null
+        else -> catalogName() ?: return null
+    }
+    return target.takeIf { it != exercise.name }
+}
+
 /** Short name by id, for tests. */
 internal val shortNames: Map<String, String> get() = SHORT_NAMES.mapValues { it.value.short }
 

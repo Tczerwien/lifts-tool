@@ -48,6 +48,8 @@ import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.displayName
+import com.tczerwien.lifts.ui.knownCatalogName
+import com.tczerwien.lifts.ui.renameTarget
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -105,6 +107,8 @@ class ExerciseDetailViewModel(
         /** The full-screen editor showing, if any: the pinned note or the name. */
         val editing: Editing? = null,
         val editSession: Int = 0,
+        /** The name the name editor opened with: submitting it unchanged does nothing ([renameTarget]). */
+        val nameAtOpen: String = "",
         val loaded: Boolean = false,
     )
 
@@ -142,7 +146,7 @@ class ExerciseDetailViewModel(
     private fun openEditor(editing: Editing) {
         val state = _uiState.value
         if (!state.loaded) return
-        _uiState.value = state.copy(editing = editing, editSession = state.editSession + 1)
+        _uiState.value = state.copy(editing = editing, editSession = state.editSession + 1, nameAtOpen = state.name)
     }
 
     fun closeEditor() {
@@ -161,19 +165,19 @@ class ExerciseDetailViewModel(
     }
 
     /**
-     * Renames the exercise: the new name shows everywhere, exports included, over any short name
-     * ([displayName]). Submitting the name as shown changes nothing. A blank name puts a catalog
-     * exercise back to its catalog name, and so back to its short name if it has one; a custom
-     * exercise keeps its name.
+     * Renames the exercise ([renameTarget]): the new name shows everywhere, exports included, over any
+     * short name ([displayName]). Submitting the name as the editor showed it changes nothing; a blank
+     * name puts a catalog exercise back to its catalog name.
      */
     fun saveName(raw: String) {
+        val shown = _uiState.value.nameAtOpen
         _uiState.value = _uiState.value.copy(editing = null)
-        val typed = raw.trim()
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write
-            if (typed == displayName(exercise)) return@write
-            val name = typed.ifEmpty { if (exercise.isCustom) null else SeedParser.catalogName(exercise.id) } ?: return@write
-            if (name != exercise.name) repository.updateExercise(exercise.copy(name = name))
+            val name = renameTarget(exercise, raw, shown) {
+                knownCatalogName(exercise.id) ?: SeedParser.catalogName(exercise.id)
+            } ?: return@write
+            repository.updateExercise(exercise.copy(name = name))
         }) { refresh() }
     }
 
@@ -310,10 +314,12 @@ class ExerciseDetailScreen(
             if (editing != null) {
                 val naming = editing == ExerciseDetailViewModel.Editing.NAME
                 val textState = remember(uiState.editSession) {
-                    TextFieldState(if (naming) uiState.name else uiState.pinnedNote ?: "")
+                    TextFieldState(if (naming) uiState.nameAtOpen else uiState.pinnedNote ?: "")
                 }
                 LightTextInputEditor(
                     title = if (naming) "Name" else "Note",
+                    // A name is one line: Return submits it. A note may run to several.
+                    singleLine = naming,
                     state = textState,
                     onSubmit = { if (naming) viewModel.saveName(it.toString()) else viewModel.saveNote(it.toString()) },
                     onBack = viewModel::closeEditor,
@@ -393,11 +399,7 @@ class ExerciseDetailScreen(
                 )
             }
             if (uiState.instructions.isNotEmpty()) {
-                if (note != null) {
-                    SectionLabel("Instructions")
-                } else {
-                    Spacer(modifier = Modifier.height(0.5f.gridUnitsAsDp()))
-                }
+                SectionLabel("Instructions")
                 uiState.instructions.forEach { paragraph ->
                     LightText(
                         text = paragraph,
