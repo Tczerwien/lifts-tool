@@ -21,6 +21,21 @@ class LiftsShare private constructor(root: File, repository: LiftsRepository) {
 
     val exports = ExportWriter(exportsDir, LiftsIo.scope) { renderExports(repository) }
 
+    /** Finish saved a workout: the exports catch up. */
+    fun workoutFinished() {
+        exports.request()
+    }
+
+    /** Workout Detail deleted a workout: the exports drop it. */
+    fun workoutDeleted() {
+        exports.request()
+    }
+
+    /** Home has loaded (on IO): writes the exports if any is missing, as after a new install. */
+    fun homeShown() {
+        if (ExportWriter.FILE_NAMES.any { !File(exportsDir, it).isFile }) exports.request()
+    }
+
     companion object {
         @Volatile
         private var instance: LiftsShare? = null

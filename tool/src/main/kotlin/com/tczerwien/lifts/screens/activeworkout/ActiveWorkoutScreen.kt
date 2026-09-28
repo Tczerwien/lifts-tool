@@ -31,6 +31,7 @@ import com.tczerwien.lifts.session.pendingSetCount
 import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.rememberSecondClock
@@ -74,11 +75,13 @@ class ActiveWorkoutScreen(
 
     private val session = ActiveSession(repository, settingsStore, lightContext.dataStore)
 
+    private val share = lightContext.liftsShare()
+
     override val viewModelClass: Class<ActiveWorkoutViewModel>
         get() = ActiveWorkoutViewModel::class.java
 
     override fun createViewModel() =
-        ActiveWorkoutViewModel(repository, session, settingsStore, workoutId, templateId)
+        ActiveWorkoutViewModel(repository, session, settingsStore, share, workoutId, templateId)
 
     @Composable
     override fun Content() {

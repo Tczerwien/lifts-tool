@@ -19,6 +19,8 @@ import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.shouldAutoResume
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -51,6 +53,7 @@ import kotlinx.coroutines.flow.update
 class HomeViewModel(
     private val repository: LiftsRepository,
     private val session: ActiveSession,
+    private val share: LiftsShare,
 ) : LightViewModel<Unit>() {
 
     data class TemplateRow(val id: Long, val name: String, val exerciseCount: Int)
@@ -107,6 +110,7 @@ class HomeViewModel(
         val ticket = ++latestLoad
         _uiState.update { it.copy(ready = false) }
         LiftsIo.write({ load() }) { loaded ->
+            share.homeShown()
             // Loads land in any order: an older one never replaces a newer one, and Home is ready
             // for Start taps only once the newest has landed.
             synchronized(loadLock) {
@@ -217,7 +221,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
     override val viewModelClass: Class<HomeViewModel>
         get() = HomeViewModel::class.java
 
-    override fun createViewModel() = HomeViewModel(repository, session)
+    override fun createViewModel() = HomeViewModel(repository, session, lightContext.liftsShare())
 
     /** Opens a new workout from [templateId] (null: empty). */
     private fun openNew(templateId: Long?) {

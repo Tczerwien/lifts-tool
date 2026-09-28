@@ -22,6 +22,7 @@ import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
@@ -47,6 +48,7 @@ class ActiveWorkoutViewModel(
     private val repository: LiftsRepository,
     private val session: ActiveSession,
     private val settingsStore: SettingsStore,
+    private val share: LiftsShare,
     private val resumeWorkoutId: Long?,
     private val templateId: Long?,
 ) : LightViewModel<Unit>() {
@@ -496,6 +498,7 @@ class ActiveWorkoutViewModel(
         val workoutId = resolvedWorkoutId ?: return
         _uiState.update { it.copy(finishing = true) }
         LiftsIo.write({ session.finishOrDiscard(workoutId) }) { outcome ->
+            if (outcome == FinishOutcome.ENDED) share.workoutFinished()
             _uiState.update {
                 when (outcome) {
                     FinishOutcome.ENDED -> it.copy(pendingCompleteWorkoutId = workoutId)

@@ -22,6 +22,8 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
@@ -60,6 +62,7 @@ private const val PR_STAR = "★"
 class WorkoutDetailViewModel(
     private val repository: LiftsRepository,
     private val settings: SettingsStore,
+    private val share: LiftsShare,
     private val workoutId: Long,
 ) : LightViewModel<Unit>() {
 
@@ -123,6 +126,7 @@ class WorkoutDetailViewModel(
         if (deleting || !deleteArm.tap()) return
         deleting = true
         LiftsIo.write({ repository.deleteWorkout(workoutId) }) {
+            share.workoutDeleted()
             withContext(Dispatchers.Main) { if (!cleared) onDeleted() }
         }
     }
@@ -211,7 +215,7 @@ class WorkoutDetailScreen(
         get() = WorkoutDetailViewModel::class.java
 
     override fun createViewModel() =
-        WorkoutDetailViewModel(repository, SettingsStore(lightContext.dataStore), workoutId)
+        WorkoutDetailViewModel(repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare(), workoutId)
 
     @Composable
     override fun Content() {
