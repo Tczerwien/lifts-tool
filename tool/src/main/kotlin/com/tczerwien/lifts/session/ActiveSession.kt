@@ -9,6 +9,7 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.displayName
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -317,7 +318,7 @@ class ActiveSession(
         val exerciseIds = slots.map { it.exerciseId }.distinct()
         val priorHistory = priorHistory(exerciseIds, workoutId)
         val prIds = prSetIds(slots, sets, priorHistory)
-        val names = exerciseIds.associateWith { repository.exerciseById(it)?.name ?: it }
+        val names = exerciseIds.associateWith { id -> repository.exerciseById(id)?.let(::displayName) ?: id }
         val end = workout.endedAt ?: workout.startedAt
         return WorkoutSummary(
             workoutId = workoutId,

@@ -22,6 +22,7 @@ import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -292,7 +293,7 @@ class TemplateEditorViewModel(
         val rows = repository.exercisesForTemplate(templateId).map { exercise ->
             ExerciseRow(
                 id = exercise.id,
-                name = repository.exerciseById(exercise.exerciseId)?.name ?: exercise.exerciseId,
+                name = repository.exerciseById(exercise.exerciseId)?.let(::displayName) ?: exercise.exerciseId,
                 targetSets = exercise.targetSets,
                 restSec = exercise.restSecWork ?: settings.defaultRestSec,
                 warmupRestSec = exercise.restSecWarmup ?: settings.warmupRestSec,
