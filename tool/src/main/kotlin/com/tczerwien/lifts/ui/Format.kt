@@ -146,6 +146,13 @@ object Format {
         }
     }
 
+    /** "412 B" under a KB, whole KB under a MB ("48 KB"), else MB with one decimal ("1.4 MB"). */
+    fun fileSize(bytes: Long): String = when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024L * 1024 -> "${(bytes / 1024.0).roundToLong()} KB"
+        else -> "%.1f MB".format(Locale.US, bytes / (1024.0 * 1024.0))
+    }
+
     // --- Dates (epoch millis) ---
 
     private val dateShortFormatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)

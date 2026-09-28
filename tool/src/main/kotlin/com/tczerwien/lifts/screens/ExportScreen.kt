@@ -32,7 +32,6 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import java.io.File
-import kotlin.math.roundToLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -92,17 +91,11 @@ class ExportViewModel(
         FileRow(
             name = name,
             detail = if (file.isFile) {
-                "updated ${Format.dateTime(file.lastModified())} · ${sizeLabel(file.length())}"
+                "updated ${Format.dateTime(file.lastModified())} · ${Format.fileSize(file.length())}"
             } else {
                 "not written yet"
             },
         )
-    }
-
-    companion object {
-        /** "412 B" under a KB, otherwise rounded to whole KB ("48 KB"). */
-        fun sizeLabel(bytes: Long): String =
-            if (bytes < 1024) "$bytes B" else "${(bytes / 1024.0).roundToLong()} KB"
     }
 }
 

@@ -157,6 +157,17 @@ class FormatTest {
         assertEquals("1:02:07", Format.elapsed((3600 + 2 * 60 + 7) * 1000L))
     }
 
+    @Test
+    fun `file sizes read in B, whole KB, then MB`() {
+        assertEquals("0 B", Format.fileSize(0))
+        assertEquals("1023 B", Format.fileSize(1023))
+        assertEquals("1 KB", Format.fileSize(1024))
+        assertEquals("48 KB", Format.fileSize(48 * 1024 + 300))
+        assertEquals("1000 KB", Format.fileSize(1000L * 1024))
+        assertEquals("1.0 MB", Format.fileSize(1024L * 1024))
+        assertEquals("1.4 MB", Format.fileSize((1.4 * 1024 * 1024).toLong()))
+    }
+
     // --- Dates ---
 
     @Test

@@ -33,7 +33,10 @@ class ToolManagerManifestTest {
     fun `Lifts lists its folders in order`() {
         assertEquals("Lifts", json.getValue("title").jsonPrimitive.content)
         assertEquals(
-            listOf(Folder("FileBrowserSpec", "Exports", LiftsToolManager.EXPORTS, readOnly = true)),
+            listOf(
+                Folder("FileBrowserSpec", "Exports", LiftsToolManager.EXPORTS, readOnly = true),
+                Folder("FileBrowserSpec", "Backups", LiftsToolManager.BACKUPS, readOnly = true),
+            ),
             folders,
         )
     }

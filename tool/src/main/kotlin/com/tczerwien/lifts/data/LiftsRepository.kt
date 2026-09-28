@@ -209,6 +209,17 @@ class LiftsRepository private constructor(
 
     fun listBars(): List<BarEntity> = db.barDao.listAll()
 
+    // --- Backup ---
+
+    /**
+     * Writes a copy of the whole database to [path], which must not exist yet (SQLite's VACUUM INTO).
+     * The copy comes from one read snapshot, so it is consistent even while other reads run; it is
+     * compact and needs no -wal file beside it.
+     */
+    fun copyTo(path: String) {
+        db.openHelper.writableDatabase.execSQL("VACUUM INTO ?", arrayOf(path))
+    }
+
     companion object {
         const val DATABASE_NAME = "lifts.db"
 

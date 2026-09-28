@@ -14,11 +14,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.backup.BackupManager
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val repository: LiftsRepository,
     private val settingsStore: SettingsStore,
+    private val backups: BackupManager,
 ) : LightViewModel<Unit>() {
 
     enum class RestField { DEFAULT, WARMUP }
@@ -67,6 +70,8 @@ class SettingsViewModel(
     data class UiState(
         val settings: SettingsStore.Settings? = null,
         val barCount: Int = 0,
+        /** When the newest dated backup was written; null when there is none. */
+        val lastBackupMillis: Long? = null,
         val mode: Mode = Mode.FieldList,
     )
 
@@ -79,7 +84,8 @@ class SettingsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             val settings = settingsStore.snapshot()
             val barCount = repository.listBars().size
-            _uiState.update { it.copy(settings = settings, barCount = barCount) }
+            val lastBackup = backups.lastBackupMillis()
+            _uiState.update { it.copy(settings = settings, barCount = barCount, lastBackupMillis = lastBackup) }
         }
     }
 
@@ -189,7 +195,7 @@ class SettingsScreen(
     override val viewModelClass: Class<SettingsViewModel>
         get() = SettingsViewModel::class.java
 
-    override fun createViewModel() = SettingsViewModel(repository, settingsStore)
+    override fun createViewModel() = SettingsViewModel(repository, settingsStore, lightContext.liftsShare().backups)
 
     @Composable
     override fun Content() {
@@ -284,6 +290,12 @@ class SettingsScreen(
                     label = "Plate Calculator",
                     value = "per-side loadout",
                     onClick = { navigateTo(::PlateCalculatorScreen) },
+                    chevron = true,
+                )
+                LiftsFieldRow(
+                    label = "Backups",
+                    value = uiState.lastBackupMillis?.let(Format::dateTime) ?: "none yet",
+                    onClick = { navigateTo(::BackupsScreen) },
                     chevron = true,
                 )
                 LiftsFieldRow(

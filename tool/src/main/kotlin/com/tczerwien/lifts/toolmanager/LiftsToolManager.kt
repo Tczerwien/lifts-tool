@@ -13,6 +13,9 @@ object LiftsToolManager {
     /** files/shared/exports: the four export files, written by ExportWriter. */
     const val EXPORTS = "exports"
 
+    /** files/shared/backups: whole-log backups, written by BackupManager. */
+    const val BACKUPS = "backups"
+
     fun manifest(): ClientToolManifest = ClientToolManifest(
         title = "Lifts",
         roots = listOf(
@@ -22,6 +25,15 @@ object LiftsToolManager {
                     path = EXPORTS,
                     headerText = "Rewritten after every workout. training-log.md reads well on its own or in an AI; " +
                         "workouts.json is the full record; strong.csv imports into Strong or Hevy.",
+                ),
+                readOnly = true,
+            ),
+            ClientLeafNode(
+                spec = FileBrowserSpec(
+                    label = "Backups",
+                    path = BACKUPS,
+                    headerText = "The whole log and your settings, saved after every workout and once a day. " +
+                        "lifts-latest.db is always the newest. To bring one back, upload it to Restore.",
                 ),
                 readOnly = true,
             ),
