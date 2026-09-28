@@ -79,6 +79,8 @@ class ExerciseNamesTest {
     fun `submitting the name the editor showed changes nothing`() {
         assertNull(renameTarget(bench, "Bench Press", shown = "Bench Press") { benchCatalogName })
         assertNull(renameTarget(bench, " Bench Press ", shown = "Bench Press") { benchCatalogName })
+        // A rename to "Flat Bench" still landing: the editor showed "Bench Press", so this changes nothing.
+        assertNull(renameTarget(bench.copy(name = "Flat Bench"), "Bench Press", shown = "Bench Press") { benchCatalogName })
     }
 
     @Test

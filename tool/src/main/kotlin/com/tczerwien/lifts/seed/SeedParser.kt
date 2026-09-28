@@ -56,7 +56,7 @@ internal object SeedParser {
 
     /**
      * The catalog's own name for exercise [id] (an app id, as [parse] makes them); null for none.
-     * Parses the whole catalog: call it off the main thread, and only when [knownCatalogName] can't
+     * Parses the whole catalog: call it off the main thread, and only when [com.tczerwien.lifts.ui.knownCatalogName] can't
      * answer.
      */
     fun catalogName(id: String): String? = parse().firstOrNull { it.id == id }?.name
