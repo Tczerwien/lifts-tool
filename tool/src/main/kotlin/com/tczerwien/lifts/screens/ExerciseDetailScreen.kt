@@ -72,6 +72,7 @@ import com.thelightphone.sdk.ui.lightClickable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 class ExerciseDetailViewModel(
     private val exerciseId: String,
@@ -211,14 +212,18 @@ class ExerciseDetailViewModel(
             )
         }
 
-        _uiState.value = _uiState.value.copy(
-            name = exercise?.let { displayName(it) } ?: "Exercise",
-            pinnedNote = exercise?.pinnedNote,
-            instructions = exercise?.instructions ?: emptyList(),
-            history = history,
-            records = recordsFor(allSets, unit),
-            loaded = true,
-        )
+        val records = recordsFor(allSets, unit)
+        // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
+        _uiState.update { state ->
+            state.copy(
+                name = exercise?.let(::displayName) ?: "Exercise",
+                pinnedNote = exercise?.pinnedNote,
+                instructions = exercise?.instructions ?: emptyList(),
+                history = history,
+                records = records,
+                loaded = true,
+            )
+        }
     }
 
     private fun SetEntity.toSegment(unit: WeightUnit, pr: Boolean): SetSegment {
