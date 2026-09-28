@@ -54,7 +54,7 @@ class ActiveWorkoutViewModel(
     /** One exercise of the session: its rows, and what last session did in the matching slot. */
     data class ExerciseBlock(
         val slot: WorkoutExerciseEntity,
-        /** As shown everywhere on this screen ([displayName]): "Bench Press - Medium Grip (Barbell)". */
+        /** As shown everywhere on this screen ([displayName]): "Bench Press", not "Barbell Bench Press - Medium Grip". */
         val name: String,
         val detailLine: String,
         val cue: String?,
@@ -718,7 +718,7 @@ class ActiveWorkoutViewModel(
             val setsBySlot = sets.groupBy { it.workoutExerciseId }
             val blocks = slots.map { slot ->
                 val exercise = catalog[slot.exerciseId]
-                val name = exercise?.let { displayName(it.name, it.equipment) } ?: slot.exerciseId
+                val name = exercise?.let { displayName(it) } ?: slot.exerciseId
                 ExerciseBlock(
                     slot = slot,
                     name = name,

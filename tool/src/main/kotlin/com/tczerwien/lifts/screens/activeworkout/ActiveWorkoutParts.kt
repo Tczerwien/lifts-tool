@@ -79,12 +79,12 @@ internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging
             .padding(horizontal = 1f.gridUnitsAsDp()),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // A long name loses its middle, never the words at either end that tell variants apart.
+            // Short names for the common lifts ([displayName]); anything longer is cut at the end.
             LightText(
                 text = block.name,
                 variant = LightTextVariant.Copy,
                 maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
             LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
@@ -206,7 +206,7 @@ internal fun NextExerciseRow(name: String, doneCount: Int, setCount: Int, onClic
             variant = LightTextVariant.Copy,
             lighten = true,
             maxLines = 1,
-            overflow = TextOverflow.MiddleEllipsis,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
         LightText(text = " · $doneCount/$setCount", variant = LightTextVariant.Detail, lighten = true, maxLines = 1)

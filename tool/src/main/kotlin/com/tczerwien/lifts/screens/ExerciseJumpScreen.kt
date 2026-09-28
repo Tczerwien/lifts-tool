@@ -123,7 +123,7 @@ private fun JumpRow(number: Int, entry: JumpEntry, current: Boolean, onClick: ()
             variant = LightTextVariant.Copy,
             lighten = finished && !current,
             maxLines = 1,
-            overflow = TextOverflow.MiddleEllipsis,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .weight(1f)
                 .padding(start = 0.5f.gridUnitsAsDp()),

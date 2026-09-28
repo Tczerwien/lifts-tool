@@ -178,7 +178,7 @@ class RestTimerViewModel(
             seed.weightKg != null -> Format.weight(seed.weightKg, units)
             else -> null
         }?.let { values -> rpe?.let { "$values @ ${trimRpe(it)}" } ?: values }
-        val exerciseName = repository.exerciseById(exerciseId)?.let { displayName(it.name, it.equipment) } ?: exerciseId
+        val exerciseName = repository.exerciseById(exerciseId)?.let { displayName(it) } ?: exerciseId
         return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
     }
 

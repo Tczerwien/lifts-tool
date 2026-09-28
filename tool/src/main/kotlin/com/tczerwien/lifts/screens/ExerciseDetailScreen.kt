@@ -181,7 +181,7 @@ class ExerciseDetailViewModel(
         }
 
         _uiState.value = _uiState.value.copy(
-            name = exercise?.let { displayName(it.name, it.equipment) } ?: "Exercise",
+            name = exercise?.let { displayName(it) } ?: "Exercise",
             pinnedNote = exercise?.pinnedNote,
             instructions = exercise?.instructions ?: emptyList(),
             history = history,

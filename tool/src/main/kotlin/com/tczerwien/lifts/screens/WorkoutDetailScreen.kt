@@ -163,7 +163,7 @@ class WorkoutDetailViewModel(
                 ?: return@mapNotNull null
             ExerciseBlock(
                 exerciseId = slot.exerciseId,
-                name = repository.exerciseById(slot.exerciseId)?.let { displayName(it.name, it.equipment) } ?: slot.exerciseId,
+                name = repository.exerciseById(slot.exerciseId)?.let { displayName(it) } ?: slot.exerciseId,
                 notation = completed.joinToString("; ") { set ->
                     setToken(set, unit) + if (set.id in prSetIds) PR_STAR else ""
                 },
@@ -287,7 +287,7 @@ class WorkoutDetailScreen(
                                             text = block.name,
                                             variant = LightTextVariant.Copy,
                                             maxLines = 1,
-                                            overflow = TextOverflow.MiddleEllipsis,
+                                            overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f, fill = false),
                                         )
                                         LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
