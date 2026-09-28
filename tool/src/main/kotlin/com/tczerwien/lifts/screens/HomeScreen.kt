@@ -47,6 +47,7 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -113,6 +114,8 @@ class HomeViewModel(
         // An upload through Tool Manager while Home is on screen shows up without leaving Home.
         viewModelScope.launch(Dispatchers.IO) {
             LiftsEntryPoint.inbox.drop(1).collect {
+                // The notice comes as the upload ends; wait until it counts as settled.
+                delay(LiftsShare.RESTORE_SETTLE_MS + 500)
                 if (showing) {
                     val waiting = share.waitingRestore()?.let { RestoreWaiting(it.name, it.absolutePath) }
                     _uiState.update { it.copy(restoreWaiting = waiting) }
@@ -304,7 +307,9 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                     uiState.restoreWaiting?.let { waiting ->
                         SectionLabel("Restore")
                         LiftsListRow(
-                            onClick = { navigateTo({ RestoreScreen(it, waiting.path, fromUpload = true) }) },
+                            onClick = {
+                                if (uiState.ready) navigateTo({ RestoreScreen(it, waiting.path, fromUpload = true) })
+                            },
                             left = {
                                 LightText(
                                     text = waiting.name,
@@ -327,8 +332,9 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                     uiState.unfinished?.let { unfinished ->
                         SectionLabel("In Progress")
                         LiftsListRow(
+                            // Rows from before a reload (a restore can reuse ids) wait for it to land.
                             onClick = {
-                                navigateTo({ ActiveWorkoutScreen(it, workoutId = unfinished.workoutId) })
+                                if (uiState.ready) navigateTo({ ActiveWorkoutScreen(it, workoutId = unfinished.workoutId) })
                             },
                             left = {
                                 LightText(
@@ -393,7 +399,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                             if (index > 0) RowDivider()
                             LiftsListRow(
                                 onClick = {
-                                    navigateTo({ WorkoutDetailScreen(it, workoutId = recent.workoutId) })
+                                    if (uiState.ready) navigateTo({ WorkoutDetailScreen(it, workoutId = recent.workoutId) })
                                 },
                                 left = {
                                     LightText(
