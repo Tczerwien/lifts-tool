@@ -36,42 +36,63 @@ class BackupManager(
         data class Failed(val message: String) : Status
     }
 
-    private val queued = AtomicInteger()
+    /** Finish and Back up now requests queued or running. */
+    private val requested = AtomicInteger()
+
+    /** Why the latest backup failed; null once one succeeds. Kept until then, and Home retries. */
+    @Volatile
+    private var lastFailure: String? = null
 
     private val _status = MutableStateFlow<Status>(Status.Idle)
     val status: StateFlow<Status> = _status.asStateFlow()
 
     /** A dated backup, queued on the write lane: Finish and Back up now. */
     fun request() {
-        queue { backUp(BackupPolicy.Kind.DATED) }
+        requested.incrementAndGet()
+        publish()
+        LiftsIo.write({ runCatching { backUp(BackupPolicy.Kind.DATED) } }) {
+            requested.decrementAndGet()
+            publish()
+        }
     }
 
-    /** Home: a dated backup if the newest is a day old ([BackupPolicy.isDue]), decided when its turn comes. */
+    /**
+     * Home: a dated backup if the newest is a day old ([BackupPolicy.isDue]) or the latest attempt
+     * failed, decided when its turn comes. A check that finds nothing due leaves the status alone.
+     */
     fun requestIfDue() {
-        queue { if (BackupPolicy.isDue(lastBackupMillis(), System.currentTimeMillis())) backUp(BackupPolicy.Kind.DATED) }
+        LiftsIo.write({
+            if (lastFailure != null || BackupPolicy.isDue(lastBackupMillis(), System.currentTimeMillis())) {
+                runCatching { backUp(BackupPolicy.Kind.DATED) }
+            }
+        }) { publish() }
     }
 
-    private fun queue(block: () -> Unit) {
-        queued.incrementAndGet()
-        _status.value = Status.Running
-        LiftsIo.write({ runCatching(block) }) { outcome ->
-            val failure = outcome.exceptionOrNull()
-            if (failure != null) Log.w(TAG, "Backup failed", failure)
-            val stillQueued = queued.decrementAndGet() > 0
-            _status.value = when {
-                failure != null -> Status.Failed(failure.message ?: failure.toString())
-                stillQueued -> Status.Running
-                else -> Status.Idle
-            }
+    private fun publish() {
+        val failure = lastFailure
+        _status.value = when {
+            requested.get() > 0 -> Status.Running
+            failure != null -> Status.Failed(failure)
+            else -> Status.Idle
         }
     }
 
     /**
      * Writes a backup of [kind] now and returns it; throws when it can't, leaving no partial file.
      * Call it on the write lane only (inside a [LiftsIo] block): it reads the database and settings
-     * as one picture.
+     * as one picture. A failure is kept for [status] until a backup succeeds.
      */
-    fun backUp(kind: BackupPolicy.Kind, now: Long = System.currentTimeMillis()): File {
+    fun backUp(kind: BackupPolicy.Kind, now: Long = System.currentTimeMillis()): File = try {
+        write(kind, now).also { lastFailure = null }
+    } catch (e: Exception) {
+        Log.w(TAG, "Backup failed", e)
+        lastFailure = e.message ?: e.toString()
+        throw e
+    } finally {
+        publish()
+    }
+
+    private fun write(kind: BackupPolicy.Kind, now: Long): File {
         val started = System.nanoTime()
         if (!dir.isDirectory && !dir.mkdirs()) throw IOException("cannot create ${dir.name}")
         val temp = File(dir, TEMP_NAME)

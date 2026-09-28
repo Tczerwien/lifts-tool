@@ -72,6 +72,8 @@ class SettingsViewModel(
         val barCount: Int = 0,
         /** When the newest dated backup was written; null when there is none. */
         val lastBackupMillis: Long? = null,
+        /** The latest backup failed (Backups says why). */
+        val backupFailed: Boolean = false,
         val mode: Mode = Mode.FieldList,
     )
 
@@ -85,7 +87,10 @@ class SettingsViewModel(
             val settings = settingsStore.snapshot()
             val barCount = repository.listBars().size
             val lastBackup = backups.lastBackupMillis()
-            _uiState.update { it.copy(settings = settings, barCount = barCount, lastBackupMillis = lastBackup) }
+            val failed = backups.status.value is BackupManager.Status.Failed
+            _uiState.update {
+                it.copy(settings = settings, barCount = barCount, lastBackupMillis = lastBackup, backupFailed = failed)
+            }
         }
     }
 
@@ -294,7 +299,10 @@ class SettingsScreen(
                 )
                 LiftsFieldRow(
                     label = "Backups",
-                    value = uiState.lastBackupMillis?.let(Format::dateTime) ?: "none yet",
+                    value = when {
+                        uiState.backupFailed -> "last backup failed"
+                        else -> uiState.lastBackupMillis?.let(Format::dateTime) ?: "none yet"
+                    },
                     onClick = { navigateTo(::BackupsScreen) },
                     chevron = true,
                 )
