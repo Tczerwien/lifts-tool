@@ -374,6 +374,17 @@ class ActiveSession(
     companion object {
         const val DEFAULT_WORKOUT_NAME = "Workout"
 
+        /**
+         * Forgets the in-workout state kept in DataStore: the exercise last on screen and the saved
+         * rest. A restore calls it, because the restored database can reuse workout and slot ids, so a
+         * saved "workout:slot" or rest would point into the wrong data. The keys are named one by
+         * one: settings share the "lifts_" prefix (lifts_rest_beep among them) and must stay.
+         */
+        suspend fun forgetWorkoutState(dataStore: DataStore<Preferences>) {
+            dataStore.edit { prefs -> prefs.remove(CURRENT_SLOT) }
+            RestStore(dataStore).clear()
+        }
+
         /** "workoutId:slotId" of the exercise last on screen; tied to its workout, so a stale one is ignored. */
         private val CURRENT_SLOT = stringPreferencesKey("lifts_current_slot")
     }

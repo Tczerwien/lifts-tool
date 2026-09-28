@@ -71,23 +71,46 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setPlateInventoryKg(platesKg: List<Double>) {
         dataStore.edit { prefs ->
-            prefs[PLATE_INVENTORY_KG] = json.encodeToString(PLATES_SERIALIZER, platesKg)
+            prefs[PLATE_INVENTORY_KG] = encodePlates(platesKg)
+        }
+    }
+
+    /** Writes every setting at once (a restore): all of them land, or none. */
+    suspend fun replaceAll(settings: Settings) {
+        dataStore.edit { prefs ->
+            prefs[UNITS] = settings.units.name
+            prefs[DEFAULT_REST_SEC] = settings.defaultRestSec
+            prefs[WARMUP_REST_SEC] = settings.warmupRestSec
+            prefs[PLATE_INVENTORY_KG] = encodePlates(settings.plateInventoryKg)
+            prefs[REST_BEEP] = settings.restBeep
         }
     }
 
     private fun decodePlates(encoded: String): List<Double> =
-        runCatching { json.decodeFromString(PLATES_SERIALIZER, encoded) }
-            .getOrDefault(DEFAULT_PLATE_INVENTORY_KG)
+        parsePlates(encoded) ?: DEFAULT_PLATE_INVENTORY_KG
 
     companion object {
-        private val UNITS = stringPreferencesKey("lifts_units")
-        private val DEFAULT_REST_SEC = intPreferencesKey("lifts_default_rest_sec")
-        private val WARMUP_REST_SEC = intPreferencesKey("lifts_warmup_rest_sec")
-        private val PLATE_INVENTORY_KG = stringPreferencesKey("lifts_plate_inventory_kg")
-        private val REST_BEEP = booleanPreferencesKey("lifts_rest_beep")
+        const val KEY_UNITS = "lifts_units"
+        const val KEY_DEFAULT_REST_SEC = "lifts_default_rest_sec"
+        const val KEY_WARMUP_REST_SEC = "lifts_warmup_rest_sec"
+        const val KEY_PLATE_INVENTORY_KG = "lifts_plate_inventory_kg"
+        const val KEY_REST_BEEP = "lifts_rest_beep"
+
+        private val UNITS = stringPreferencesKey(KEY_UNITS)
+        private val DEFAULT_REST_SEC = intPreferencesKey(KEY_DEFAULT_REST_SEC)
+        private val WARMUP_REST_SEC = intPreferencesKey(KEY_WARMUP_REST_SEC)
+        private val PLATE_INVENTORY_KG = stringPreferencesKey(KEY_PLATE_INVENTORY_KG)
+        private val REST_BEEP = booleanPreferencesKey(KEY_REST_BEEP)
 
         private val json = Json
         private val PLATES_SERIALIZER = ListSerializer(Double.serializer())
+
+        /** The plate list as stored: a JSON array of kg. */
+        fun encodePlates(platesKg: List<Double>): String = json.encodeToString(PLATES_SERIALIZER, platesKg)
+
+        /** [encodePlates] read back; null when it isn't a JSON array of numbers. */
+        fun parsePlates(encoded: String): List<Double>? =
+            runCatching { json.decodeFromString(PLATES_SERIALIZER, encoded) }.getOrNull()
 
         val DEFAULT_UNITS = WeightUnit.LB
         const val DEFAULT_REST_SEC_VALUE = 180
