@@ -36,9 +36,11 @@ import com.tczerwien.lifts.analytics.exerciseRecords
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.LiftsTabRow
@@ -100,10 +102,13 @@ class ExerciseDetailViewModel(
         val instructions: List<String> = emptyList(),
         val history: List<HistoryRow> = emptyList(),
         val records: Records? = null,
-        val noteOpen: Boolean = false,
-        val noteSession: Int = 0,
+        /** The full-screen editor showing, if any: the pinned note or the name. */
+        val editing: Editing? = null,
+        val editSession: Int = 0,
         val loaded: Boolean = false,
     )
+
+    enum class Editing { NOTE, NAME }
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -117,12 +122,12 @@ class ExerciseDetailViewModel(
     }
 
     /**
-     * Back from the note editor closes it. Only the in-app back button reaches this: the SDK routes the
-     * system Back key straight to the activity.
+     * Back from the note or name editor closes it. Only the in-app back button reaches this: the SDK
+     * routes the system Back key straight to the activity.
      */
     override fun onBackPressed(): Boolean {
-        if (!_uiState.value.noteOpen) return false
-        closeNoteEditor()
+        if (_uiState.value.editing == null) return false
+        closeEditor()
         return true
     }
 
@@ -130,23 +135,45 @@ class ExerciseDetailViewModel(
         _uiState.value = _uiState.value.copy(tab = index)
     }
 
-    fun openNoteEditor() {
+    fun openNoteEditor() = openEditor(Editing.NOTE)
+
+    fun openNameEditor() = openEditor(Editing.NAME)
+
+    private fun openEditor(editing: Editing) {
         val state = _uiState.value
-        _uiState.value = state.copy(noteOpen = true, noteSession = state.noteSession + 1)
+        if (!state.loaded) return
+        _uiState.value = state.copy(editing = editing, editSession = state.editSession + 1)
     }
 
-    fun closeNoteEditor() {
-        _uiState.value = _uiState.value.copy(noteOpen = false)
+    fun closeEditor() {
+        _uiState.value = _uiState.value.copy(editing = null)
     }
 
     /** Blank input clears the pinned note. */
     fun saveNote(raw: String) {
-        _uiState.value = _uiState.value.copy(noteOpen = false)
+        _uiState.value = _uiState.value.copy(editing = null)
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId)
             if (exercise != null) {
                 repository.updateExercise(exercise.copy(pinnedNote = raw.trim().takeIf { it.isNotEmpty() }))
             }
+        }) { refresh() }
+    }
+
+    /**
+     * Renames the exercise: the new name shows everywhere, exports included, over any short name
+     * ([displayName]). Submitting the name as shown changes nothing. A blank name puts a catalog
+     * exercise back to its catalog name, and so back to its short name if it has one; a custom
+     * exercise keeps its name.
+     */
+    fun saveName(raw: String) {
+        _uiState.value = _uiState.value.copy(editing = null)
+        val typed = raw.trim()
+        LiftsIo.write({
+            val exercise = repository.exerciseById(exerciseId) ?: return@write
+            if (typed == displayName(exercise)) return@write
+            val name = typed.ifEmpty { if (exercise.isCustom) null else SeedParser.catalogName(exercise.id) } ?: return@write
+            if (name != exercise.name) repository.updateExercise(exercise.copy(name = name))
         }) { refresh() }
     }
 
@@ -256,7 +283,8 @@ class ExerciseDetailViewModel(
  * Exercise detail (design/screens/exercise-detail.html): ABOUT / HISTORY / RECORDS tabs.
  * History lists one row per workout (date + compact set notation with PR stars); Records
  * shows max weight, best e1RM, best volume set, and 1/5/8 rep maxes; About shows the
- * pinned note and the catalog instructions. Top-bar pencil edits the pinned note.
+ * pinned note and the catalog instructions. Top-bar pencil edits the pinned note; a tap on the
+ * name (top bar, or About's Name row) renames the exercise.
  * Opens on History — the common in-workout question is "what did I do last time".
  */
 class ExerciseDetailScreen(
@@ -278,15 +306,19 @@ class ExerciseDetailScreen(
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
         LiftsFrame(sealedActivity, lightContext) {
-            if (uiState.noteOpen) {
-                val textState = remember { TextFieldState(uiState.pinnedNote ?: "") }
+            val editing = uiState.editing
+            if (editing != null) {
+                val naming = editing == ExerciseDetailViewModel.Editing.NAME
+                val textState = remember(uiState.editSession) {
+                    TextFieldState(if (naming) uiState.name else uiState.pinnedNote ?: "")
+                }
                 LightTextInputEditor(
-                    title = "Note",
+                    title = if (naming) "Name" else "Note",
                     state = textState,
-                    onSubmit = { viewModel.saveNote(it.toString()) },
-                    onBack = viewModel::closeNoteEditor,
+                    onSubmit = { if (naming) viewModel.saveName(it.toString()) else viewModel.saveNote(it.toString()) },
+                    onBack = viewModel::closeEditor,
                     keyboardOptionsFlow = keyboardOptionsFlow,
-                    editorKey = "exercise-note-${uiState.noteSession}",
+                    editorKey = "exercise-${editing.name.lowercase()}-${uiState.editSession}",
                     modifier = Modifier
                         .fillMaxSize()
                         .background(LightThemeTokens.colors.background),
@@ -309,7 +341,8 @@ class ExerciseDetailScreen(
                     icon = LightIcons.BACK,
                     onClick = { goBack() },
                 ),
-                center = LightTopBarCenter.Text(uiState.name),
+                // A tap on the name renames it, as the About tab's Name row does.
+                center = LightTopBarCenter.Text(uiState.name, onClick = viewModel::openNameEditor),
                 rightButton = LightBarButton.LightIcon(
                     icon = LightIcons.PENCIL,
                     contentDescription = "edit note",
@@ -337,11 +370,16 @@ class ExerciseDetailScreen(
     @Composable
     private fun AboutTab(uiState: ExerciseDetailViewModel.UiState, modifier: Modifier) {
         val note = uiState.pinnedNote
-        if (uiState.loaded && note == null && uiState.instructions.isEmpty()) {
-            EmptyTabMessage("No instructions", modifier)
-            return
-        }
         LightScrollView(modifier = modifier) {
+            LiftsFieldRow(label = "Name", value = uiState.name, onClick = viewModel::openNameEditor, chevron = true)
+            if (uiState.loaded && note == null && uiState.instructions.isEmpty()) {
+                LightText(
+                    text = "No instructions",
+                    variant = LightTextVariant.Copy,
+                    lighten = true,
+                    modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp()),
+                )
+            }
             if (note != null) {
                 SectionLabel("Note")
                 LightText(

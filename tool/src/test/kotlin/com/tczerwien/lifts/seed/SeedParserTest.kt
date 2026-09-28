@@ -101,4 +101,10 @@ class SeedParserTest {
         val bytes = ExerciseSeedData.json.toByteArray(Charsets.UTF_8).size
         assertTrue(bytes < 2 * 1024 * 1024, "seed payload is $bytes bytes; expected < 2 MB")
     }
+
+    @Test
+    fun `catalog name lookup finds a lift by its app id`() {
+        assertEquals("Barbell Bench Press - Medium Grip", SeedParser.catalogName("barbell-bench-press-medium-grip"))
+        assertEquals(null, SeedParser.catalogName("no-such-lift"))
+    }
 }
