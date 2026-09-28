@@ -13,9 +13,9 @@ import com.tczerwien.lifts.data.ExerciseEntity
 private data class ShortName(val catalogName: String, val short: String)
 
 /**
- * Short names for the common catalog lifts, by exercise id: a typical program's lifts (from a
- * private note) plus the everyday variants. "DB" is dumbbell. The standard
- * variant gets the plain name; only real variants keep a qualifier. Unique, 22 characters at most.
+ * Short names for the common catalog lifts, by exercise id: a typical hypertrophy program's lifts
+ * plus the everyday variants. "DB" is dumbbell. The standard variant gets the plain name; only real
+ * variants keep a qualifier. Unique, 22 characters at most.
  */
 private val SHORT_NAMES: Map<String, ShortName> = mapOf(
     "band-assisted-pull-up" to ShortName("Band Assisted Pull-Up", "Band-Assisted Pull-Up"),
