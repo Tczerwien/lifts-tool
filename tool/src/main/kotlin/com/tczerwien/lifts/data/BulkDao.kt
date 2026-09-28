@@ -1,0 +1,84 @@
+package com.tczerwien.lifts.data
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+
+/**
+ * Whole tables at once, for a restore: read every row of a backup, then replace every row of the
+ * live database with them, ids included. Nothing else uses it.
+ */
+@Dao
+interface BulkDao {
+    @Query("SELECT * FROM exercises ORDER BY id")
+    fun exercises(): List<ExerciseEntity>
+
+    @Query("SELECT * FROM workouts ORDER BY id")
+    fun workouts(): List<WorkoutEntity>
+
+    @Query("SELECT * FROM workout_exercises ORDER BY id")
+    fun workoutExercises(): List<WorkoutExerciseEntity>
+
+    @Query("SELECT * FROM sets ORDER BY id")
+    fun sets(): List<SetEntity>
+
+    @Query("SELECT * FROM templates ORDER BY id")
+    fun templates(): List<TemplateEntity>
+
+    @Query("SELECT * FROM template_exercises ORDER BY id")
+    fun templateExercises(): List<TemplateExerciseEntity>
+
+    @Query("SELECT * FROM bodyweight ORDER BY id")
+    fun bodyweight(): List<BodyweightEntity>
+
+    @Query("SELECT * FROM bars ORDER BY id")
+    fun bars(): List<BarEntity>
+
+    @Query("DELETE FROM sets")
+    fun clearSets()
+
+    @Query("DELETE FROM workout_exercises")
+    fun clearWorkoutExercises()
+
+    @Query("DELETE FROM workouts")
+    fun clearWorkouts()
+
+    @Query("DELETE FROM template_exercises")
+    fun clearTemplateExercises()
+
+    @Query("DELETE FROM templates")
+    fun clearTemplates()
+
+    @Query("DELETE FROM bodyweight")
+    fun clearBodyweight()
+
+    @Query("DELETE FROM bars")
+    fun clearBars()
+
+    @Query("DELETE FROM exercises")
+    fun clearExercises()
+
+    @Insert
+    fun insertExercises(rows: List<ExerciseEntity>)
+
+    @Insert
+    fun insertWorkouts(rows: List<WorkoutEntity>)
+
+    @Insert
+    fun insertWorkoutExercises(rows: List<WorkoutExerciseEntity>)
+
+    @Insert
+    fun insertSets(rows: List<SetEntity>)
+
+    @Insert
+    fun insertTemplates(rows: List<TemplateEntity>)
+
+    @Insert
+    fun insertTemplateExercises(rows: List<TemplateExerciseEntity>)
+
+    @Insert
+    fun insertBodyweight(rows: List<BodyweightEntity>)
+
+    @Insert
+    fun insertBars(rows: List<BarEntity>)
+}

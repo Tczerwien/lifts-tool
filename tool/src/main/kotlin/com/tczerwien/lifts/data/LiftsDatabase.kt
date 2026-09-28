@@ -15,7 +15,7 @@ import androidx.room.TypeConverters
         BodyweightEntity::class,
         BarEntity::class,
     ],
-    version = 1,
+    version = LiftsDatabase.VERSION,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -25,4 +25,10 @@ abstract class LiftsDatabase : RoomDatabase() {
     abstract val templateDao: TemplateDao
     abstract val bodyweightDao: BodyweightDao
     abstract val barDao: BarDao
+    abstract val bulkDao: BulkDao
+
+    companion object {
+        /** The @Database version above; a backup from a newer version can't be restored. */
+        const val VERSION = 1
+    }
 }

@@ -209,7 +209,36 @@ class LiftsRepository private constructor(
 
     fun listBars(): List<BarEntity> = db.barDao.listAll()
 
-    // --- Backup ---
+    // --- Backup and restore ---
+
+    /** Every row of every table (the phone's side of a restore's summary). */
+    fun readAll(): LiftsRows = readAll(db)
+
+    /**
+     * Replaces every row of every table with [rows], ids included, in one transaction: a failure (a
+     * row that breaks a foreign key, say) leaves the database exactly as it was. Children are
+     * removed first and parents written first, so the foreign keys hold at every step.
+     */
+    fun replaceAll(rows: LiftsRows) = inTransaction {
+        with(db.bulkDao) {
+            clearSets()
+            clearWorkoutExercises()
+            clearWorkouts()
+            clearTemplateExercises()
+            clearTemplates()
+            clearBodyweight()
+            clearBars()
+            clearExercises()
+            insertExercises(rows.exercises)
+            insertBars(rows.bars)
+            insertBodyweight(rows.bodyweight)
+            insertTemplates(rows.templates)
+            insertTemplateExercises(rows.templateExercises)
+            insertWorkouts(rows.workouts)
+            insertWorkoutExercises(rows.workoutExercises)
+            insertSets(rows.sets)
+        }
+    }
 
     /**
      * Writes a copy of the whole database to [path], which must not exist yet (SQLite's VACUUM INTO).
@@ -225,6 +254,22 @@ class LiftsRepository private constructor(
 
         @Volatile
         private var instance: LiftsRepository? = null
+
+        /** Every row of every table in [db]: the live database, or a backup opened on its own. */
+        fun readAll(db: LiftsDatabase): LiftsRows = db.runInTransaction<LiftsRows> {
+            with(db.bulkDao) {
+                LiftsRows(
+                    exercises = exercises(),
+                    workouts = workouts(),
+                    workoutExercises = workoutExercises(),
+                    sets = sets(),
+                    templates = templates(),
+                    templateExercises = templateExercises(),
+                    bodyweight = bodyweight(),
+                    bars = bars(),
+                )
+            }
+        }
 
         fun getInstance(create: () -> LiftsDatabase): LiftsRepository {
             return instance ?: synchronized(this) {
