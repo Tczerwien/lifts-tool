@@ -28,6 +28,20 @@ class ExerciseNamesTest {
     }
 
     @Test
+    fun `a catalog lift he renamed shows his name, and his name only`() {
+        val renamed = catalog.getValue("barbell-bench-press-medium-grip").copy(name = "Flat Bench")
+        assertEquals("Flat Bench", displayName(renamed))
+        // Renamed back to the catalog name: the short name again.
+        assertEquals("Bench Press", displayName(renamed.copy(name = "Barbell Bench Press - Medium Grip")))
+    }
+
+    @Test
+    fun `each short name is tied to its lift's catalog name exactly`() {
+        val wrong = shortNameCatalogNames.filter { (id, name) -> catalog[id]?.name != name }
+        assertTrue(wrong.isEmpty(), "catalog name differs: $wrong")
+    }
+
+    @Test
     fun `a custom exercise shows the name he gave it`() {
         val custom = catalog.getValue("barbell-bench-press-medium-grip").copy(name = "My Bench", isCustom = true)
         assertEquals("My Bench", displayName(custom))
