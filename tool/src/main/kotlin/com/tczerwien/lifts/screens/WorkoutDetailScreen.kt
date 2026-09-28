@@ -82,8 +82,9 @@ class WorkoutDetailViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    /** Queued behind any write still pending, so a rename made in Exercise Detail shows on the way back. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        LiftsIo.write({}) { refresh() }
     }
 
     /** The trash takes two taps; see [tapDelete]. */
