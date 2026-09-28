@@ -48,13 +48,18 @@ push_restore() {
   [ -f "$file" ] || { echo "no such file: $file" >&2; exit 1; }
   local name
   name="$(basename "$file")"
+  # The name goes into a shell command on the device, and Home hides dot files: keep it plain.
+  if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    echo "rename it first: letters, digits, '.', '_' and '-' only, not starting with a dot: $name" >&2
+    exit 1
+  fi
   # Through /data/local/tmp rather than exec-in, which returns before the remote write has finished.
   # The copy lands under a dot name and is renamed once whole, so Home never offers half a file.
   local tmp=/data/local/tmp/lifts-restore.db
   "$ADB" push "$file" "$tmp" >/dev/null
   "$ADB" shell "run-as $PKG sh -c 'umask 077; mkdir -p files/shared/restore && cp $tmp files/shared/restore/.incoming && mv files/shared/restore/.incoming \"files/shared/restore/$name\"'"
   "$ADB" shell rm -f "$tmp"
-  echo "put $name in Restore; open Lifts (Home) to check it and restore"
+  echo "put $name in Restore; open Lifts (Home) after a few seconds to check it and restore"
 }
 
 push_db() {
