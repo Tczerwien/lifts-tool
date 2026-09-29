@@ -63,6 +63,7 @@ class JsonExportTest {
         val expected = listOf(
             "exercises", "exercises[].equipment", "exercises[].hidden", "exercises[].id", "exercises[].is_custom",
             "exercises[].name", "exercises[].pinned_note", "exercises[].primary_muscles", "exercises[].secondary_muscles",
+            "exercises[].type",
             "exported_at",
             "profile", "profile.bodyweight_log", "profile.bodyweight_log[].date", "profile.bodyweight_log[].weight_kg",
             "profile.equipment", "profile.equipment.bars", "profile.equipment.bars[].name",
@@ -112,7 +113,7 @@ class JsonExportTest {
 
     @Test
     fun topLevelFields() {
-        assertEquals("2.1", decoded.schemaVersion)
+        assertEquals("2.2", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals(JsonUnits(weight = "kg", display = "kg"), decoded.units)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)

@@ -19,6 +19,7 @@ import com.tczerwien.lifts.ui.WeightUnit
  * - Duration is a human string ("1h 38m", "44m"). Workouts still in progress are left out.
  * - Set types are NOT exported (Strong limitation); warm-ups appear as plain rows.
  * - Distance is always 0 (no distance cardio in v1); Seconds is durationSec or 0.
+ * - Weight is signed: the help on an assisted exercise is negative ("-30"); no weight is 0.
  * - Notes = exercise-instance notes, Workout Notes = workout notes, both repeated per row.
  * - RFC-4180 quoting: fields containing comma, quote, or newline are quoted and embedded
  *   quotes doubled. Rows are separated by "\n".
@@ -45,7 +46,8 @@ object CsvExport {
                         duration,
                         exercise.name,
                         set.index.toString(),
-                        set.weightKg?.takeIf { it > 0.0 }?.let { Format.weight(it, unit) } ?: "0",
+                        // Signed: an assisted set's help is negative, as Strong writes it.
+                        set.weightKg?.let { Format.weight(it, unit) } ?: "0",
                         (set.reps ?: 0).toString(),
                         "0",
                         (set.durationSec ?: 0).toString(),

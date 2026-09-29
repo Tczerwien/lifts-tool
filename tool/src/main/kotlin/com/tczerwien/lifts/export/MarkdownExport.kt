@@ -63,6 +63,8 @@ object MarkdownExport {
         append(" an `F` after it a set to failure, a `D` a drop set. `@8` is RPE, logged as reps in reserve (RPE = 10 − RIR,")
         append(" so `@8` left 2 reps in the tank). `r150` is the seconds since the")
         append(" previous set was ticked (the rest plus the set itself; none after a break over 15 minutes).")
+        append(" On bodyweight exercises the weight is what was added to the body, and a negative weight is")
+        append(" help (`-30x8` is an assisted pull-up with 30 ").append(unit).append(" of assistance).")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }
@@ -77,6 +79,11 @@ object MarkdownExport {
                 if (pr.bestE1RmKg != null) {
                     append("e1RM ").append(Format.weight(pr.bestE1RmKg, unit))
                     append(' ').append(unit.suffix).append(" (").append(pr.bestE1RmDateIso).append(')')
+                } else if (pr.maxWeightKg < 0.0) {
+                    append("least assistance ").append(Format.weight(-pr.maxWeightKg, unit))
+                    append(' ').append(unit.suffix).append(" (").append(pr.maxWeightDateIso).append(')')
+                } else if (pr.maxWeightKg == 0.0) {
+                    append("unassisted (").append(pr.maxWeightDateIso).append(')')
                 } else {
                     append("max ").append(Format.weight(pr.maxWeightKg, unit))
                     append(' ').append(unit.suffix).append(" (").append(pr.maxWeightDateIso).append(')')

@@ -3,6 +3,7 @@ package com.tczerwien.lifts.analytics
 import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import java.time.Instant
@@ -37,7 +38,8 @@ fun epleyE1RmKg(weightKg: Double, reps: Int): Double? {
 /**
  * Personal records for one exercise, computed from completed non-warmup sets.
  *
- * @property maxWeightKg heaviest weight ever moved (any rep count)
+ * @property maxWeightKg heaviest weight ever moved (any rep count); for an assisted exercise the
+ *   least help, negative (0 unassisted)
  * @property maxWeightDate epoch millis of the set that first achieved [maxWeightKg]
  * @property bestE1RmKg best Epley estimate, null when no completed set had 1..12 reps
  * @property bestE1RmDate epoch millis of the set that first achieved [bestE1RmKg]
@@ -54,8 +56,11 @@ data class ExercisePr(
 )
 
 /**
- * Computes one [ExercisePr] per exercise that has at least one record-eligible weighted set
- * (see [recordEligible]: completed, not a warm-up, at least one rep). Sets are joined
+ * Computes one [ExercisePr] per exercise with a weight record, from the shared records engine
+ * ([exerciseRecords], by each exercise's [tracking]; weight × reps where it has none): the heaviest
+ * weighted set and best e1RM of a weight × reps lift, the most added weight of a weighted bodyweight
+ * one (no e1RM), the least help of an assisted one ([ExercisePr.maxWeightKg] is then negative, or 0
+ * unassisted). Reps-only lifts and holds have no weight record and are left out. Sets are joined
  * through [workoutExercises] and must belong to a workout present in [workouts]. Result order
  * follows the [exercises] list; any exercise ids referenced by sets but missing from
  * [exercises] are appended sorted by id. Weights within [WEIGHT_TOLERANCE_KG] tie, and ties keep
@@ -66,13 +71,14 @@ fun computePrs(
     workouts: List<WorkoutEntity>,
     workoutExercises: List<WorkoutExerciseEntity>,
     sets: List<SetEntity>,
+    tracking: Map<String, Tracking> = emptyMap(),
 ): List<ExercisePr> {
     val workoutIds = workouts.mapTo(HashSet()) { it.id }
     val weById = workoutExercises.filter { it.workoutId in workoutIds }.associateBy { it.id }
 
     val setsByExercise = HashMap<String, MutableList<SetEntity>>()
     for (set in sets) {
-        if (!recordEligible(set) || (set.weightKg ?: 0.0) <= 0.0) continue
+        if (set.completedAt == null) continue
         val slot = weById[set.workoutExerciseId] ?: continue
         setsByExercise.getOrPut(slot.exerciseId) { mutableListOf() }.add(set)
     }
@@ -82,43 +88,17 @@ fun computePrs(
 
     val result = mutableListOf<ExercisePr>()
     for (exerciseId in orderedIds) {
-        val ordered = setsByExercise.getValue(exerciseId)
-            .sortedWith(compareBy({ it.completedAt }, { it.id }))
-
-        var maxWeight: Double? = null
-        var maxWeightDate = 0L
-        var maxWeightSet: SetEntity? = null
-        var bestE1Rm: Double? = null
-        var bestE1RmDate: Long? = null
-        var bestE1RmSet: SetEntity? = null
-
-        for (set in ordered) {
-            val weight = set.weightKg ?: continue
-            val currentMax = maxWeight
-            if (currentMax == null || weight > currentMax + WEIGHT_TOLERANCE_KG) {
-                maxWeight = weight
-                maxWeightDate = set.completedAt ?: 0L
-                maxWeightSet = set
-            }
-            val e1Rm = set.reps?.let { epleyE1RmKg(weight, it) }
-            val currentBest = bestE1Rm
-            if (e1Rm != null && (currentBest == null || e1Rm > currentBest + WEIGHT_TOLERANCE_KG)) {
-                bestE1Rm = e1Rm
-                bestE1RmDate = set.completedAt
-                bestE1RmSet = set
-            }
-        }
-
-        val finalMaxWeight = maxWeight ?: continue // no weighted sets -> no PR entry
-        val notationSet = bestE1RmSet ?: maxWeightSet ?: continue
+        val kind = tracking[exerciseId] ?: Tracking.WEIGHT_REPS
+        val records = exerciseRecords(setsByExercise.getValue(exerciseId), emptyList(), kind) ?: continue
+        val maxWeightSet = records.maxWeightSet ?: continue // no weight record -> no PR entry
         result.add(
             ExercisePr(
                 exerciseId = exerciseId,
-                maxWeightKg = finalMaxWeight,
-                maxWeightDate = maxWeightDate,
-                bestE1RmKg = bestE1Rm,
-                bestE1RmDate = bestE1RmDate,
-                bestSet = notationSet,
+                maxWeightKg = maxWeightSet.weightKg ?: 0.0,
+                maxWeightDate = maxWeightSet.completedAt ?: 0L,
+                bestE1RmKg = records.bestE1RmKg,
+                bestE1RmDate = records.bestE1RmSet?.completedAt,
+                bestSet = records.bestE1RmSet ?: maxWeightSet,
             ),
         )
     }

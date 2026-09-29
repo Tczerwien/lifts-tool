@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.data.Tracking
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -23,6 +24,10 @@ import kotlinx.serialization.json.Json
  *
  * 2.1 (B8) renamed sets[].rest_seconds → seconds_since_previous_set: it is the gap since the previous
  * tick, not a rest setting as in Hevy (templates keep rest_seconds, which is one).
+ *
+ * 2.2 (B9) added exercises[].type, Hevy's exercise types: weight_reps, reps_only, bodyweight_reps
+ * (weighted bodyweight: weight_kg is what was added), bodyweight_assisted_reps (weight_kg is the help,
+ * negative) and duration (duration_seconds). An RPE is logged as reps in reserve: rpe = 10 − RIR.
  */
 object JsonExport {
 
@@ -50,6 +55,7 @@ object JsonExport {
                     primaryMuscles = it.primaryMuscles,
                     secondaryMuscles = it.secondaryMuscles,
                     isCustom = it.isCustom,
+                    type = hevyType(it.tracking),
                     hidden = it.hidden.takeIf { hidden -> hidden },
                     pinnedNote = it.pinnedNote,
                 )
@@ -138,6 +144,15 @@ object JsonExport {
 
     /** Hevy's set types: normal, warmup, failure, dropset (Lifts stores a drop set as "drop"). */
     private fun jsonSetType(type: String): String = if (type == "drop") "dropset" else type
+
+    /** Hevy's name for how an exercise is measured. */
+    private fun hevyType(tracking: Tracking): String = when (tracking) {
+        Tracking.WEIGHT_REPS -> "weight_reps"
+        Tracking.REPS_ONLY -> "reps_only"
+        Tracking.WEIGHTED_BODYWEIGHT -> "bodyweight_reps"
+        Tracking.ASSISTED_BODYWEIGHT -> "bodyweight_assisted_reps"
+        Tracking.DURATION -> "duration"
+    }
 }
 
 @Serializable
@@ -185,6 +200,11 @@ data class JsonExercise(
     @SerialName("primary_muscles") val primaryMuscles: List<String>,
     @SerialName("secondary_muscles") val secondaryMuscles: List<String>,
     @SerialName("is_custom") val isCustom: Boolean,
+    /**
+     * How its sets are measured, in Hevy's words: weight_reps, reps_only, bodyweight_reps (weight_kg is
+     * added load), bodyweight_assisted_reps (weight_kg is the help, negative) or duration.
+     */
+    val type: String,
     /** Only written (true) for a custom exercise taken out of the picker. */
     val hidden: Boolean? = null,
     /** His form cue. */

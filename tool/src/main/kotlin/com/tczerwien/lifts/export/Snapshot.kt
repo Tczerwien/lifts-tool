@@ -12,7 +12,9 @@ import com.tczerwien.lifts.analytics.workoutBodyweight
 import com.tczerwien.lifts.analytics.workoutEpochDay
 import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.LiftsRows
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
@@ -31,7 +33,7 @@ import kotlin.math.roundToInt
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
-const val EXPORT_SCHEMA_VERSION = "2.1"
+const val EXPORT_SCHEMA_VERSION = "2.2"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -98,6 +100,8 @@ data class SnapshotExercise(
     val primaryMuscles: List<String>,
     val secondaryMuscles: List<String>,
     val isCustom: Boolean,
+    /** How its sets are measured: which numbers they carry, and what a negative weight is (help). */
+    val tracking: Tracking,
     /** A custom exercise he took out of the picker; old workouts still use it. */
     val hidden: Boolean,
     /** His form cue, shown above the sets. */
@@ -242,9 +246,11 @@ fun buildSnapshot(
     val slotsById = validSlots.associateBy { it.id }
     val completedSets = sets.filter { it.completedAt != null && it.workoutExerciseId in slotsById }
 
-    // PR flags: each exercise's history replayed in completion order by the shared records engine.
+    // PR flags: each exercise's history replayed in completion order by the shared records engine,
+    // by how the exercise is measured.
+    val tracking = exercises.associate { it.id to it.tracking }
     val setsByExercise = completedSets.groupBy { slotsById.getValue(it.workoutExerciseId).exerciseId }
-    val prSetIds = chronologicalPrSetIds(setsByExercise)
+    val prSetIds = chronologicalPrSetIds(setsByExercise, tracking)
 
     val setsBySlot = completedSets.groupBy { it.workoutExerciseId }
     val slotsByWorkout = validSlots.groupBy { it.workoutId }
@@ -335,13 +341,14 @@ fun buildSnapshot(
                 primaryMuscles = it.primaryMuscles,
                 secondaryMuscles = it.secondaryMuscles,
                 isCustom = it.isCustom,
+                tracking = it.tracking,
                 hidden = it.hidden,
                 pinnedNote = it.pinnedNote,
             )
         }
         .sortedWith(compareBy({ it.name }, { it.id }))
 
-    val prs = computePrs(exercises, workouts, workoutExercises, sets)
+    val prs = computePrs(exercises, workouts, workoutExercises, sets, tracking)
         .map { pr ->
             SnapshotPr(
                 exerciseId = pr.exerciseId,
@@ -404,7 +411,11 @@ fun buildSnapshot(
         e1RmTrend = SnapshotE1RmTrend(
             blockDays = TREND_BLOCK_DAYS,
             blockStarts = trendBlockStarts(todayEpochDay, TREND_BLOCKS, TREND_BLOCK_DAYS).map { LocalDate.ofEpochDay(it).toString() },
-            lifts = e1RmTrend(setsByExercise, todayEpochDay, zone, TREND_BLOCKS, TREND_BLOCK_DAYS, TREND_LIFTS).map {
+            // An e1RM is a barbell-style number: a belt's load or an assisted machine's help alone says nothing.
+            lifts = e1RmTrend(
+                setsByExercise.filterKeys { (tracking[it] ?: Tracking.WEIGHT_REPS) == Tracking.WEIGHT_REPS },
+                todayEpochDay, zone, TREND_BLOCKS, TREND_BLOCK_DAYS, TREND_LIFTS,
+            ).map {
                 SnapshotLiftTrend(it.exerciseId, nameOf(it.exerciseId), it.bestE1RmKg)
             },
         ),
