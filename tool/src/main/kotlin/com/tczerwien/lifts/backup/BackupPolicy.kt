@@ -1,6 +1,8 @@
 package com.tczerwien.lifts.backup
 
 import java.time.Instant
+import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -13,6 +15,15 @@ object BackupPolicy {
 
     const val KEEP_DATED = 10
     const val KEEP_PRE_RESTORE = 3
+
+    /**
+     * Besides the newest [KEEP_DATED], the newest dated backup of each of the last [KEEP_WEEKLY] weeks
+     * and of the last [KEEP_MONTHLY] months stays, so a mistake noticed weeks later (a workout deleted,
+     * the wrong file restored) can still be undone: every Finish writes a backup, and ten alone cover
+     * only about two weeks. Each file is about 1 MB.
+     */
+    const val KEEP_WEEKLY = 12
+    const val KEEP_MONTHLY = 12
 
     /** Home backs up when the newest dated backup is at least this old. */
     const val DUE_AFTER_MS = 24 * 60 * 60 * 1000L
@@ -58,9 +69,11 @@ object BackupPolicy {
 
     /**
      * The files of a backups folder ([stored]) to delete: every dated copy but the newest [KEEP_DATED]
-     * and every pre-restore copy but the newest [KEEP_PRE_RESTORE], newest by when they were written.
-     * A file written in the future (the clock was wrong, then fixed) counts as oldest: it predates the
-     * fix. [justWritten] is never on the list and counts toward its kind's limit. Names in [keep] (the
+     * and every pre-restore copy but the newest [KEEP_PRE_RESTORE], newest by when they were written;
+     * the dated copies that are the newest of one of the last [KEEP_WEEKLY] weeks or [KEEP_MONTHLY]
+     * months (local calendar in [zone]) stay too. A file written in the future (the clock was wrong,
+     * then fixed) counts as oldest, and never as a week's or month's copy: it predates the fix.
+     * [justWritten] is never on the list and counts toward its kind's limit. Names in [keep] (the
      * file a restore is reading) are never on the list either, but don't count: the limit may be
      * passed for a while, and a later backup trims the extra copy. [LATEST] and files Lifts didn't
      * name are never on the list.
@@ -70,24 +83,45 @@ object BackupPolicy {
         now: Long,
         justWritten: String? = null,
         keep: Collection<String> = emptyList(),
+        zone: ZoneId = ZoneId.systemDefault(),
     ): List<String> {
         val spared = keep + listOfNotNull(justWritten)
-        val byKind = stored.distinctBy { it.name }.filter { it.name !in spared }.groupBy { kindOf(it.name) }
+        val distinct = stored.distinctBy { it.name }
+        val byKind = distinct.filter { it.name !in spared }.groupBy { kindOf(it.name) }
         return Kind.entries.flatMap { kind ->
             val limit = when (kind) {
                 Kind.DATED -> KEEP_DATED
                 Kind.PRE_RESTORE -> KEEP_PRE_RESTORE
             }
             val kept = if (justWritten != null && kindOf(justWritten) == kind) 1 else 0
-            byKind[kind].orEmpty()
-                .sortedWith(
-                    compareBy<Stored> { it.writtenAt > now + CLOCK_SLACK_MS }
-                        .thenByDescending { it.writtenAt }
-                        .thenByDescending { it.name },
-                )
-                .drop((limit - kept).coerceAtLeast(0))
-                .map { it.name }
+            val ordered = byKind[kind].orEmpty().sortedWith(
+                compareBy<Stored> { it.writtenAt > now + CLOCK_SLACK_MS }
+                    .thenByDescending { it.writtenAt }
+                    .thenByDescending { it.name },
+            )
+            val recent = ordered.take((limit - kept).coerceAtLeast(0)).mapTo(HashSet()) { it.name }
+            val longer = if (kind == Kind.DATED) newestPerWeekAndMonth(distinct.filter { kindOf(it.name) == kind }, now, zone) else emptySet()
+            ordered.filter { it.name !in recent && it.name !in longer }.map { it.name }
         }
+    }
+
+    /**
+     * The newest of [files] in each of the last [KEEP_WEEKLY] ISO weeks and each of the last
+     * [KEEP_MONTHLY] months up to [now], in [zone]. Files from the future are left out.
+     */
+    private fun newestPerWeekAndMonth(files: List<Stored>, now: Long, zone: ZoneId): Set<String> {
+        val newestFirst = files
+            .filter { it.writtenAt <= now + CLOCK_SLACK_MS }
+            .sortedWith(compareByDescending<Stored> { it.writtenAt }.thenByDescending { it.name })
+        fun dayOf(file: Stored): LocalDate = Instant.ofEpochMilli(file.writtenAt).atZone(zone).toLocalDate()
+        fun mondayOf(date: LocalDate): LocalDate = date.minusDays((date.dayOfWeek.value - 1).toLong())
+        val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+        val firstMonday = mondayOf(today).minusWeeks((KEEP_WEEKLY - 1).toLong())
+        val firstMonth = YearMonth.from(today).minusMonths((KEEP_MONTHLY - 1).toLong())
+        // groupBy keeps the order, so each group's first file is its newest.
+        val weekly = newestFirst.groupBy { mondayOf(dayOf(it)) }.filterKeys { it >= firstMonday }.values.map { it.first().name }
+        val monthly = newestFirst.groupBy { YearMonth.from(dayOf(it)) }.filterKeys { it >= firstMonth }.values.map { it.first().name }
+        return (weekly + monthly).toSet()
     }
 
     /**

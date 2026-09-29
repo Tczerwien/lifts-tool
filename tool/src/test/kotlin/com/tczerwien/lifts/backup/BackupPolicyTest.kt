@@ -70,7 +70,7 @@ class BackupPolicyTest {
         val others = listOf(stored(BackupPolicy.LATEST, sep1), stored("notes.txt", 0), stored(".backup.tmp", 0))
         val listing = (dated + preRestore + others).shuffled(java.util.Random(6))
 
-        val deleted = BackupPolicy.toDelete(listing, now = sep1 + 20 * day).toSet()
+        val deleted = BackupPolicy.toDelete(listing, now = sep1 + 20 * day, zone = utc).toSet()
 
         assertEquals((dated.take(3) + preRestore.take(2)).map { it.name }.toSet(), deleted)
     }
@@ -111,6 +111,46 @@ class BackupPolicyTest {
         // The next backup that doesn't keep it (the next Finish, say) trims the source.
         val dated = stored("lifts-2026-09-05-0801.db", sep1 + 5 * day + 60_000)
         assertEquals(listOf(copies[0].name), BackupPolicy.toDelete(copies + safety + dated, now = dated.writtenAt, justWritten = dated.name))
+    }
+
+    @Test
+    fun `a backup a day for 400 days keeps ten recent, one a week for 12 weeks and one a month for a year`() {
+        // Daily at 20:00 UTC from 2025-08-26 to 2026-09-29 (a Tuesday); just written: today's.
+        val first = millis("2025-08-26T20:00:00Z")
+        val daily = (0 until 400).map { d ->
+            val at = first + d * day
+            stored(BackupPolicy.fileName(Kind.DATED, at, utc), at)
+        }
+        val now = daily.last().writtenAt
+        val deleted = BackupPolicy.toDelete(daily, now = now, justWritten = daily.last().name, zone = utc).toSet()
+        val kept = daily.map { it.name }.filterNot { it in deleted }
+
+        // The newest ten: 2026-09-20 .. 09-29.
+        assertTrue(kept.containsAll(daily.takeLast(10).map { it.name }))
+        // Each of the last 12 weeks (Mondays 2026-07-13 .. 09-28) keeps its Sunday, or today in this week.
+        for (sunday in listOf("2026-07-19", "2026-08-02", "2026-08-30", "2026-09-13")) {
+            assertTrue("lifts-$sunday-2000.db" in kept, "week ending $sunday")
+        }
+        assertFalse("lifts-2026-07-12-2000.db" in kept, "13 weeks back and not its month's newest")
+        assertTrue("lifts-2026-07-31-2000.db" in kept && "lifts-2026-08-31-2000.db" in kept, "months' newest")
+        // Each of the last 12 months (2025-10 .. 2026-09) keeps its last day; older months nothing.
+        for (lastDay in listOf("2025-10-31", "2025-12-31", "2026-02-28", "2026-06-30")) {
+            assertTrue("lifts-$lastDay-2000.db" in kept, "month ending $lastDay")
+        }
+        assertTrue(kept.none { it.startsWith("lifts-2025-08") || it.startsWith("lifts-2025-09") }, "older than 12 months")
+        // 10 recent (09-20..29), 9 more weeks (Sundays 07-19..09-13; the week of 09-14 ends in the recent
+        // ten) and 11 more months (2025-10 .. 2026-08; September's newest is today's).
+        assertEquals(10 + 9 + 11, kept.size)
+    }
+
+    @Test
+    fun `a file from a wrong clock never stands for a week or a month`() {
+        val now = millis("2026-09-29T20:00:00Z")
+        val recent = (0 until 10).map { d -> stored("lifts-2026-09-%02d-2000.db".format(29 - d), now - d * day) }
+        val future = stored("lifts-2026-12-01-2000.db", now + 60 * day)
+        val lastMonth = stored("lifts-2026-08-15-2000.db", now - 45 * day)
+        val deleted = BackupPolicy.toDelete(recent + future + lastMonth, now = now, zone = utc)
+        assertEquals(listOf(future.name), deleted)
     }
 
     @Test
