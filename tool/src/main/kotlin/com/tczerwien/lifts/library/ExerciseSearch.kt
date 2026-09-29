@@ -77,7 +77,8 @@ class CatalogEntry(
 
     /** Equipment as words ("cable"), so "cable pushdown" finds Triceps Pushdown; none for "other", "body only". */
     internal val equipmentWords: List<String> =
-        equipment?.trim()?.lowercase()?.takeIf { it !in NOT_EQUIPMENT }?.let(::words).orEmpty()
+        equipment?.trim()?.lowercase()?.takeIf { it !in NOT_EQUIPMENT }
+            ?.let { EQUIPMENT_WORDS[it] ?: words(it) }.orEmpty()
 
     /** Lifts rank above stretches and jumps that share their words ("Overhead Triceps" is a stretch). */
     internal val isLift: Boolean = category.lowercase() !in NOT_LIFTS
@@ -101,6 +102,9 @@ internal fun words(text: String): List<String> =
 private val NON_WORD = Regex("[^a-z0-9]+")
 
 private val NOT_EQUIPMENT = setOf("other", "body only", "none")
+
+/** Equipment whose own words would mislead: every EZ-bar lift would answer "curl". */
+private val EQUIPMENT_WORDS = mapOf("e-z curl bar" to listOf("ez", "bar"))
 
 private val NOT_LIFTS = setOf("stretching", "plyometrics", "cardio")
 
@@ -135,8 +139,16 @@ internal val ALIASES: Map<String, List<String>> = mapOf(
     "hamstring curl" to listOf("leg curl"),
     // The catalog's cable pushdowns are "Triceps Pushdown", filed under cable.
     "cable pushdown" to listOf("triceps pushdown"),
+    // Chest flyes: the pec deck is "Butterfly"; cable ones include the crossover.
+    "pec fly" to listOf("butterfly"),
+    "machine fly" to listOf("butterfly"),
+    "chest fly" to listOf("butterfly", "dumbbell fly", "cable fly", "cable crossover"),
+    "cable fly" to listOf("cable crossover"),
     "flies" to listOf("fly"),
     "calves" to listOf("calf"),
+    "abs" to listOf("crunch", "ab roller", "sit up"),
+    "farmer carry" to listOf("farmer walk"),
+    "farmers carry" to listOf("farmer walk"),
 )
 
 private val ALIAS_PHRASES: Map<List<String>, List<List<String>>> =
@@ -165,19 +177,39 @@ private fun singulars(word: String): List<String> = buildList {
 /** A typed word this long that begins a shorthand ("dum" of dumbbell) takes its spellings. */
 private const val MIN_BEGUN_LENGTH = 3
 
-/** A parsed query: its terms, and what he typed run together. */
-internal class Query(val terms: List<Term>, val compact: String)
+/**
+ * A parsed query: its terms, and every way of writing the whole query run together ([forms]): what he
+ * typed, and each shorthand swapped for its spellings ("pec deck" is also "butterfly"), each also
+ * without a plural ending. [forms] is what the exact and phrase fits compare against.
+ */
+internal class Query(val terms: List<Term>) {
+    val forms: Set<String> = terms
+        .fold(listOf("")) { heads, term ->
+            heads.flatMap { head -> term.spellings.map { head + it.joinToString("") } }.take(MAX_FORMS)
+        }
+        .filter { it.isNotEmpty() }
+        .flatMapTo(LinkedHashSet()) { listOf(it) + singulars(it) }
+}
+
+/** Whole-query spellings kept at most: a long query full of shorthand multiplies them. */
+private const val MAX_FORMS = 64
 
 internal fun parseQuery(raw: String): Query {
     val typed = words(raw)
     val terms = mutableListOf<Term>()
     var at = 0
     while (at < typed.size) {
-        val phrase = (minOf(LONGEST_ALIAS, typed.size - at) downTo 1).asSequence()
+        // The longest shorthand here, also with its last word's plural ending off ("rdls", "pec decks").
+        val found = (minOf(LONGEST_ALIAS, typed.size - at) downTo 1).asSequence()
             .map { typed.subList(at, at + it) }
-            .firstOrNull { it in ALIAS_PHRASES }
-        if (phrase != null) {
-            terms += Term(listOf(phrase) + ALIAS_PHRASES.getValue(phrase))
+            .firstNotNullOfOrNull { phrase ->
+                (listOf(phrase) + singulars(phrase.last()).map { phrase.dropLast(1) + it })
+                    .firstOrNull { it in ALIAS_PHRASES }
+                    ?.let { key -> phrase to key }
+            }
+        if (found != null) {
+            val (phrase, key) = found
+            terms += Term((listOf(phrase, key) + ALIAS_PHRASES.getValue(key)).distinct())
             at += phrase.size
         } else {
             // A word he is still typing takes a one-word shorthand's spellings too ("dumb" also finds DB).
@@ -191,41 +223,44 @@ internal fun parseQuery(raw: String): Query {
             at++
         }
     }
-    return Query(terms, typed.joinToString(""))
-}
-
-/** How well a name answers a query; lower is better. */
-private enum class Fit { EXACT, MATCHES }
-
-private fun fit(name: SearchName, query: Query): Fit? {
-    val runTogether = listOf(query.compact) + singulars(query.compact)
-    return when {
-        query.compact.isEmpty() -> null
-        runTogether.any { it == name.compact } || singulars(name.compact).any { it == query.compact } -> Fit.EXACT
-        query.terms.all { it.matches(name.words) } -> Fit.MATCHES
-        runTogether.any { compact ->
-            name.wordStarts.any { name.compact.startsWith(compact, it) }
-        } -> Fit.MATCHES
-        else -> null
-    }
+    return Query(terms)
 }
 
 /**
- * The rank of [entry] for [query], lower is better, or null when it doesn't match:
- * 0 the shown name is what he typed; 1 the shown name matches; 2 another of its names is what he
- * typed; 3 another name matches; 4 it matches once its equipment counts ("cable pushdown").
+ * How well a name answers a query, best first: it is the query ([Query.forms]; plural endings aside);
+ * the query runs on in it from the start of a word, as a phrase ("T-Bar Row with Handle" for "t-bar",
+ * "Chin-Up" for "chinup"); or each query word starts one of its words, anywhere ("bench dumb").
+ */
+private enum class Fit { EXACT, PHRASE, WORDS }
+
+private fun fit(name: SearchName, query: Query): Fit? = when {
+    query.forms.isEmpty() -> null
+    name.compact in query.forms || singulars(name.compact).any { it in query.forms } -> Fit.EXACT
+    query.forms.any { form -> name.wordStarts.any { name.compact.startsWith(form, it) } } -> Fit.PHRASE
+    query.terms.all { it.matches(name.words) } -> Fit.WORDS
+    else -> null
+}
+
+/**
+ * The rank of [entry] for [query], lower is better, or null when it doesn't match. Its best name
+ * counts; at each [Fit] the name Lifts shows ranks just above its other names: 0 shown exact, 1 other
+ * exact, 2 shown phrase, 3 other phrase, 4 shown words, 5 other words, then 6 when it matches only
+ * once its equipment counts ("cable pushdown").
  */
 internal fun rank(entry: CatalogEntry, query: Query): Int? {
-    fit(entry.shownName, query)?.let { return it.ordinal }
-    entry.otherNames.mapNotNull { fit(it, query) }.minOrNull()?.let { return 2 + it.ordinal }
+    val shown = fit(entry.shownName, query)?.let { 2 * it.ordinal }
+    val other = entry.otherNames.mapNotNull { fit(it, query) }.minOrNull()?.let { 2 * it.ordinal + 1 }
+    listOfNotNull(shown, other).minOrNull()?.let { return it }
     val withEquipment = entry.equipmentWords.isNotEmpty() && (listOf(entry.shownName) + entry.otherNames).any { name ->
         query.terms.all { it.matches(name.words, entry.equipmentWords) }
     }
-    return if (withEquipment) 4 else null
+    return if (withEquipment) EQUIPMENT_RANK else null
 }
 
+private const val EQUIPMENT_RANK = 6
+
 /** Near misses: a name that has all but one of his words, for a long query nothing else answers. */
-private const val NEAR_MISS_RANK = 5
+private const val NEAR_MISS_RANK = 7
 private const val NEAR_MISS_MIN_TERMS = 3
 
 private fun nearMiss(entry: CatalogEntry, query: Query): Boolean =

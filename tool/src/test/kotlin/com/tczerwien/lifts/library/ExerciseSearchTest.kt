@@ -84,9 +84,26 @@ class ExerciseSearchTest {
         val renamed = entries.filter { it.id != bench.id } + catalogEntry(bench.summary(), knownCatalogName(bench.id))
         assertEquals(bench.id, search("flat bench", within = renamed).first())
         assertTrue(bench.id in search("barbell bench press medium", within = renamed))
-        // "Bench Press" is no longer the name it shows, but it still answers to it, behind the lifts that show it.
-        val benchPress = search("bench press", within = renamed)
-        assertTrue(bench.id in benchPress && benchPress.first() != bench.id, "$benchPress")
+        // "Bench Press" is no longer the name it shows, but it is still that lift's short name.
+        assertEquals(bench.id, search("bench press", within = renamed).first())
+    }
+
+    @Test
+    fun `more gym words, plurals of shorthand, and phrases before scattered words`() {
+        assertEquals("butterfly", search("pec deck").first())
+        assertEquals("butterfly", search("machine fly").first())
+        assertEquals("butterfly", search("pec fly").first())
+        val chestFly = search("chest fly")
+        assertTrue(chestFly.take(4).containsAll(listOf("butterfly", "cable-crossover", "dumbbell-flyes")), "$chestFly")
+        assertTrue("cable-crossover" in search("cable fly"))
+        assertTrue(search("abs").take(5).containsAll(listOf("crunches", "ab-roller", "sit-up")), "${search("abs")}")
+        assertEquals("romanian-deadlift", search("rdls").first())
+        assertEquals("farmers-walk", search("farmer carry").first())
+        // "t-bar" is a phrase in T-Bar Row, and scattered in "... Two-Arm Long Bar Row".
+        assertEquals("t-bar-row-with-handle", search("t-bar").first())
+        // The EZ bar's equipment doesn't make every EZ-bar lift a curl.
+        assertFalse("ez-bar-skullcrusher" in search("ez curl"))
+        assertEquals("ez-bar-curl", search("ez curl").first())
     }
 
     @Test
