@@ -28,10 +28,11 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.BodyPart
 import com.tczerwien.lifts.library.CatalogEntry
+import com.tczerwien.lifts.library.PickerChip
 import com.tczerwien.lifts.library.catalogEntries
-import com.tczerwien.lifts.library.inBodyPart
+import com.tczerwien.lifts.library.chipAfterLoad
 import com.tczerwien.lifts.library.nameFromQuery
-import com.tczerwien.lifts.library.searchExercises
+import com.tczerwien.lifts.library.pickerEntries
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.ui.KeptListState
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -65,18 +66,9 @@ class ExercisePickerViewModel(
 
     data class ExerciseRow(val id: String, val name: String, val muscleLabel: String)
 
-    /** A chip: what he has logged lately, the whole catalog, or one body part. */
-    sealed interface Chip {
-        data object Recent : Chip
-
-        data object All : Chip
-
-        data class Part(val part: BodyPart) : Chip
-    }
-
     data class UiState(
         /** The active chip, shown while no search is. */
-        val chip: Chip = Chip.All,
+        val chip: PickerChip = PickerChip.All,
         /** He picked a chip or searched: the first load no longer moves him to Recent. */
         val chipChosen: Boolean = false,
         /** He has logged something, so the Recent chip shows. */
@@ -129,7 +121,7 @@ class ExercisePickerViewModel(
         return true
     }
 
-    fun selectChip(chip: Chip) {
+    fun selectChip(chip: PickerChip) {
         _uiState.update { it.copy(chip = chip, chipChosen = true, searchQuery = null).withRows() }
     }
 
@@ -158,27 +150,17 @@ class ExercisePickerViewModel(
         recentIds = repository.recentExerciseIds(RECENT_LIMIT).filter { it in shown }
         val hasRecent = recentIds.isNotEmpty()
         _uiState.update { state ->
-            // He opens on Recent once he has logged something, unless he has already picked a chip.
-            val chip = when {
-                hasRecent && !state.chipChosen -> Chip.Recent
-                state.chip == Chip.Recent && !hasRecent -> Chip.All
-                else -> state.chip
-            }
-            state.copy(chip = chip, hasRecent = hasRecent, loaded = true).withRows()
+            state.copy(
+                chip = chipAfterLoad(state.chip, state.chipChosen, hasRecent),
+                hasRecent = hasRecent,
+                loaded = true,
+            ).withRows()
         }
     }
 
-    /** The rows for this state: a search, else the chip's. Recent keeps its order, most recent first. */
+    /** A new list for this state ([pickerEntries]): a search, else the chip's. */
     private fun UiState.withRows(): UiState {
-        val entries = when {
-            searchQuery != null -> searchExercises(catalog, searchQuery, recentIds)
-            else -> when (val chip = chip) {
-                Chip.Recent -> catalog.associateBy { it.id }.let { byId -> recentIds.mapNotNull(byId::get) }
-                Chip.All -> catalog
-                is Chip.Part -> inBodyPart(catalog, chip.part)
-            }
-        }
-        val rows = entries.map { it.toRow() }
+        val rows = pickerEntries(catalog, recentIds, chip, searchQuery).map { it.toRow() }
         return copy(
             rows = rows,
             showMuscles = rows.mapTo(HashSet()) { it.muscleLabel }.size > 1,
@@ -343,9 +325,9 @@ class ExercisePickerScreen(
                 FilterChip(label = "$query ×", active = true, onClick = { viewModel.clearSearch() })
             } else {
                 val chips = buildList {
-                    if (uiState.hasRecent) add(ExercisePickerViewModel.Chip.Recent to "Recent")
-                    add(ExercisePickerViewModel.Chip.All to "All")
-                    BodyPart.entries.forEach { add(ExercisePickerViewModel.Chip.Part(it) to it.label) }
+                    if (uiState.hasRecent) add(PickerChip.Recent to "Recent")
+                    add(PickerChip.All to "All")
+                    BodyPart.entries.forEach { add(PickerChip.Part(it) to it.label) }
                 }
                 chips.forEach { (chip, label) ->
                     FilterChip(label = label, active = chip == uiState.chip, onClick = { viewModel.selectChip(chip) })
