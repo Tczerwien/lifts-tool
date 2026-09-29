@@ -373,6 +373,21 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a stale workout with a note but no tick is closed, not deleted`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "squat")!!
+        assertTrue(session.setSlotNotes(workoutId, slotId, "knee sore, skipped squats"))
+        assertTrue(session.closeIfStale(workoutId, now = 1_000 + 5 * 3_600_000L))
+        assertEquals(1_000L, store.workoutById(workoutId)?.endedAt, "closed at its start")
+        assertEquals("knee sore, skipped squats", store.slots.getValue(slotId).notes)
+        // Without the note it goes, as before.
+        val bare = session.startEmpty(now = 2_000)
+        session.addExercise(bare, "squat")!!
+        assertTrue(session.closeIfStale(bare, now = 2_000 + 5 * 3_600_000L))
+        assertNull(store.workoutById(bare))
+    }
+
+    @Test
     fun `a rest for this exercise equal to the default follows the default`() {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = session.addExercise(workoutId, "fly")!!

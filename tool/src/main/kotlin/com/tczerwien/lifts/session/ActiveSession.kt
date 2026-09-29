@@ -339,7 +339,7 @@ class ActiveSession(
         val plan = planOpenWorkouts(
             open.map { workout ->
                 val sets = setsById.getValue(workout.id)
-                OpenWorkout(workout.id, workout.startedAt, sets, untouched(workout, sets))
+                OpenWorkout(workout.id, workout.startedAt, sets, untouched(workout, sets), hasNotes(workout))
             },
             now,
         )
@@ -363,12 +363,16 @@ class ActiveSession(
      */
     fun closeIfStale(workoutId: Long, now: Long = System.currentTimeMillis()): Boolean {
         val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return false
-        return when (val action = staleAction(workout.startedAt, repository.setsForWorkout(workoutId), now)) {
+        return when (val action = staleAction(workout.startedAt, repository.setsForWorkout(workoutId), now, hasNotes = hasNotes(workout))) {
             OpenWorkoutAction.Keep -> false
             is OpenWorkoutAction.CloseAt -> repository.updateWorkout(workout.copy(endedAt = action.endedAt))
             OpenWorkoutAction.Delete -> repository.deleteWorkout(workoutId)
         }
     }
+
+    /** A note on [workout] or one of its exercises: closing it must keep it ([closeAction]). */
+    private fun hasNotes(workout: WorkoutEntity): Boolean =
+        !workout.notes.isNullOrBlank() || repository.exercisesForWorkout(workout.id).any { !it.notes.isNullOrBlank() }
 
     /** When [workout] was last used: its latest logged set, else its start. */
     fun lastActivity(workout: WorkoutEntity): Long =

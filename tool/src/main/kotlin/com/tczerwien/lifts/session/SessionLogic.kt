@@ -331,10 +331,12 @@ sealed interface OpenWorkoutAction {
 
 /**
  * Closes a workout that won't be resumed: at its last logged set, or deleted when nothing was
- * logged (sets without a tick never count anywhere, so nothing is lost).
+ * logged (sets without a tick never count anywhere, so nothing is lost). One that [hasNotes] (a note
+ * on it or an exercise, written from the "…" menu) closes at its start instead: the note is his.
  */
-fun closeAction(startedAt: Long, sets: List<SetEntity>): OpenWorkoutAction {
-    val lastLogged = sets.mapNotNull { it.completedAt }.maxOrNull() ?: return OpenWorkoutAction.Delete
+fun closeAction(startedAt: Long, sets: List<SetEntity>, hasNotes: Boolean = false): OpenWorkoutAction {
+    val lastLogged = sets.mapNotNull { it.completedAt }.maxOrNull()
+        ?: return if (hasNotes) OpenWorkoutAction.CloseAt(startedAt) else OpenWorkoutAction.Delete
     return OpenWorkoutAction.CloseAt(maxOf(startedAt, lastLogged))
 }
 
@@ -348,11 +350,12 @@ fun staleAction(
     sets: List<SetEntity>,
     now: Long,
     staleAfterMillis: Long = STALE_AFTER_MILLIS,
+    hasNotes: Boolean = false,
 ): OpenWorkoutAction =
     if (now - lastActivityMillis(startedAt, sets) <= staleAfterMillis) {
         OpenWorkoutAction.Keep
     } else {
-        closeAction(startedAt, sets)
+        closeAction(startedAt, sets, hasNotes)
     }
 
 /**
@@ -375,6 +378,8 @@ data class OpenWorkout(
     val startedAt: Long,
     val sets: List<SetEntity>,
     val untouched: Boolean,
+    /** A note on it or one of its exercises ([closeAction]). */
+    val hasNotes: Boolean = false,
 )
 
 /**
@@ -389,9 +394,9 @@ fun planOpenWorkouts(open: List<OpenWorkout>, now: Long): Map<Long, OpenWorkoutA
             workout.untouched -> OpenWorkoutAction.Delete
             !newestSeen -> {
                 newestSeen = true
-                staleAction(workout.startedAt, workout.sets, now)
+                staleAction(workout.startedAt, workout.sets, now, hasNotes = workout.hasNotes)
             }
-            else -> closeAction(workout.startedAt, workout.sets)
+            else -> closeAction(workout.startedAt, workout.sets, workout.hasNotes)
         }
     }
 }
