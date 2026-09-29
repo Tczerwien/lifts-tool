@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,6 +35,7 @@ import com.tczerwien.lifts.library.isRenamed
 import com.tczerwien.lifts.library.searchExercises
 import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.ui.KeptListState
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.knownCatalogName
 import com.thelightphone.sdk.LightScreen
@@ -45,6 +47,7 @@ import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
+import com.thelightphone.sdk.ui.LightScrollBarPosition
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightTextVariant
@@ -85,6 +88,10 @@ class ExercisePickerViewModel(
         val searchOpen: Boolean = false,
         val searchSession: Int = 0,
         val rows: List<ExerciseRow> = emptyList(),
+        /** The rows differ in muscle: under Chest every row would say Chest, so the label is left off. */
+        val showMuscles: Boolean = true,
+        /** Bumped with every new list (a chip, a search, the load): the list starts over at the top. */
+        val listGeneration: Int = 0,
         val loaded: Boolean = false,
     )
 
@@ -185,7 +192,12 @@ class ExercisePickerViewModel(
                 is Chip.Part -> inBodyPart(catalog, chip.part)
             }
         }
-        return copy(rows = entries.map { it.toRow() })
+        val rows = entries.map { it.toRow() }
+        return copy(
+            rows = rows,
+            showMuscles = rows.mapTo(HashSet()) { it.muscleLabel }.size > 1,
+            listGeneration = listGeneration + 1,
+        )
     }
 
     private fun CatalogEntry.toRow() = ExerciseRow(
@@ -206,6 +218,9 @@ class ExercisePickerScreen(
 ) : LightScreen<String, ExercisePickerViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
+
+    /** The list's place survives the search editor and Custom Exercise; a new list starts at the top. */
+    private val listState = KeptListState()
 
     override val viewModelClass: Class<ExercisePickerViewModel>
         get() = ExercisePickerViewModel::class.java
@@ -275,14 +290,21 @@ class ExercisePickerScreen(
                     )
                 }
             } else {
-                LightLazyScrollView(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    uniformItemHeightGridUnits = EXERCISE_ROW_HEIGHT_UNITS,
-                ) {
-                    items(uiState.rows, key = { it.id }) { row ->
-                        ExerciseRow(row = row, onClick = { goBack(row.id) })
+                // Inside: the scrollbar floats over the rows' 2gu end padding instead of taking 4gu of
+                // every name once the list scrolls. Keyed, because the scroll view remembers its first
+                // list state for the scrollbar: a new list gets a new view.
+                key(uiState.listGeneration) {
+                    LightLazyScrollView(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        scrollBarPosition = LightScrollBarPosition.Inside,
+                        listState = listState.forKey(uiState.listGeneration),
+                        uniformItemHeightGridUnits = EXERCISE_ROW_HEIGHT_UNITS,
+                    ) {
+                        items(uiState.rows, key = { it.id }) { row ->
+                            ExerciseRow(row = row, showMuscle = uiState.showMuscles, onClick = { goBack(row.id) })
+                        }
                     }
                 }
             }
@@ -368,12 +390,13 @@ private const val RECENT_LIMIT = 30
 private const val ROW_DIVIDER_ALPHA = 0.3f
 
 /**
- * Uniform 3gu catalog row (design .exrow): name left with ellipsis, primary muscle right
- * in contentSecondary, full-width hairline divider at the bottom edge (inside the row so
- * the LightLazyScrollView uniform-height contract holds).
+ * Uniform 3gu catalog row (design .exrow): the name left, cut in the middle when too long so the words
+ * that tell variants apart stay ("Decline Dumb…Flyes"); the primary muscle right in contentSecondary
+ * when [showMuscle]; a full-width hairline divider at the bottom edge (inside the row so the
+ * LightLazyScrollView uniform-height contract holds). The 2gu end padding holds the scrollbar.
  */
 @Composable
-private fun ExerciseRow(row: ExercisePickerViewModel.ExerciseRow, onClick: () -> Unit) {
+private fun ExerciseRow(row: ExercisePickerViewModel.ExerciseRow, showMuscle: Boolean, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -383,23 +406,25 @@ private fun ExerciseRow(row: ExercisePickerViewModel.ExerciseRow, onClick: () ->
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 1f.gridUnitsAsDp()),
+                .padding(start = 1f.gridUnitsAsDp(), end = 2f.gridUnitsAsDp()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             LightText(
                 text = row.name,
                 variant = LightTextVariant.Copy,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = TextOverflow.MiddleEllipsis,
                 modifier = Modifier.weight(1f),
             )
-            Spacer(modifier = Modifier.width(0.5f.gridUnitsAsDp()))
-            LightText(
-                text = row.muscleLabel,
-                variant = LightTextVariant.Detail,
-                lighten = true,
-                maxLines = 1,
-            )
+            if (showMuscle) {
+                Spacer(modifier = Modifier.width(0.5f.gridUnitsAsDp()))
+                LightText(
+                    text = row.muscleLabel,
+                    variant = LightTextVariant.Detail,
+                    lighten = true,
+                    maxLines = 1,
+                )
+            }
         }
         Box(
             modifier = Modifier
