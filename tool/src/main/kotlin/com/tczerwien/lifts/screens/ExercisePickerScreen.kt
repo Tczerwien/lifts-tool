@@ -26,8 +26,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.library.BodyPart
 import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.catalogEntry
+import com.tczerwien.lifts.library.inBodyPart
 import com.tczerwien.lifts.library.isRenamed
 import com.tczerwien.lifts.library.searchExercises
 import com.tczerwien.lifts.seed.SeedParser
@@ -62,12 +64,23 @@ class ExercisePickerViewModel(
 
     data class ExerciseRow(val id: String, val name: String, val muscleLabel: String)
 
+    /** A chip: what he has logged lately, the whole catalog, or one body part. */
+    sealed interface Chip {
+        data object Recent : Chip
+
+        data object All : Chip
+
+        data class Part(val part: BodyPart) : Chip
+    }
+
     data class UiState(
-        /** Distinct primary muscles of the catalog (raw dataset values, alphabetical). */
-        val muscles: List<String> = emptyList(),
-        /** Active muscle chip; null = ALL. */
-        val selectedMuscle: String? = null,
-        /** Active name search; null = none. Mutually exclusive with [selectedMuscle]. */
+        /** The active chip, shown while no search is. */
+        val chip: Chip = Chip.All,
+        /** He picked a chip or searched: the first load no longer moves him to Recent. */
+        val chipChosen: Boolean = false,
+        /** He has logged something, so the Recent chip shows. */
+        val hasRecent: Boolean = false,
+        /** Active name search; null = none. It replaces the chip until cleared. */
         val searchQuery: String? = null,
         val searchOpen: Boolean = false,
         val searchSession: Int = 0,
@@ -84,6 +97,10 @@ class ExercisePickerViewModel(
      */
     @Volatile
     private var catalog: List<CatalogEntry> = emptyList()
+
+    /** What he has logged, most recently used first ([LiftsRepository.recentExerciseIds]). */
+    @Volatile
+    private var recentIds: List<String> = emptyList()
 
     private var loadStarted = false
 
@@ -107,8 +124,8 @@ class ExercisePickerViewModel(
         return true
     }
 
-    fun selectMuscle(muscle: String?) {
-        _uiState.update { it.copy(selectedMuscle = muscle, searchQuery = null).withRows() }
+    fun selectChip(chip: Chip) {
+        _uiState.update { it.copy(chip = chip, chipChosen = true, searchQuery = null).withRows() }
     }
 
     fun openSearch() {
@@ -119,10 +136,10 @@ class ExercisePickerViewModel(
         _uiState.update { it.copy(searchOpen = false) }
     }
 
-    /** Blank submit clears the search; otherwise the query replaces any muscle filter. */
+    /** Blank submit clears the search; otherwise the query replaces the chip until cleared. */
     fun submitSearch(raw: String) {
         val query = raw.trim().takeIf { it.isNotEmpty() }
-        _uiState.update { it.copy(searchOpen = false, searchQuery = query, selectedMuscle = null).withRows() }
+        _uiState.update { it.copy(searchOpen = false, searchQuery = query, chipChosen = true).withRows() }
     }
 
     fun clearSearch() {
@@ -144,16 +161,29 @@ class ExercisePickerViewModel(
         catalog = summaries
             .map { catalogEntry(it, knownCatalogName(it.id) ?: seedNames[it.id]) }
             .sortedWith(compareBy({ it.shown.lowercase() }, { it.id }))
-        val muscles = catalog.flatMap { it.primaryMuscles }.distinct().sorted()
-        _uiState.update { it.copy(muscles = muscles, loaded = true).withRows() }
+        val shown = catalog.mapTo(HashSet()) { it.id }
+        recentIds = repository.recentExerciseIds(RECENT_LIMIT).filter { it in shown }
+        val hasRecent = recentIds.isNotEmpty()
+        _uiState.update { state ->
+            // He opens on Recent once he has logged something, unless he has already picked a chip.
+            val chip = when {
+                hasRecent && !state.chipChosen -> Chip.Recent
+                state.chip == Chip.Recent && !hasRecent -> Chip.All
+                else -> state.chip
+            }
+            state.copy(chip = chip, hasRecent = hasRecent, loaded = true).withRows()
+        }
     }
 
-    /** The rows for this state's filter: a search, a muscle, or the whole catalog. */
+    /** The rows for this state: a search, else the chip's. Recent keeps its order, most recent first. */
     private fun UiState.withRows(): UiState {
         val entries = when {
-            searchQuery != null -> searchExercises(catalog, searchQuery)
-            selectedMuscle != null -> catalog.filter { selectedMuscle in it.primaryMuscles }
-            else -> catalog
+            searchQuery != null -> searchExercises(catalog, searchQuery, recentIds)
+            else -> when (val chip = chip) {
+                Chip.Recent -> catalog.associateBy { it.id }.let { byId -> recentIds.mapNotNull(byId::get) }
+                Chip.All -> catalog
+                is Chip.Part -> inBodyPart(catalog, chip.part)
+            }
         }
         return copy(rows = entries.map { it.toRow() })
     }
@@ -272,8 +302,10 @@ class ExercisePickerScreen(
     }
 
     /**
-     * 2gu chip row (tokens.css-style superfine chips, active inverted). With a search
-     * active it shows the query as a single inverted chip; tapping the chip clears it.
+     * 2gu chip row (tokens.css-style superfine chips, active inverted): Recent (once he has logged
+     * something), All, then the body parts in gym order. With a search active it shows the query as a
+     * single inverted chip with an ×; tapping it clears the search. Every chip carries the same padding,
+     * so the row doesn't shift when another is picked; the row still scrolls if a phone's text is wider.
      */
     @Composable
     private fun FilterRow(uiState: ExercisePickerViewModel.UiState) {
@@ -281,26 +313,23 @@ class ExercisePickerScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(FILTER_ROW_HEIGHT_UNITS.gridUnitsAsDp())
-                .padding(horizontal = 1f.gridUnitsAsDp())
+                .padding(horizontal = (1f - CHIP_PADDING_UNITS).gridUnitsAsDp())
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(1f.gridUnitsAsDp()),
+            horizontalArrangement = Arrangement.spacedBy((1f - 2 * CHIP_PADDING_UNITS).gridUnitsAsDp()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val query = uiState.searchQuery
             if (query != null) {
-                FilterChip(label = query, active = true, onClick = { viewModel.clearSearch() })
+                // The × says what a tap does: it clears the search.
+                FilterChip(label = "$query ×", active = true, onClick = { viewModel.clearSearch() })
             } else {
-                FilterChip(
-                    label = "All",
-                    active = uiState.selectedMuscle == null,
-                    onClick = { viewModel.selectMuscle(null) },
-                )
-                uiState.muscles.forEach { muscle ->
-                    FilterChip(
-                        label = muscle,
-                        active = muscle == uiState.selectedMuscle,
-                        onClick = { viewModel.selectMuscle(muscle) },
-                    )
+                val chips = buildList {
+                    if (uiState.hasRecent) add(ExercisePickerViewModel.Chip.Recent to "Recent")
+                    add(ExercisePickerViewModel.Chip.All to "All")
+                    BodyPart.entries.forEach { add(ExercisePickerViewModel.Chip.Part(it) to it.label) }
+                }
+                chips.forEach { (chip, label) ->
+                    FilterChip(label = label, active = chip == uiState.chip, onClick = { viewModel.selectChip(chip) })
                 }
             }
         }
@@ -311,15 +340,8 @@ class ExercisePickerScreen(
         Box(
             modifier = Modifier
                 .lightClickable(onClick = onClick)
-                .let { m ->
-                    if (active) {
-                        m
-                            .background(LightThemeTokens.colors.content)
-                            .padding(horizontal = 0.5f.gridUnitsAsDp())
-                    } else {
-                        m
-                    }
-                },
+                .let { m -> if (active) m.background(LightThemeTokens.colors.content) else m }
+                .padding(horizontal = CHIP_PADDING_UNITS.gridUnitsAsDp()),
         ) {
             LightText(
                 text = label.uppercase(),
@@ -337,6 +359,12 @@ class ExercisePickerScreen(
 
 private const val EXERCISE_ROW_HEIGHT_UNITS = 3f
 private const val FILTER_ROW_HEIGHT_UNITS = 2f
+
+/** Each chip's padding, active or not; the gap between chip texts stays 1gu. */
+private const val CHIP_PADDING_UNITS = 0.5f
+
+/** How many exercises Recent lists: a program's week and then some. */
+private const val RECENT_LIMIT = 30
 private const val ROW_DIVIDER_ALPHA = 0.3f
 
 /**
