@@ -22,7 +22,15 @@ class MarkdownExportTest {
         assertContains(lines, "  goals: ${ExportFixtures.GOALS}")
         assertContains(lines, "  injuries:")
         assertContains(lines, "    - left knee")
-        assertContains(lines, "---")
+    }
+
+    @Test
+    fun frontMatterClosesBeforeTheTitle() {
+        // The opening "---" alone must not satisfy this (#124): a front matter that never closes swallows
+        // the whole file for YAML readers.
+        val close = lines.drop(1).indexOf("---") + 1
+        val title = lines.indexOfFirst { it.startsWith("# Training Log") }
+        assertTrue(close in 1 until title, "closing --- at $close, title at $title")
     }
 
     @Test
