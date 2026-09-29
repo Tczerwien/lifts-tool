@@ -96,9 +96,9 @@ class Restorer(
 
     /**
      * Restores [prepared]. Call it on the write lane only (inside a LiftsIo block), so no save lands
-     * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. The
-     * in-workout keys go next (restored ids can repeat), then every row in one transaction, then
-     * the settings. Last, the restored log is saved as the newest dated backup, so lifts-latest.db
+     * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. Then
+     * every row in one transaction; only once they are in do the in-workout keys go (restored ids can
+     * repeat), so a restore that fails leaves a running rest alone; then the settings. Last, the restored log is saved as the newest dated backup, so lifts-latest.db
      * holds it rather than what was replaced (on a new install, an empty log). Throws
      * [NothingChanged] when it stopped before the rows were replaced.
      */
@@ -113,17 +113,24 @@ class Restorer(
         }
         if (!safety.isFile || safety.length() == 0L) throw NothingChanged("the copy of this phone's log went missing")
         try {
-            ActiveSession.forgetWorkoutState(dataStore)
             live.replaceAll(prepared.rows)
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
         }
-        val settingsProblem = if (prepared.settingsRows.isEmpty()) {
+        // The rest, the exercise on screen: they name ids of the log just replaced. The same store as
+        // the settings, so a failure here reads as a settings problem.
+        val keysProblem = try {
+            ActiveSession.forgetWorkoutState(dataStore)
             null
+        } catch (e: Exception) {
+            e.message ?: e.toString()
+        }
+        val settingsProblem = if (prepared.settingsRows.isEmpty()) {
+            keysProblem
         } else {
             try {
                 settings.replaceAll(SettingsRows.decode(prepared.settingsRows, current = settings.snapshot()))
-                null
+                keysProblem
             } catch (e: Exception) {
                 e.message ?: e.toString()
             }
