@@ -4,6 +4,7 @@ import com.tczerwien.lifts.data.ExerciseSummary
 import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.knownCatalogName
+import com.tczerwien.lifts.ui.knownShortName
 
 /**
  * Exercise search for the picker. Pure, so it is tested against the real catalog.
@@ -17,12 +18,14 @@ import com.tczerwien.lifts.ui.knownCatalogName
 
 /**
  * [exercise] as the search sees it: shown as [displayName], and answering to its stored name too and,
- * for a catalog lift he renamed ([isRenamed]), to [catalogName].
+ * for a catalog lift he renamed ([isRenamed]), to [catalogName] and its short name: the names it shows
+ * again if he resets it, which no other exercise may take meanwhile.
  */
 fun catalogEntry(exercise: ExerciseSummary, catalogName: String? = null): CatalogEntry = CatalogEntry(
     id = exercise.id,
     shown = displayName(exercise.id, exercise.name, exercise.isCustom),
-    otherNames = listOfNotNull(exercise.name, catalogName?.takeIf { isRenamed(exercise) }),
+    otherNames = listOfNotNull(exercise.name) +
+        if (isRenamed(exercise)) listOfNotNull(catalogName, knownShortName(exercise.id)) else emptyList(),
     primaryMuscles = exercise.primaryMuscles,
     equipment = exercise.equipment,
     category = exercise.category,
@@ -298,6 +301,15 @@ fun bodyPartOf(muscle: String): BodyPart? {
 /** The entries whose primary muscle is in [part], in the order given. */
 fun inBodyPart(entries: List<CatalogEntry>, part: BodyPart): List<CatalogEntry> =
     entries.filter { entry -> entry.primaryMuscles.any { bodyPartOf(it) == part } }
+
+/**
+ * The exercise, other than [exerciseId], that already answers to what renaming it to [target] would
+ * store or show: a lift reset to its catalog name shows its short name ("Dumbbell Shrug" shows "DB
+ * Shrug"), and that one must be free too. Null when both are.
+ */
+fun renameClash(exerciseId: String, isCustom: Boolean, target: String, entries: List<CatalogEntry>): CatalogEntry? =
+    nameClash(target, entries, exerciseId)
+        ?: nameClash(displayName(exerciseId, target, isCustom), entries, exerciseId)
 
 /**
  * A name as duplicate checks compare it: case, spaces, punctuation and a plural s don't count, so

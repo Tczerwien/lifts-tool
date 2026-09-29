@@ -193,8 +193,9 @@ class ExerciseSearchTest {
     fun `the catalog name counts only for a renamed lift`() {
         val shrug = catalog.first { it.id == "dumbbell-shrug" }
         assertEquals(listOf("DB Shrug", "Dumbbell Shrug"), catalogEntry(shrug.summary(), "Something Else").allNames)
+        // Renamed, it keeps its catalog and short names: the ones it shows again if he resets it.
         assertEquals(
-            listOf("Shrugs", "Dumbbell Shrug"),
+            listOf("Shrugs", "Dumbbell Shrug", "DB Shrug"),
             catalogEntry(shrug.copy(name = "Shrugs").summary(), "Dumbbell Shrug").allNames,
         )
     }

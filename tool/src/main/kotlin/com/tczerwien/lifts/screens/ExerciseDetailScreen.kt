@@ -33,6 +33,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.nameClash
+import com.tczerwien.lifts.library.renameClash
 import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
@@ -201,7 +202,8 @@ class ExerciseDetailViewModel(
             val name = renameTarget(exercise, raw, shown) {
                 knownCatalogName(exercise.id) ?: SeedParser.catalogName(exercise.id)
             } ?: return@write false
-            val taken = nameClash(name, catalogEntries(repository.exerciseSummaries()), selfId = exerciseId)
+            // What it would show counts too: a reset to the catalog name shows the short name again.
+            val taken = renameClash(exerciseId, exercise.isCustom, name, catalogEntries(repository.exerciseSummaries()))
             taken == null && repository.updateExercise(exercise.copy(name = name))
         }) { changed ->
             if (changed) share.logChanged()

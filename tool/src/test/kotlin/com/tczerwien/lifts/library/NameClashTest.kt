@@ -62,5 +62,21 @@ class NameClashTest {
         // Another exercise can't take the name he gave it, nor its old catalog name.
         assertEquals(shrug.id, nameClash("shrugs", renamed, selfId = "barbell-shrug")?.id)
         assertEquals(shrug.id, nameClash("Dumbbell Shrug", renamed, selfId = "barbell-shrug")?.id)
+        // Nor its short name, which it shows again once reset.
+        assertEquals(shrug.id, nameClash("DB Shrug", renamed, selfId = "custom-1")?.id)
+    }
+
+    @Test
+    fun `a reset is checked against the name it would show, not only the one it stores`() {
+        // Older data: a custom "DB Shrug" made while the catalog lift was renamed "Shrugs".
+        val shrug = catalog.first { it.id == "dumbbell-shrug" }.copy(name = "Shrugs")
+        val customShrug = landmine.copy(id = "custom-2", name = "DB Shrug")
+        val entries = entries.filter { it.id != shrug.id } +
+            catalogEntry(shrug.summary(), knownCatalogName(shrug.id)) + catalogEntry(customShrug.summary())
+        // Stored "Dumbbell Shrug" is free by name, but it would show "DB Shrug", which the custom has.
+        assertNull(nameClash("Dumbbell Shrug", entries, selfId = shrug.id))
+        assertEquals("custom-2", renameClash(shrug.id, isCustom = false, target = "Dumbbell Shrug", entries)?.id)
+        // A custom exercise shows what it stores, so only that is checked.
+        assertNull(renameClash("custom-2", isCustom = true, target = "Shrug Hold", entries))
     }
 }

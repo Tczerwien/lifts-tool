@@ -113,6 +113,9 @@ fun displayName(id: String, name: String, isCustom: Boolean): String =
 /** The catalog name of a lift with a short name, without reading the catalog; null for the others. */
 fun knownCatalogName(id: String): String? = SHORT_NAMES[id]?.catalogName
 
+/** The short name of catalog lift [id], whether or not it shows now (he may have renamed it); null for none. */
+fun knownShortName(id: String): String? = SHORT_NAMES[id]?.short
+
 /**
  * What a rename submitted as [typed] should store for [exercise], or null to leave it alone.
  * Whitespace runs (a Return included) collapse to single spaces. Submitting [shown], the name the
