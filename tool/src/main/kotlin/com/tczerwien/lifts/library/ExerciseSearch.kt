@@ -291,7 +291,7 @@ private const val EQUIPMENT_RANK = 6
 /** Ranks 0 and 1 are an exact name (shown or other). */
 private const val LAST_EXACT_RANK = 1
 
-/** Near misses: a name that has all but one of his words, for a long query nothing else answers. */
+/** Near misses: a name that misses exactly one of [terms] (three or more), for a query nothing else answers. */
 private const val NEAR_MISS_RANK = 7
 private const val NEAR_MISS_MIN_TERMS = 3
 
@@ -316,12 +316,13 @@ private fun wordTerms(raw: String): List<Term> {
 
 /**
  * The entries that answer [raw], best first: lifts before stretches and jumps ("split squat" is a lift
- * before it is the "Split Squats" jump); then a name he typed exactly; then what he has done before,
- * most recent first ([recentIds]), so "db press" finds his DB Shoulder Press before closer phrases;
- * then by [rank]; then shorter shown names, the plain lift before its variants ("Overhead Press"
- * before "Seated Barbell Military Press"); then by name. When nothing answers a query of three words
- * or more, the names that miss only one of them are offered instead ("seated db shoulder press" finds
- * "DB Shoulder Press").
+ * before it is the "Split Squats" jump); then a name he typed exactly; then names that match, before
+ * lifts that match only through their equipment ("machine press": Machine Shoulder Press before Leg
+ * Press); within each, what he has done before, most recent first ([recentIds]), so "db press" finds
+ * his DB Shoulder Press before closer phrases; then by [rank]; then shorter shown names, the plain lift
+ * before its variants ("Overhead Press" before "Seated Barbell Military Press"); then by name. When
+ * nothing answers, the names that miss exactly one of three or more terms, or one of three or more
+ * typed words, are offered instead ("seated db shoulder press" finds "DB Shoulder Press").
  */
 fun searchExercises(
     entries: List<CatalogEntry>,
