@@ -24,7 +24,8 @@ import com.tczerwien.lifts.screens.JumpEntry
 import com.tczerwien.lifts.screens.RestTimerScreen
 import com.tczerwien.lifts.screens.WorkoutCompleteResult
 import com.tczerwien.lifts.screens.WorkoutCompleteScreen
-import com.tczerwien.lifts.screens.WorkoutMenuAction
+import com.tczerwien.lifts.screens.PlateCalculatorScreen
+import com.tczerwien.lifts.screens.WorkoutMenuResult
 import com.tczerwien.lifts.screens.WorkoutMenuScreen
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.SET_TYPE_DROP
@@ -61,7 +62,8 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
  * set grid (PREVIOUS autofill, steppers on the active row, checkbox logging + PR stars),
  * a collapsed next-exercise row, and the rest strip. Top bar: back / name and clock / Finish,
  * which takes two taps and discards a workout with nothing logged. Bottom bar: rest timer / add
- * exercise / "…" (remove set, remove exercise, discard). The elapsed clock and rest remaining are
+ * exercise / "…" (the exercise's note, rest, plates, details, name, removing a set or it; the
+ * workout's exercise list, name, note, discard). The elapsed clock and rest remaining are
  * derived from wall-clock timestamps; each ticks in its own small composable, once a second,
  * and only while the app is in the foreground ([rememberSecondClock]).
  *
@@ -375,21 +377,33 @@ class ActiveWorkoutScreen(
         navigateTo({ ExerciseJumpScreen(it, entries, currentSlotId) }) { slotId -> viewModel.jumpTo(slotId) }
     }
 
+    /**
+     * The "…" menu ([WorkoutMenuScreen]). Its result acts on the exercise and rows it showed, even if
+     * the screen moved on meanwhile; the ones that open another screen do so from here, as if tapped.
+     */
     private fun openMenu(uiState: ActiveWorkoutViewModel.UiState) {
         viewModel.finishArm.disarm()
         viewModel.holdPosition()
         val options = viewModel.menuOptions(uiState)
-        navigateTo({
-            WorkoutMenuScreen(
-                it,
-                removeSetLabel = options.removeSetLabel,
-                removeExerciseLabel = options.removeExerciseLabel,
-            )
-        }) { action ->
-            when (action) {
-                WorkoutMenuAction.REMOVE_SET -> options.removeSetId?.let(viewModel::removeSet)
-                WorkoutMenuAction.REMOVE_EXERCISE -> options.removeSlotId?.let(viewModel::removeExercise)
-                WorkoutMenuAction.DISCARD_WORKOUT -> viewModel.discard()
+        navigateTo({ WorkoutMenuScreen(it, options.content) }) { result ->
+            when (result) {
+                WorkoutMenuResult.RemoveSet -> options.removeSetId?.let(viewModel::removeSet)
+                WorkoutMenuResult.RemoveExercise -> options.removeSlotId?.let(viewModel::removeExercise)
+                WorkoutMenuResult.DiscardWorkout -> viewModel.discard()
+                WorkoutMenuResult.Jump -> openExerciseList(viewModel.uiState.value)
+                WorkoutMenuResult.ExerciseDetails -> options.exerciseId?.let { exerciseId ->
+                    navigateTo({ ExerciseDetailScreen(it, exerciseId = exerciseId) })
+                }
+                WorkoutMenuResult.RenameExercise -> options.exerciseId?.let { exerciseId ->
+                    navigateTo({ ExerciseDetailScreen(it, exerciseId = exerciseId, renameOnly = true) })
+                }
+                WorkoutMenuResult.Plates -> options.platesKg?.let { kg ->
+                    navigateTo({ PlateCalculatorScreen(it, targetWeightKg = kg) })
+                }
+                is WorkoutMenuResult.RenameWorkout -> viewModel.renameWorkout(result.name)
+                is WorkoutMenuResult.WorkoutNote -> viewModel.setWorkoutNotes(result.text)
+                is WorkoutMenuResult.ExerciseNote -> options.slotId?.let { viewModel.setSlotNotes(it, result.text) }
+                is WorkoutMenuResult.Rest -> options.slotId?.let { viewModel.setSlotRest(it, result.sec) }
             }
         }
     }

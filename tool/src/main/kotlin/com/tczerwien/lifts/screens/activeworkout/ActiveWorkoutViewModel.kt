@@ -7,6 +7,7 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.data.tracking
+import com.tczerwien.lifts.screens.WorkoutMenuContent
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.session.DURATION_STEP_SEC
@@ -90,6 +91,7 @@ class ActiveWorkoutViewModel(
         val loaded: Boolean = false,
         val workoutId: Long = 0,
         val workoutName: String = "",
+        val workoutNotes: String? = null,
         val startedAt: Long = 0,
         val exercises: List<ExerciseBlock> = emptyList(),
         val currentIndex: Int = 0,
@@ -128,16 +130,20 @@ class ActiveWorkoutViewModel(
     data class WeightEntry(val setId: Long, val prefill: String, val session: Int, val refused: Boolean = false)
 
     /**
-     * What the "…" menu can offer for the current exercise and row. The ids travel with the menu, so
-     * its result acts on exactly what it showed even if the screen moved on meanwhile.
+     * What the "…" menu shows ([content]) and the ids its result acts on. The ids travel with the
+     * menu, so its result acts on exactly what it showed even if the screen moved on meanwhile.
      */
     data class MenuOptions(
-        /** The active row while it is unticked, named as its marker shows it ("Set 2", "Warm-up"). */
-        val removeSetLabel: String? = null,
+        val content: WorkoutMenuContent,
+        /** The active row while it is unticked. */
         val removeSetId: Long? = null,
-        /** The current exercise's name while none of its sets is ticked. */
-        val removeExerciseLabel: String? = null,
+        /** The current exercise while none of its sets is ticked. */
         val removeSlotId: Long? = null,
+        /** The exercise on screen: its slot and catalog id. */
+        val slotId: Long? = null,
+        val exerciseId: String? = null,
+        /** The weight the active row shows, in kg, for Plates; null when there are none to load. */
+        val platesKg: Double? = null,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -705,18 +711,87 @@ class ActiveWorkoutViewModel(
     }
 
     fun menuOptions(state: UiState): MenuOptions {
-        val block = state.exercises.getOrNull(state.currentIndex) ?: return MenuOptions()
+        val workout = WorkoutMenuContent(workoutName = state.workoutName, workoutNote = state.workoutNotes)
+        val block = state.exercises.getOrNull(state.currentIndex) ?: return MenuOptions(workout)
         val activeIndex = block.sets.indexOfFirst { it.id == state.activeSetId }
-        val removableSet = block.sets.getOrNull(activeIndex)?.takeIf { it.completedAt == null }
+        val activeSet = block.sets.getOrNull(activeIndex)
+        val removableSet = activeSet?.takeIf { it.completedAt == null }
         val exerciseRemovable = block.sets.none { it.completedAt != null }
+        // Plates for the weight the active row shows, its own or its starting value.
+        val shownKg = activeSet?.let { it.weightKg ?: block.seeds[activeIndex].weightKg }
+        val platesKg = shownKg?.takeIf { block.tracking == Tracking.WEIGHT_REPS && Format.roundWeight(Format.kgToDisplay(it, state.units), state.units) > 0.0 }
         return MenuOptions(
-            removeSetLabel = removableSet?.let {
-                if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${buildMarkers(block.sets)[activeIndex]}"
-            },
+            content = workout.copy(
+                exerciseName = block.name,
+                exerciseNote = block.slot.notes,
+                restSec = block.slot.restSecWork ?: state.defaultRestSec,
+                defaultRestSec = state.defaultRestSec,
+                platesFor = platesKg?.let { "${Format.weight(it, state.units)} ${state.units.suffix}" },
+                platesUnavailable = when {
+                    platesKg != null -> null
+                    block.tracking != Tracking.WEIGHT_REPS -> "BARBELL LIFTS ONLY"
+                    activeSet == null -> "NO SET SELECTED"
+                    else -> "SET A WEIGHT FIRST"
+                },
+                position = "${state.currentIndex + 1} OF ${state.exercises.size}",
+                removeSetLabel = removableSet?.let {
+                    if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${buildMarkers(block.sets)[activeIndex]}"
+                },
+                removeExerciseLabel = block.name.takeIf { exerciseRemovable },
+            ),
             removeSetId = removableSet?.id,
-            removeExerciseLabel = block.name.takeIf { exerciseRemovable },
             removeSlotId = block.slot.id.takeIf { exerciseRemovable },
+            slotId = block.slot.id,
+            exerciseId = block.slot.exerciseId,
+            platesKg = platesKg,
         )
+    }
+
+    /**
+     * Menu: renames the workout. Shown at once, so the menu opened again reads the new name; the
+     * session ignores a blank or unchanged name and a workout that has closed, and the reload after
+     * shows what was saved.
+     */
+    fun renameWorkout(name: String) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        val tidy = name.replace(Regex("\\s+"), " ").trim()
+        if (tidy.isNotEmpty()) _uiState.update { it.copy(workoutName = tidy) }
+        LiftsIo.write({ session.renameWorkout(workoutId, name) }) { refresh() }
+    }
+
+    /** Menu: the workout's note (blank clears it); shown at once, like [renameWorkout]. */
+    fun setWorkoutNotes(text: String) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        _uiState.update { it.copy(workoutNotes = text.trim().ifEmpty { null }) }
+        LiftsIo.write({ session.setWorkoutNotes(workoutId, text) }) { refresh() }
+    }
+
+    /** Menu: the note on exercise [slotId] for this workout (blank clears it); shown at once. */
+    fun setSlotNotes(slotId: Long, text: String) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        updateSlot(slotId) { it.copy(notes = text.trim().ifEmpty { null }) }
+        LiftsIo.write({ session.setSlotNotes(workoutId, slotId, text) }) { refresh() }
+    }
+
+    /** Menu: exercise [slotId]'s work rest from its next tick; Settings' default is stored as none. Shown at once. */
+    fun setSlotRest(slotId: Long, sec: Int) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        val default = _uiState.value.defaultRestSec
+        updateSlot(slotId) { it.copy(restSecWork = sec.takeIf { rest -> rest != default }) }
+        LiftsIo.write({ session.setSlotRest(workoutId, slotId, sec) }) { refresh() }
+    }
+
+    /** [transform] applied to slot [slotId] on screen, ahead of the save and the reload after it. */
+    private fun updateSlot(slotId: Long, transform: (WorkoutExerciseEntity) -> WorkoutExerciseEntity) {
+        synchronized(refreshLock) {
+            _uiState.update { state ->
+                state.copy(exercises = state.exercises.map { if (it.slot.id == slotId) it.copy(slot = transform(it.slot)) else it })
+            }
+        }
     }
 
     /** Menu: removes the set it offered, only while it is unticked (the session checks again). */
@@ -945,6 +1020,7 @@ class ActiveWorkoutViewModel(
                     loaded = true,
                     workoutId = workoutId,
                     workoutName = workout.name,
+                    workoutNotes = workout.notes,
                     startedAt = workout.startedAt,
                     exercises = blocks,
                     currentIndex = currentIndex,

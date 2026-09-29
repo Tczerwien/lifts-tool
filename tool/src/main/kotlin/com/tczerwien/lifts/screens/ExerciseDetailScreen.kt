@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -78,6 +79,8 @@ class ExerciseDetailViewModel(
     private val repository: LiftsRepository,
     private val settings: SettingsStore,
     private val share: LiftsShare,
+    /** Opened only to rename (the "…" menu): the name editor opens at once, and closing it leaves. */
+    private val renameOnly: Boolean = false,
 ) : LightViewModel<Unit>() {
 
     data class HistoryRow(
@@ -113,6 +116,8 @@ class ExerciseDetailViewModel(
         /** What the name editor opens with in place of [nameAtOpen]: his text, when the lane refused it. */
         val nameDraft: String? = null,
         val loaded: Boolean = false,
+        /** Opened only to rename, and the rename is done or dropped: the screen goes back. */
+        val leave: Boolean = false,
     )
 
     enum class Editing { NOTE, NAME }
@@ -129,8 +134,19 @@ class ExerciseDetailViewModel(
      * Queued behind any write still pending, so a workout deleted a moment ago can't show.
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        LiftsIo.write({}) { refresh() }
+        LiftsIo.write({}) {
+            refresh()
+            // Opened to rename: straight into the name editor, once, as the name has loaded.
+            if (renameOnly && !renameOpened) {
+                renameOpened = true
+                openNameEditor()
+            }
+        }
     }
+
+    /** [renameOnly]: the name editor has been opened once; after that, closing it leaves. */
+    @Volatile
+    private var renameOpened = false
 
     /**
      * Back from the note or name editor closes it. Only the in-app back button reaches this: the SDK
@@ -167,7 +183,7 @@ class ExerciseDetailViewModel(
     }
 
     fun closeEditor() {
-        _uiState.value = _uiState.value.copy(editing = null, nameTakenBy = null, nameDraft = null)
+        _uiState.value = _uiState.value.copy(editing = null, nameTakenBy = null, nameDraft = null, leave = renameOnly)
     }
 
     /** Blank input clears the pinned note. workouts.json carries the cue, so the exports catch up. */
@@ -202,6 +218,7 @@ class ExerciseDetailViewModel(
             return
         }
         _uiState.update { it.copy(editing = null, nameTakenBy = null, nameDraft = null) }
+        // Opened only to rename: back to the workout once the lane says it's done (not when refused).
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write RenameResult.Unchanged
             val name = renameTarget(exercise, raw, shown) {
@@ -216,6 +233,7 @@ class ExerciseDetailViewModel(
             }
         }) { result ->
             if (result == RenameResult.Saved) share.logChanged()
+            if (renameOnly && result !is RenameResult.Taken) _uiState.update { it.copy(leave = true) }
             if (result is RenameResult.Taken) {
                 // Back in the editor with his text, unless he has opened the note editor meanwhile.
                 _uiState.update { state ->
@@ -359,6 +377,8 @@ class ExerciseDetailViewModel(
 class ExerciseDetailScreen(
     private val sealedActivity: SealedLightActivity,
     private val exerciseId: String,
+    /** Opened by the Active Workout menu's Rename: only the name editor, then back. */
+    private val renameOnly: Boolean = false,
 ) : LightScreen<Unit, ExerciseDetailViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -367,12 +387,16 @@ class ExerciseDetailScreen(
         get() = ExerciseDetailViewModel::class.java
 
     override fun createViewModel() =
-        ExerciseDetailViewModel(exerciseId, repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare())
+        ExerciseDetailViewModel(exerciseId, repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare(), renameOnly)
 
     @Composable
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
+
+        LaunchedEffect(uiState.leave) {
+            if (uiState.leave) goBack()
+        }
 
         LiftsFrame(sealedActivity, lightContext) {
             val editing = uiState.editing
@@ -401,8 +425,11 @@ class ExerciseDetailScreen(
                         .fillMaxSize()
                         .background(LightThemeTokens.colors.background),
                 )
-            } else {
+            } else if (!renameOnly) {
                 DetailContent(uiState)
+            } else {
+                // Opened only to rename: nothing behind the editor while it opens and closes.
+                Box(modifier = Modifier.fillMaxSize().background(LightThemeTokens.colors.background))
             }
         }
     }
