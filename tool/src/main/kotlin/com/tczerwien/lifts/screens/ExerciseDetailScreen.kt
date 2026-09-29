@@ -10,12 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.InlineTextContent
-import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -23,16 +19,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.Placeholder
-import androidx.compose.ui.text.PlaceholderVerticalAlign
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.SetRun
+import com.tczerwien.lifts.analytics.SetToken
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
+import com.tczerwien.lifts.analytics.compactNotation
 import com.tczerwien.lifts.analytics.exerciseRecords
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
@@ -48,6 +40,7 @@ import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.LiftsTabRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
+import com.tczerwien.lifts.ui.SetLine
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.knownCatalogName
@@ -58,7 +51,6 @@ import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
-import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
 import com.thelightphone.sdk.ui.LightScrollView
@@ -68,7 +60,6 @@ import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
-import com.thelightphone.sdk.ui.designVerticalPxToSp
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,13 +73,11 @@ class ExerciseDetailViewModel(
     private val settings: SettingsStore,
 ) : LightViewModel<Unit>() {
 
-    /** One set inside a history row, e.g. "w95×10" / "140×8"; [pr] appends the star. */
-    data class SetSegment(val text: String, val pr: Boolean)
-
     data class HistoryRow(
         val workoutId: Long,
         val dateLabel: String,
-        val segments: List<SetSegment>,
+        /** The workout's sets in one line, repeats collapsed ("w95×10; 225×5 ×3"): see [compactNotation]. */
+        val runs: List<SetRun>,
         /** The workout still in progress: shown, but it doesn't open Workout Detail, whose trash would delete it. */
         val inProgress: Boolean = false,
     )
@@ -209,7 +198,7 @@ class ExerciseDetailViewModel(
             HistoryRow(
                 workoutId = entry.workoutId,
                 dateLabel = Format.dateShort(entry.dateMillis),
-                segments = entry.sets.map { set -> set.toSegment(unit, set.id in prSetIds) },
+                runs = compactNotation(entry.sets.map { set -> set.toToken(unit, set.id in prSetIds) }),
                 inProgress = entry.inProgress,
             )
         }
@@ -228,14 +217,8 @@ class ExerciseDetailViewModel(
         }
     }
 
-    private fun SetEntity.toSegment(unit: WeightUnit, pr: Boolean): SetSegment {
-        val weightLabel = weightKg?.let { Format.weight(it, unit) } ?: "—"
-        val body = reps?.let { "$weightLabel×$it" } ?: weightLabel
-        return SetSegment(
-            text = if (type == SET_TYPE_WARMUP) "w$body" else body,
-            pr = pr,
-        )
-    }
+    private fun SetEntity.toToken(unit: WeightUnit, pr: Boolean) =
+        SetToken(setNotation(this, unit, NotationStyle.LIST) ?: "-", pr)
 
     /** The Records tab, formatted from the shared records engine. */
     private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit): Records? {
@@ -285,7 +268,6 @@ class ExerciseDetailViewModel(
         const val TAB_ABOUT = 0
         const val TAB_HISTORY = 1
         const val TAB_RECORDS = 2
-        private const val SET_TYPE_WARMUP = "warmup"
         private val REP_MAX_TARGETS = listOf(1, 5, 8)
     }
 }
@@ -534,8 +516,10 @@ private fun HistoryRow(
                 maxLines = 1,
             )
             Spacer(modifier = Modifier.width(1f.gridUnitsAsDp()))
-            HistoryNotation(
-                segments = row.segments,
+            SetLine(
+                runs = row.runs,
+                singleLine = true,
+                textAlign = TextAlign.End,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -543,67 +527,6 @@ private fun HistoryRow(
             RowDivider(modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
-}
-
-/** "w95×10; 140×8; 165×5★; 165×4" as one ellipsized line; stars are inline STAR_OUTLINE icons. */
-@Composable
-private fun HistoryNotation(
-    segments: List<ExerciseDetailViewModel.SetSegment>,
-    modifier: Modifier = Modifier,
-) {
-    val style = detailMonoStyle().copy(
-        color = LightThemeTokens.colors.content,
-        textAlign = TextAlign.End,
-    )
-    val starSizeDp = with(LocalDensity.current) { style.fontSize.toDp() }
-    val starSizeUnits = starSizeDp.value / 1f.gridUnitsAsDp().value
-    val inlineContent = mapOf(
-        PR_STAR_INLINE_ID to InlineTextContent(
-            Placeholder(
-                width = style.fontSize,
-                height = style.fontSize,
-                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-            ),
-        ) {
-            Box(
-                modifier = Modifier.size(starSizeDp),
-                contentAlignment = Alignment.Center,
-            ) {
-                LightIcon(
-                    icon = LightIcons.STAR_OUTLINE,
-                    size = starSizeUnits,
-                    contentDescription = "PR",
-                )
-            }
-        },
-    )
-    BasicText(
-        text = buildAnnotatedString {
-            segments.forEachIndexed { index, segment ->
-                if (index > 0) append("; ")
-                append(segment.text)
-                if (segment.pr) appendInlineContent(PR_STAR_INLINE_ID, "*")
-            }
-        },
-        style = style,
-        inlineContent = inlineContent,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
-}
-
-private const val PR_STAR_INLINE_ID = "pr"
-
-/** Detail-variant mono style scaled like LightText scales its variants. */
-@Composable
-private fun detailMonoStyle(): TextStyle {
-    val base = LightThemeTokens.typography.detail
-    return base.copy(
-        fontSize = base.fontSize.value.designVerticalPxToSp(),
-        lineHeight = (base.fontSize.value * 1.25f).designVerticalPxToSp(),
-        fontFamily = FontFamily.Monospace,
-    )
 }
 
 /** Stat row (design .statrow): superfine label over mono value with the date at the right. */
