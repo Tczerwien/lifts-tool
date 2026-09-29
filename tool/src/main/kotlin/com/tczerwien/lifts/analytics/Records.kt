@@ -46,6 +46,10 @@ private fun SetEntity.isWeighted(): Boolean = (weightKg ?: 0.0) > 0.0
 /** An assisted set's load: its help as a negative number, whatever sign it was stored with; none is 0. */
 private fun SetEntity.assistLoad(): Double = -kotlin.math.abs(weightKg ?: 0.0)
 
+/** The load a record set holds, as this engine ranks it: an assisted set's help negative, else its weight. */
+fun recordLoadKg(set: SetEntity, tracking: Tracking): Double =
+    if (tracking == Tracking.ASSISTED_BODYWEIGHT) set.assistLoad() else set.weightKg ?: 0.0
+
 /**
  * A heaviest-load record with reps as the tie-break: a set beats it with more load, or with the same
  * load (within [WEIGHT_TOLERANCE_KG]) and more reps. For the bodyweight kinds, where no e1RM applies.

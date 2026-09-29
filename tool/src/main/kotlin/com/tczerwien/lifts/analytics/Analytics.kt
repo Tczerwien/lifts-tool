@@ -10,7 +10,6 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
-import kotlin.math.abs
 
 /**
  * Pure-Kotlin analytics over the Lifts entities. No Android, no SDK, no reflection.
@@ -96,8 +95,7 @@ fun computePrs(
         result.add(
             ExercisePr(
                 exerciseId = exerciseId,
-                // Help is negative however it was stored (Records' rule for assisted exercises).
-                maxWeightKg = (maxWeightSet.weightKg ?: 0.0).let { if (kind == Tracking.ASSISTED_BODYWEIGHT) -abs(it) else it },
+                maxWeightKg = recordLoadKg(maxWeightSet, kind),
                 maxWeightDate = maxWeightSet.completedAt ?: 0L,
                 bestE1RmKg = records.bestE1RmKg,
                 bestE1RmDate = records.bestE1RmSet?.completedAt,
