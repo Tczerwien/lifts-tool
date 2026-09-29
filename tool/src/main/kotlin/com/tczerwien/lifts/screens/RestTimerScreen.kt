@@ -114,7 +114,9 @@ class RestTimerViewModel(
                 val persisted = session.restStateSnapshot()
                 val endMillis = when {
                     !initialized -> openingRestEnd(persisted?.endMillis, now, resumeOnly) ?: run {
-                        session.startRest(requestedDurationSec, now)
+                        // On the lane, as Skip's clear is: whichever was tapped first lands first, and a
+                        // rest skipped before this load got here is not started.
+                        LiftsIo.write { if (!skipped) session.startRest(requestedDurationSec, now) }.join()
                         now + requestedDurationSec.coerceAtLeast(0) * 1000L
                     }
                     persisted != null -> persisted.endMillis
@@ -151,16 +153,13 @@ class RestTimerViewModel(
     private var skipped = false
 
     /**
-     * Skip: clear the persisted timer, then leave (callback runs on Main). Under the same lock as the
-     * loads, and marked first: a Skip tapped before the timer had loaded used to race the first load,
-     * which could start the rest again after the clear.
+     * Skip: clear the persisted timer, then leave (callback runs on Main). Marked first, and cleared on
+     * the write lane, where the first load starts its rest: a Skip tapped before the timer had loaded
+     * can't be undone by that load, and Back right after can't cancel the clear (it isn't this screen's).
      */
     fun skip(onCleared: () -> Unit) {
         skipped = true
-        viewModelScope.launch(Dispatchers.IO) {
-            syncMutex.withLock { session.clearRest() }
-            withContext(Dispatchers.Main) { onCleared() }
-        }
+        LiftsIo.write({ session.clearRest() }) { withContext(Dispatchers.Main) { onCleared() } }
     }
 
     /**
@@ -337,7 +336,8 @@ class RestTimerScreen(
                             ),
                             LightBarButton.Text(
                                 text = "SKIP",
-                                onClick = { viewModel.skip { goBack() } },
+                                // Back may have left meanwhile: a goBack then would pop Active Workout.
+                                onClick = { viewModel.skip { if (onTop) goBack() } },
                             ),
                             LightBarButton.Text(
                                 text = "+30",
