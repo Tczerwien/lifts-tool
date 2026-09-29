@@ -194,6 +194,7 @@ class ExerciseSearchTest {
         assertEquals("Hanging Knee Raise", nameFromQuery("  hanging   knee raise "))
         assertEquals("DB Hip Thrust", nameFromQuery("db hip thrust"))
         assertEquals("RDL Dumbbell", nameFromQuery("rdl dumbbell"))
+        assertEquals("Deficit RDLs", nameFromQuery("deficit rdls"))
         assertEquals("McGill Curl-up", nameFromQuery("McGill curl-up"))
         assertEquals("", nameFromQuery("   "))
     }

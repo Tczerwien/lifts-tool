@@ -309,13 +309,18 @@ fun nameFromQuery(raw: String): String =
     raw.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ") { word ->
         when {
             word.any { it.isUpperCase() } -> word
-            listOf(word) in ALIAS_PHRASES && word.length <= SHORTHAND_MAX_LENGTH -> word.uppercase()
+            isShorthand(word) -> word.uppercase()
+            // A plural of shorthand keeps its s small: "rdls" is RDLs.
+            word.endsWith("s") && isShorthand(word.dropLast(1)) -> word.dropLast(1).uppercase() + "s"
             else -> word.replaceFirstChar { it.uppercase() }
         }
     }
 
 /** Shorthand this short is written in capitals (DB, RDL, OHP); "dumbbell" is a word. */
 private const val SHORTHAND_MAX_LENGTH = 4
+
+private fun isShorthand(word: String): Boolean =
+    word.length <= SHORTHAND_MAX_LENGTH && listOf(word.lowercase()) in ALIAS_PHRASES
 
 /**
  * The picker's body-part chips, in gym order, over the catalog's 17 muscles. Neck has no chip: its 8
