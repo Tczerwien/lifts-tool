@@ -154,15 +154,19 @@ class WorkoutDetailViewModel(
         _uiState.update { it.copy(editingNotes = false) }
     }
 
-    /** On the write lane, so Back can't drop it; the notes are in every export file, so they catch up. */
+    /**
+     * On the write lane, so Back can't drop it; the notes are in every export file, so they catch up.
+     * The editor closes on the saved text, so opening it again before the reload lands starts from
+     * that, not the note before.
+     */
     fun saveNotes(text: String) {
+        val notes = text.trim().ifEmpty { null }
         LiftsIo.write({
             val workout = repository.workoutById(workoutId) ?: return@write false
-            val notes = text.trim().ifEmpty { null }
             notes != workout.notes && repository.updateWorkout(workout.copy(notes = notes))
         }) { changed ->
             if (changed) share.logChanged()
-            _uiState.update { it.copy(editingNotes = false) }
+            _uiState.update { it.copy(editingNotes = false, notes = if (changed) notes else it.notes) }
             refresh()
         }
     }

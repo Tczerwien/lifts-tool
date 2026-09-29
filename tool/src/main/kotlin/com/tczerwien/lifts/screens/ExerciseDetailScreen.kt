@@ -219,9 +219,12 @@ class ExerciseDetailViewModel(
         _uiState.value = _uiState.value.copy(editing = null, nameTakenBy = null, nameDraft = null, leave = renameOnly)
     }
 
-    /** Blank input clears the pinned note. workouts.json carries the cue, so the exports catch up. */
+    /**
+     * Blank input clears the pinned note. workouts.json carries the cue, so the exports catch up. The
+     * note shows at once, so the editor opened again before the save lands starts from it, not the old one.
+     */
     fun saveNote(raw: String) {
-        _uiState.value = _uiState.value.copy(editing = null)
+        _uiState.value = _uiState.value.copy(editing = null, pinnedNote = raw.trim().takeIf { it.isNotEmpty() })
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val note = raw.trim().takeIf { it.isNotEmpty() }
