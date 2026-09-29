@@ -387,6 +387,8 @@ class ActiveSession(
             val templateExercises = repository.exercisesForTemplate(templateId)
             planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
         },
+        // A name or a rest he set from the "…" menu is his: Back must not throw it away.
+        startName = workout.templateId?.let { repository.templateById(it)?.name } ?: defaultWorkoutName(workout.startedAt, zone),
     )
 
     /** Clears endedAt after a Finish the lifter takes back from Workout Complete. */

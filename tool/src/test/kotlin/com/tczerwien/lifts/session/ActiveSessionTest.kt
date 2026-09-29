@@ -352,6 +352,27 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a workout he renamed or gave a rest is kept when he backs out before a tick`() {
+        val utc = ActiveSession(store, SettingsStore(dataStore), dataStore, alarm, ZoneOffset.UTC)
+        val renamed = utc.startEmpty(now = 18 * 3_600_000L)
+        assertTrue(utc.renameWorkout(renamed, "Legs - deload"))
+        assertFalse(utc.discardIfUntouched(renamed))
+        assertNotNull(store.workoutById(renamed))
+
+        val template = store.addTemplate("Lower A", "squat" to 3)
+        val rested = utc.startFromTemplate(template, now = 19 * 3_600_000L)
+        val slot = store.exercisesForWorkout(rested).single()
+        assertTrue(utc.setSlotRest(rested, slot.id, 240))
+        assertFalse(utc.discardIfUntouched(rested))
+
+        // As started, it goes.
+        val untouched = utc.startFromTemplate(template, now = 20 * 3_600_000L)
+        assertTrue(utc.discardIfUntouched(untouched))
+        val empty = utc.startEmpty(now = 21 * 3_600_000L)
+        assertTrue(utc.discardIfUntouched(empty))
+    }
+
+    @Test
     fun `a rest for this exercise equal to the default follows the default`() {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = session.addExercise(workoutId, "fly")!!

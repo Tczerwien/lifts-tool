@@ -158,8 +158,13 @@ fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null): List<S
     return lastTime.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
 }
 
-/** One slot as a start creates it: the exercise, and its rows' set types in order. */
-data class PlannedSlot(val exerciseId: String, val types: List<String>)
+/** One slot as a start creates it: the exercise, its rows' set types in order, and its rests (the template's). */
+data class PlannedSlot(
+    val exerciseId: String,
+    val types: List<String>,
+    val restSecWork: Int? = null,
+    val restSecWarmup: Int? = null,
+)
 
 /**
  * The slots a workout started from [templateExercises] begins with: one per template exercise in
@@ -176,7 +181,12 @@ fun planTemplate(
         val occurrence = seen[planned.exerciseId] ?: 0
         seen[planned.exerciseId] = occurrence + 1
         val lastTime = groupsByExercise[planned.exerciseId].orEmpty().getOrElse(occurrence) { emptyList() }
-        PlannedSlot(planned.exerciseId, prefillTypes(lastTime, targetWorkSets = planned.targetSets))
+        PlannedSlot(
+            planned.exerciseId,
+            prefillTypes(lastTime, targetWorkSets = planned.targetSets),
+            restSecWork = planned.restSecWork,
+            restSecWarmup = planned.restSecWarmup,
+        )
     }
 }
 

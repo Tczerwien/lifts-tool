@@ -284,7 +284,8 @@ fun lastActivityMillis(startedAt: Long, sets: List<SetEntity>): Long =
 
 /**
  * True when nothing has changed since the workout was created, so discarding it loses nothing: no
- * notes, no set logged or given a value, and the slots and their set types are exactly what the
+ * notes, the name it started with, no set logged or given a value, and the slots, their set types
+ * and their rests are exactly what the
  * start made. That is no slots at all for an empty workout, and [planned] ([planTemplate] from the
  * template as it is now) for a template workout; [planned] is null for a workout with no template.
  * Any doubt (the template was edited or deleted since) counts as touched, so the workout is kept.
@@ -295,8 +296,11 @@ fun isUntouched(
     slots: List<WorkoutExerciseEntity>,
     sets: List<SetEntity>,
     planned: List<PlannedSlot>?,
+    /** The name the start gave it (the template's, or [defaultWorkoutName]); another name is his. */
+    startName: String? = null,
 ): Boolean {
     if (!workout.notes.isNullOrBlank() || slots.any { !it.notes.isNullOrBlank() }) return false
+    if (startName != null && workout.name != startName) return false
     val hasValue = sets.any { set ->
         set.completedAt != null || set.weightKg != null || set.reps != null ||
             set.durationSec != null || set.rpe != null
@@ -308,7 +312,8 @@ fun isUntouched(
     val typesBySlot = sets.groupBy { it.workoutExerciseId }
         .mapValues { (_, slotSets) -> slotSets.sortedBy { it.position }.map { it.type } }
     return actual.zip(expected).all { (slot, plannedSlot) ->
-        slot.exerciseId == plannedSlot.exerciseId && typesBySlot[slot.id].orEmpty() == plannedSlot.types
+        slot.exerciseId == plannedSlot.exerciseId && typesBySlot[slot.id].orEmpty() == plannedSlot.types &&
+            slot.restSecWork == plannedSlot.restSecWork && slot.restSecWarmup == plannedSlot.restSecWarmup
     }
 }
 
