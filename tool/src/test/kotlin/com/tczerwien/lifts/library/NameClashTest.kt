@@ -6,8 +6,9 @@ import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.ui.knownCatalogName
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class NameClashTest {
 
@@ -27,12 +28,23 @@ class NameClashTest {
     )
 
     @Test
-    fun `case, spaces, punctuation and a plural s don't make a new name`() {
-        assertEquals(nameKey("Pull-Ups"), nameKey("pull ups"))
-        assertEquals(nameKey("Pull-Ups"), nameKey("Pullup"))
-        assertEquals(nameKey("Hammer Curls"), nameKey("hammer curl"))
-        assertNotEquals(nameKey("Leg Press"), nameKey("Leg Curl"))
-        assertEquals("", nameKey(" - "))
+    fun `case, spaces, punctuation and plural endings don't make a new name`() {
+        assertTrue(sameName("Pull-Ups", "pull ups"))
+        assertTrue(sameName("Pull-Ups", "Pullup"))
+        assertTrue(sameName("Hammer Curls", "hammer curl"))
+        assertTrue(sameName("Crunch", "Crunches"))
+        assertTrue(sameName("Bench Presses", "Bench Press"))
+        assertTrue(sameName("Dumbbell Fly", "Dumbbell Flyes"))
+        assertTrue(sameName("Incline Cable Flye", "incline cable flies"))
+        assertFalse(sameName("Leg Press", "Leg Curl"))
+        assertFalse(sameName("Press", "Pres"))
+        assertEquals(emptySet(), nameKeys(" - "))
+    }
+
+    @Test
+    fun `a plural of a catalog name is taken`() {
+        assertEquals("crunches", nameClash("Crunch", entries)?.id)
+        assertEquals("dumbbell-flyes", nameClash("Dumbbell Fly", entries)?.id)
     }
 
     @Test

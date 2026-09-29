@@ -72,6 +72,9 @@ class CatalogEntry(
     /** Every name it answers to, for duplicate checks. */
     internal val allNames: List<String> get() = listOf(shown) + otherNames.map { it.text }
 
+    /** The [nameKeys] of all its names, worked out once: the check on Main runs over the whole catalog. */
+    internal val claimedKeys: Set<String> by lazy { allNames.flatMapTo(HashSet()) { nameKeys(it) } }
+
     /** Equipment as words ("cable"), so "cable pushdown" finds Triceps Pushdown; none for "other", "body only". */
     internal val equipmentWords: List<String> =
         equipment?.trim()?.lowercase()?.takeIf { it !in NOT_EQUIPMENT }?.let(::words).orEmpty()
@@ -312,13 +315,20 @@ fun renameClash(exerciseId: String, isCustom: Boolean, target: String, entries: 
         ?: nameClash(displayName(exerciseId, target, isCustom), entries, exerciseId)
 
 /**
- * A name as duplicate checks compare it: case, spaces, punctuation and a plural s don't count, so
- * "Pull-Ups", "pull ups" and "Pullup" are one name.
+ * A name's keys, as duplicate checks compare names: its words run together, so case, spaces and
+ * punctuation don't count, plus the same without a plural ending, as search reads them ("Crunches" is
+ * also crunch, "Pull-Ups" also pullup); fly, flye, flyes and flies are all fly. Two names are one when
+ * their keys meet ([sameName]): "Bench Presses" is Bench Press, "Dumbbell Fly" is Dumbbell Flyes.
  */
-fun nameKey(name: String): String {
-    val compact = words(name).joinToString("")
-    return if (compact.length >= 4 && compact.endsWith("s")) compact.dropLast(1) else compact
+fun nameKeys(name: String): Set<String> {
+    val compact = words(name).joinToString("") { FLY_FORMS[it] ?: it }
+    return if (compact.isEmpty()) emptySet() else setOf(compact) + singulars(compact)
 }
+
+/** [a] and [b] are one name to the duplicate checks ([nameKeys]). */
+fun sameName(a: String, b: String): Boolean = nameKeys(a).any { it in nameKeys(b) }
+
+private val FLY_FORMS = mapOf("flye" to "fly", "flyes" to "fly", "flies" to "fly")
 
 /**
  * The exercise, other than [selfId], that already answers to [name] (the name Lifts shows for it,
@@ -326,7 +336,7 @@ fun nameKey(name: String): String {
  * would split his history, and the Strong CSV keys exercises by name.
  */
 fun nameClash(name: String, entries: List<CatalogEntry>, selfId: String? = null): CatalogEntry? {
-    val key = nameKey(name)
-    if (key.isEmpty()) return null
-    return entries.firstOrNull { entry -> entry.id != selfId && entry.allNames.any { nameKey(it) == key } }
+    val keys = nameKeys(name)
+    if (keys.isEmpty()) return null
+    return entries.firstOrNull { entry -> entry.id != selfId && entry.claimedKeys.any { it in keys } }
 }
