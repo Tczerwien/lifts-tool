@@ -150,7 +150,7 @@ object MarkdownExport {
     /** "Weeks start Monday 2026-05-25 … 2026-07-13; the last is this week, still in progress." */
     private fun StringBuilder.appendWeeks(snapshot: ExportSnapshot) {
         append("Weeks start Monday ").append(snapshot.weekStarts.first()).append(" … ").append(snapshot.weekStarts.last())
-        append("; the last is this week, still in progress.\n")
+        append("; the last is this week, still in progress.\n\n")
     }
 
     /**

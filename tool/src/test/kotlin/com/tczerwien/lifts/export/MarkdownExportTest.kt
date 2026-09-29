@@ -4,6 +4,7 @@ import com.tczerwien.lifts.data.BodyweightEntity
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class MarkdownExportTest {
@@ -50,7 +51,9 @@ class MarkdownExportTest {
         // Labelled: which way the series runs, which weeks, and that the last one is partial (#069).
         assertContains(lines, "### Weekly sets per muscle (last 8 weeks, oldest → newest)")
         assertContains(lines, "Weeks start Monday 2026-05-25 … 2026-07-13; the last is this week, still in progress.")
-        assertTrue(lines.any { it.startsWith("Counting: each working set (warm-ups excluded) adds 1") }, "the counting rule (#126)")
+        val counting = lines.indexOfFirst { it.startsWith("Counting: each working set (warm-ups excluded) adds 1") }
+        assertTrue(counting > 0, "the counting rule (#126)")
+        assertEquals("", lines[counting - 1], "its own paragraph, not run into the week line")
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
         assertContains(lines, "- triceps: 0, 0, 0, 0, 0, 0, 1, 1")
     }
