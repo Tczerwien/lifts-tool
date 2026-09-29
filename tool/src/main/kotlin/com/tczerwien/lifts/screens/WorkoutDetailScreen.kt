@@ -112,8 +112,12 @@ class WorkoutDetailViewModel(
         super.onCleared()
     }
 
+    /** A delete is under way: rows and the pencil do nothing until it lands and the screen leaves. */
+    val busyDeleting: Boolean get() = deleting
+
     override fun onBackPressed(): Boolean {
-        if (deleting) return false
+        // Leaving because the workout is gone: an armed trash or an open editor must not swallow it.
+        if (deleting || _uiState.value.gone) return false
         if (_uiState.value.editingNotes) {
             cancelEditNotes()
             return true
@@ -309,7 +313,10 @@ class WorkoutDetailScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .lightClickable {
-                                            navigateTo({ ExerciseDetailScreen(it, exerciseId = block.exerciseId) })
+                                            // Not while our own delete lands: its goBack would pop that screen instead.
+                                            if (!viewModel.busyDeleting) {
+                                                navigateTo({ ExerciseDetailScreen(it, exerciseId = block.exerciseId) })
+                                            }
                                         }
                                         .padding(
                                             start = 1f.gridUnitsAsDp(),

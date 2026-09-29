@@ -95,6 +95,14 @@ class TemplatesViewModel(
     @Volatile
     private var cleared = false
 
+    /** In front (between onScreenShow and onScreenHide): a late create opens its editor only then. */
+    @Volatile
+    private var shown = false
+
+    override fun onScreenHide(screen: SimpleLightScreen<Unit>) {
+        shown = false
+    }
+
     override fun onCleared() {
         cleared = true
         super.onCleared()
@@ -105,6 +113,7 @@ class TemplatesViewModel(
      * deleted shows as it is and an older refresh can never land after a newer one.
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        shown = true
         LiftsIo.write { refresh() }
     }
 
@@ -121,8 +130,8 @@ class TemplatesViewModel(
     /**
      * Creates a template from the editor text (trimmed; blank cancels) on the write lane, so Back
      * can't drop it, and invokes [onCreated] on Main with the new row id so the screen can push its
-     * editor (unless the screen is already gone). workouts.json lists the templates, so the exports
-     * catch up.
+     * editor, unless he has moved on meanwhile (another screen in front, or the name entry open again):
+     * the create can wait its turn on the lane. workouts.json lists the templates, so the exports catch up.
      */
     fun createTemplate(raw: CharSequence, onCreated: (Long) -> Unit) {
         val name = raw.toString().trim()
@@ -133,7 +142,9 @@ class TemplatesViewModel(
             repository.addTemplate(TemplateEntity(name = name, position = position)).also { refresh() }
         }) { id ->
             share.logChanged()
-            withContext(Dispatchers.Main) { if (!cleared) onCreated(id) }
+            withContext(Dispatchers.Main) {
+                if (!cleared && shown && _uiState.value.mode == Mode.Overview) onCreated(id)
+            }
         }
     }
 

@@ -92,6 +92,8 @@ class CustomExerciseViewModel(
      * system Back key straight to the activity.
      */
     override fun onBackPressed(): Boolean {
+        // Saved: the goBack that hands the new id to the picker must not be taken for closing a mode.
+        if (_uiState.value.createdId != null) return false
         if (_uiState.value.mode == Mode.FORM) return false
         closeMode()
         return true
