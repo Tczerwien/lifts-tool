@@ -113,6 +113,11 @@ class TemplateEditorViewModel(
         val deleteArmed: Boolean = false,
         /** Edit-mode trash armed — next trash tap removes the exercise. */
         val removeArmed: Boolean = false,
+        /**
+         * The delete is confirmed and waiting its turn on the lane: rows, rename and add are ignored, and
+         * Back lets the editor go, so the delete's own exit can't be swallowed or pop another screen.
+         */
+        val deleting: Boolean = false,
         /** Bumped per editor entry so the embedded keyboard binds to the fresh field state. */
         val editorSession: Int = 0,
     )
@@ -127,6 +132,7 @@ class TemplateEditorViewModel(
     }
 
     fun openRename() {
+        if (_uiState.value.deleting) return
         _uiState.update {
             it.copy(
                 mode = Mode.Rename,
@@ -154,6 +160,7 @@ class TemplateEditorViewModel(
     }
 
     fun openEdit(templateExerciseId: Long) {
+        if (_uiState.value.deleting) return
         _uiState.update {
             it.copy(
                 mode = Mode.EditExercise(templateExerciseId),
@@ -163,18 +170,24 @@ class TemplateEditorViewModel(
         }
     }
 
-    /** Appends the picked exercise with [DEFAULT_TARGET_SETS] sets and settings-default rests. */
+    /**
+     * Appends the picked exercise with [DEFAULT_TARGET_SETS] sets and settings-default rests; nothing
+     * when the template is gone (deleted while the picker was open), which would break the foreign key.
+     */
     fun addExercise(exerciseId: String) = mutate {
-        val position =
-            (repository.exercisesForTemplate(templateId).maxOfOrNull { it.position } ?: -1) + 1
-        repository.addTemplateExercise(
-            TemplateExerciseEntity(
-                templateId = templateId,
-                exerciseId = exerciseId,
-                position = position,
-                targetSets = DEFAULT_TARGET_SETS,
-            ),
-        )
+        repository.inTransaction {
+            if (repository.templateById(templateId) == null) return@inTransaction
+            val position =
+                (repository.exercisesForTemplate(templateId).maxOfOrNull { it.position } ?: -1) + 1
+            repository.addTemplateExercise(
+                TemplateExerciseEntity(
+                    templateId = templateId,
+                    exerciseId = exerciseId,
+                    position = position,
+                    targetSets = DEFAULT_TARGET_SETS,
+                ),
+            )
+        }
     }
 
     /** Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1 ([reorderPositions]). */
@@ -230,11 +243,13 @@ class TemplateEditorViewModel(
 
     /** First tap arms ("tap again to delete"); second deletes and invokes [onDeleted] on Main. */
     fun tapDeleteTemplate(onDeleted: () -> Unit) {
+        // A second delete would queue a second exit, which would pop the screen below.
+        if (_uiState.value.deleting) return
         if (!_uiState.value.deleteArmed) {
             _uiState.update { it.copy(deleteArmed = true) }
             return
         }
-        _uiState.update { it.copy(deleteArmed = false) }
+        _uiState.update { it.copy(deleteArmed = false, deleting = true) }
         LiftsIo.write({ repository.deleteTemplate(templateId) }) {
             share.logChanged()
             // The delete survives Back, but the callback must not: if the editor is already gone,
@@ -255,6 +270,9 @@ class TemplateEditorViewModel(
     override fun onBackPressed(): Boolean {
         val state = _uiState.value
         return when {
+            // The template is going: its exit (or his Back) leaves, whatever else is open.
+            state.deleting -> false
+
             state.removeArmed -> {
                 _uiState.update { it.copy(removeArmed = false) }
                 true
@@ -437,8 +455,8 @@ class TemplateEditorScreen(
                 if (uiState.rows.isNotEmpty()) RowDivider()
                 AddExerciseRow(
                     onClick = {
-                        navigateTo(::ExercisePickerScreen) { exerciseId ->
-                            viewModel.addExercise(exerciseId)
+                        if (!uiState.deleting) {
+                            navigateTo(::ExercisePickerScreen) { exerciseId -> viewModel.addExercise(exerciseId) }
                         }
                     },
                 )
