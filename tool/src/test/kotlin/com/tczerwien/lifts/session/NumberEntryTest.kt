@@ -24,6 +24,12 @@ class NumberEntryTest {
     }
 
     @Test
+    fun `the other unit's suffix converts`() {
+        assertEquals(value(20.5), parseTypedWeight("45 lb", kg), "a US machine's 45 lb on a kg screen")
+        assertEquals(value(53.0), parseTypedWeight("24kg", lb), "24 kg is 52.9 lb")
+    }
+
+    @Test
     fun `it rounds to the unit's grid`() {
         assertEquals(value(17.5), parseTypedWeight("17.4", lb))
         assertEquals(value(21.25), parseTypedWeight("21.3", kg))
