@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -82,6 +83,8 @@ class WorkoutDetailViewModel(
         /** "182.4 lb", or "182.4 lb (Sep 11)" from an earlier day ([workoutBodyweight]); null without one. */
         val bodyweightText: String? = null,
         val editingNotes: Boolean = false,
+        /** The workout was deleted while this screen was underneath another one: it leaves. */
+        val gone: Boolean = false,
         /** Bumped per edit session so the editor state resets. */
         val notesEditSession: Int = 0,
     )
@@ -161,7 +164,13 @@ class WorkoutDetailViewModel(
     }
 
     private fun refresh() {
-        val workout = repository.workoutById(workoutId) ?: return
+        val workout = repository.workoutById(workoutId)
+        if (workout == null) {
+            // Deleted from another Workout Detail stacked above this one (via Exercise Detail's
+            // history). Our own delete leaves through its callback instead.
+            if (!deleting) _uiState.update { it.copy(gone = true, editingNotes = false) }
+            return
+        }
         val unit = settings.snapshot().units
         val slots = repository.exercisesForWorkout(workoutId)
         val setsBySlot = repository.setsForWorkout(workoutId)
@@ -239,6 +248,10 @@ class WorkoutDetailScreen(
         val uiState by viewModel.uiState.collectAsState()
         val deleteArmed by viewModel.deleteArm.armed.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
+
+        LaunchedEffect(uiState.gone) {
+            if (uiState.gone) goBack()
+        }
 
         LiftsFrame(sealedActivity, lightContext) {
             Box(
