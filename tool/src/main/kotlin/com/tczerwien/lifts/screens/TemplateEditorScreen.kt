@@ -455,7 +455,8 @@ class TemplateEditorScreen(
                 if (uiState.rows.isNotEmpty()) RowDivider()
                 AddExerciseRow(
                     onClick = {
-                        if (!uiState.deleting) {
+                        // The state as it is now, not as this frame drew it: the delete may be a moment old.
+                        if (!viewModel.uiState.value.deleting) {
                             navigateTo(::ExercisePickerScreen) { exerciseId -> viewModel.addExercise(exerciseId) }
                         }
                     },
