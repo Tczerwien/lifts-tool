@@ -53,15 +53,12 @@ class LiftsShare private constructor(
         exports.request()
     }
 
-    /**
-     * The newest file waiting in Restore (uploaded through Tool Manager), or null. Blocking. A file
-     * changed in the last [RESTORE_SETTLE_MS] may still be arriving (Tool Manager writes an upload in
-     * place), so it isn't offered yet.
-     */
-    fun waitingRestore(now: Long = System.currentTimeMillis()): File? = restoreDir.listFiles()
-        .orEmpty()
-        .filter { it.isFile && !it.name.startsWith(".") && now - it.lastModified() >= RESTORE_SETTLE_MS }
-        .maxByOrNull { it.lastModified() }
+    /** The file waiting in Restore (uploaded through Tool Manager) that Home offers ([RestoreInbox]), or null. Blocking. */
+    fun waitingRestore(now: Long = System.currentTimeMillis()): File? {
+        val uploads = restoreDir.listFiles().orEmpty().filter { it.isFile }
+        val name = RestoreInbox.pick(uploads.map { RestoreInbox.Upload(it.name, it.lastModified()) }, now)
+        return name?.let { File(restoreDir, it) }
+    }
 
     /** A restore from [source] landed: an upload moves to restore/applied, and the exports catch up. */
     fun restored(source: File) {
@@ -99,9 +96,6 @@ class LiftsShare private constructor(
                 instance ?: create().also { instance = it }
             }
         }
-
-        /** How long an upload must sit unchanged before Home offers it. */
-        const val RESTORE_SETTLE_MS = 3_000L
 
         private const val APPLIED = "applied"
         private const val REJECTED = "rejected"

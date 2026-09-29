@@ -21,6 +21,7 @@ import com.tczerwien.lifts.session.shouldAutoResume
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsEntryPoint
 import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.RestoreInbox
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
@@ -114,11 +115,14 @@ class HomeViewModel(
         // An upload through Tool Manager while Home is on screen shows up without leaving Home.
         viewModelScope.launch(Dispatchers.IO) {
             LiftsEntryPoint.inbox.drop(1).collect {
-                // The notice comes as the upload ends; wait until it counts as settled.
-                delay(LiftsShare.RESTORE_SETTLE_MS + 500)
+                // The notice comes as the upload ends; wait until it counts as settled. The look goes on
+                // the write lane, so it can't bring back a file a restore has just moved.
+                delay(RestoreInbox.SETTLE_MS + 500)
                 if (showing) {
-                    val waiting = share.waitingRestore()?.let { RestoreWaiting(it.name, it.absolutePath) }
-                    _uiState.update { it.copy(restoreWaiting = waiting) }
+                    LiftsIo.write({ share.waitingRestore() }) { file ->
+                        val waiting = file?.let { RestoreWaiting(it.name, it.absolutePath) }
+                        _uiState.update { it.copy(restoreWaiting = waiting) }
+                    }
                 }
             }
         }
