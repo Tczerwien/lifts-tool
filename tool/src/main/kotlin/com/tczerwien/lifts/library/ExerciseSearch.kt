@@ -413,13 +413,12 @@ fun renameClash(exerciseId: String, isCustom: Boolean, target: String, entries: 
  * their keys meet ([sameName]): "Bench Presses" is Bench Press, "Dumbbell Fly" is Dumbbell Flyes.
  */
 fun nameKeys(name: String): Set<String> {
-    val compact = words(name).joinToString("") { FLY_FORMS[it] ?: it }
+    val compact = searchWords(name).joinToString("")
     return if (compact.isEmpty()) emptySet() else setOf(compact) + singulars(compact)
 }
 
 /** [a] and [b] are one name to the duplicate checks ([nameKeys]). */
 fun sameName(a: String, b: String): Boolean = nameKeys(a).any { it in nameKeys(b) }
-
 
 /**
  * The exercise, other than [selfId], that already answers to [name] (the name Lifts shows for it,
