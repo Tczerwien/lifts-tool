@@ -150,6 +150,7 @@ class RestoreViewModel(
                                     else -> "this phone's settings stay"
                                 },
                             )
+                            outcome.keysProblem?.let { add("a running rest could not be cleared: $it") }
                             add(
                                 outcome.backupProblem?.let { "not backed up yet ($it): tap BACK UP NOW in Backups" }
                                     ?: "saved as the newest backup",

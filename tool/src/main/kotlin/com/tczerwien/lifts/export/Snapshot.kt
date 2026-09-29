@@ -234,6 +234,9 @@ fun buildSnapshot(
     val format = ExportFormat(zone)
     val exercisesById = exercises.associateBy { it.id }
     val names = exercises.associate { it.id to displayName(it) }
+    // A set whose catalog row is missing keeps its id beside the label, so two missing exercises don't
+    // merge into one in a file with no id column (strong.csv).
+    fun nameOf(exerciseId: String): String = names[exerciseId] ?: "$UNKNOWN_EXERCISE ($exerciseId)"
     val workoutIds = workouts.mapTo(HashSet()) { it.id }
     val validSlots = workoutExercises.filter { it.workoutId in workoutIds }
     val slotsById = validSlots.associateBy { it.id }
@@ -265,7 +268,7 @@ fun buildSnapshot(
                     val orderedSets = setsBySlot.getValue(slot.id).sortedBy { it.position }
                     SnapshotWorkoutExercise(
                         exerciseId = slot.exerciseId,
-                        name = names[slot.exerciseId] ?: UNKNOWN_EXERCISE,
+                        name = nameOf(slot.exerciseId),
                         primaryMuscles = exercise?.primaryMuscles ?: emptyList(),
                         secondaryMuscles = exercise?.secondaryMuscles ?: emptyList(),
                         notes = slot.notes,
@@ -307,7 +310,7 @@ fun buildSnapshot(
             exercises = templateSlots[template.id].orEmpty().sortedWith(compareBy({ it.position }, { it.id })).map {
                 SnapshotTemplateExercise(
                     exerciseId = it.exerciseId,
-                    name = names[it.exerciseId] ?: UNKNOWN_EXERCISE,
+                    name = nameOf(it.exerciseId),
                     targetSets = it.targetSets,
                     warmupSets = it.warmupSets,
                     repMin = it.repMin,
@@ -342,7 +345,7 @@ fun buildSnapshot(
         .map { pr ->
             SnapshotPr(
                 exerciseId = pr.exerciseId,
-                exerciseName = names[pr.exerciseId] ?: UNKNOWN_EXERCISE,
+                exerciseName = nameOf(pr.exerciseId),
                 maxWeightKg = pr.maxWeightKg,
                 maxWeightDateIso = format.date(pr.maxWeightDate),
                 bestE1RmKg = pr.bestE1RmKg,
@@ -402,7 +405,7 @@ fun buildSnapshot(
             blockDays = TREND_BLOCK_DAYS,
             blockStarts = trendBlockStarts(todayEpochDay, TREND_BLOCKS, TREND_BLOCK_DAYS).map { LocalDate.ofEpochDay(it).toString() },
             lifts = e1RmTrend(setsByExercise, todayEpochDay, zone, TREND_BLOCKS, TREND_BLOCK_DAYS, TREND_LIFTS).map {
-                SnapshotLiftTrend(it.exerciseId, names[it.exerciseId] ?: UNKNOWN_EXERCISE, it.bestE1RmKg)
+                SnapshotLiftTrend(it.exerciseId, nameOf(it.exerciseId), it.bestE1RmKg)
             },
         ),
         weekStarts = weekStarts,

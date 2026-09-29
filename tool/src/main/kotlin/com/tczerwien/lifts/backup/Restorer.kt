@@ -51,6 +51,8 @@ class Restorer(
         val settingsProblem: String? = null,
         /** Set when the restored log could not be saved as the newest backup. */
         val backupProblem: String? = null,
+        /** Set when a running rest (or the exercise on screen) from the replaced log could not be cleared. */
+        val keysProblem: String? = null,
     )
 
     /**
@@ -117,8 +119,7 @@ class Restorer(
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
         }
-        // The rest, the exercise on screen: they name ids of the log just replaced. The same store as
-        // the settings, so a failure here reads as a settings problem.
+        // The rest, the exercise on screen: they name ids of the log just replaced.
         val keysProblem = try {
             ActiveSession.forgetWorkoutState(dataStore)
             null
@@ -126,11 +127,11 @@ class Restorer(
             e.message ?: e.toString()
         }
         val settingsProblem = if (prepared.settingsRows.isEmpty()) {
-            keysProblem
+            null
         } else {
             try {
                 settings.replaceAll(SettingsRows.decode(prepared.settingsRows, current = settings.snapshot()))
-                keysProblem
+                null
             } catch (e: Exception) {
                 e.message ?: e.toString()
             }
@@ -147,6 +148,7 @@ class Restorer(
             settingsRestored = prepared.settingsRows.isNotEmpty() && settingsProblem == null,
             settingsProblem = settingsProblem,
             backupProblem = backupProblem,
+            keysProblem = keysProblem,
         )
     }
 

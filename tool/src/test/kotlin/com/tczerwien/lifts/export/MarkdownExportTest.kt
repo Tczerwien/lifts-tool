@@ -77,11 +77,10 @@ class MarkdownExportTest {
     }
 
     @Test
-    fun aMissingExerciseIsUnknownNotItsId() {
+    fun aMissingExerciseIsUnknownButKeepsItsId() {
         val orphan = ExportFixtures.snapshot(exercises = listOf(ExportFixtures.squat))
-        assertTrue(MarkdownExport.render(orphan).contains("- **Unknown exercise**"))
-        assertTrue(CsvExport.render(orphan).split("\n")[1].contains(",Unknown exercise,"))
-        assertTrue(ExportFixtures.bench.id !in MarkdownExport.render(orphan))
+        assertTrue(MarkdownExport.render(orphan).contains("- **Unknown exercise (bench-press-barbell)**"))
+        assertTrue(CsvExport.render(orphan).split("\n")[1].contains(",Unknown exercise (bench-press-barbell),"))
     }
 
     @Test
