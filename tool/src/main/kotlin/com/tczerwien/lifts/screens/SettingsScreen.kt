@@ -22,6 +22,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.settings.barAfterUnitSwitch
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
@@ -106,8 +107,13 @@ class SettingsViewModel(
             WeightUnit.KG -> WeightUnit.LB
         }
         _uiState.update { it.copy(settings = settings.copy(units = next)) }
-        // training-log.md and the CSVs are in this unit, so they are rewritten in the new one.
-        LiftsIo.write({ settingsStore.setUnits(next) }) { share.logChanged() }
+        // Untouched plates follow the unit by themselves (SettingsStore); the seeded bar, still as it
+        // was seeded, becomes the new unit's standard bar. training-log.md and the CSVs are in this
+        // unit and workouts.json lists the bars, so the exports are rewritten.
+        LiftsIo.write({
+            settingsStore.setUnits(next)
+            repository.listBars().forEach { bar -> barAfterUnitSwitch(bar, settings.units, next)?.let(repository::updateBar) }
+        }) { share.logChanged() }
     }
 
     /** Weight Step: the next increment on offer in the current unit (5 / 2.5 lb; 2.5 / 1.25 / 1 kg). */
@@ -182,7 +188,7 @@ class SettingsViewModel(
             return
         }
         _uiState.update {
-            it.copy(settings = settings.copy(plateInventoryKg = parsed), mode = Mode.FieldList)
+            it.copy(settings = settings.copy(customPlatesKg = parsed), mode = Mode.FieldList)
         }
         LiftsIo.write { settingsStore.setPlateInventoryKg(parsed) }
     }

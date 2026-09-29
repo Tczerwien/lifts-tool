@@ -39,7 +39,7 @@ class RestoreSettingsTest {
         units = SettingsStore.DEFAULT_UNITS,
         defaultRestSec = SettingsStore.DEFAULT_REST_SEC_VALUE,
         warmupRestSec = SettingsStore.DEFAULT_WARMUP_REST_SEC_VALUE,
-        plateInventoryKg = SettingsStore.DEFAULT_PLATE_INVENTORY_KG,
+        customPlatesKg = null,
         restBeep = SettingsStore.DEFAULT_REST_BEEP,
     )
 
@@ -48,7 +48,7 @@ class RestoreSettingsTest {
         units = WeightUnit.KG,
         defaultRestSec = 150,
         warmupRestSec = 60,
-        plateInventoryKg = listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25),
+        customPlatesKg = listOf(25.0, 20.0, 15.0, 10.0, 5.0, 1.0),
         restBeep = false,
         weightStepLb = 2.5,
         weightStepKg = 1.25,
@@ -62,7 +62,7 @@ class RestoreSettingsTest {
 
     @Test
     fun `lb plates round-trip exactly in kg`() {
-        val lb = his.copy(units = WeightUnit.LB, plateInventoryKg = listOf(45.0, 35.0, 2.5).map(Format::lbToKg))
+        val lb = his.copy(units = WeightUnit.LB, customPlatesKg = listOf(45.0, 35.0, 2.5).map(Format::lbToKg))
         assertEquals(lb, SettingsRows.decode(SettingsRows.encode(lb), current = defaults))
     }
 
@@ -83,7 +83,7 @@ class RestoreSettingsTest {
             his.copy(
                 units = defaults.units,
                 defaultRestSec = defaults.defaultRestSec,
-                plateInventoryKg = defaults.plateInventoryKg,
+                customPlatesKg = defaults.customPlatesKg,
             ),
             restored,
         )

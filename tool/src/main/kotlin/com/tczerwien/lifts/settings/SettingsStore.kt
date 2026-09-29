@@ -30,8 +30,12 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         val units: WeightUnit,
         val defaultRestSec: Int,
         val warmupRestSec: Int,
-        /** Available plates per side, canonical kg, descending. */
-        val plateInventoryKg: List<Double>,
+        /**
+         * The plates he typed in (per side, canonical kg, descending), or null while he never has: then
+         * the plates are the standard set of the unit shown ([defaultPlatesKg]), so switching to kg
+         * brings kg plates rather than lb plates in odd kg values.
+         */
+        val customPlatesKg: List<Double>?,
         /** Beep when a rest ends; the flash and keep-awake don't depend on it. */
         val restBeep: Boolean,
         /** The weight steppers' increment when the unit is lb (one of [WeightUnit.weightSteps]). */
@@ -39,6 +43,9 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         /** The same when the unit is kg: each unit keeps its own, so switching back finds it as it was. */
         val weightStepKg: Double = WeightUnit.KG.defaultWeightStep,
     ) {
+        /** The plates the calculator loads: his, else the standard set of [units]. */
+        val plateInventoryKg: List<Double> get() = customPlatesKg ?: defaultPlatesKg(units)
+
         /** The weight steppers' increment in the current unit, in display units. */
         val weightStep: Double get() = weightStepFor(units)
 
@@ -60,8 +67,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             } ?: DEFAULT_UNITS,
             defaultRestSec = prefs[DEFAULT_REST_SEC] ?: DEFAULT_REST_SEC_VALUE,
             warmupRestSec = prefs[WARMUP_REST_SEC] ?: DEFAULT_WARMUP_REST_SEC_VALUE,
-            plateInventoryKg = prefs[PLATE_INVENTORY_KG]?.let(::decodePlates)
-                ?: DEFAULT_PLATE_INVENTORY_KG,
+            customPlatesKg = prefs[PLATE_INVENTORY_KG]?.let(::parsePlates),
             restBeep = prefs[REST_BEEP] ?: DEFAULT_REST_BEEP,
             weightStepLb = validStep(prefs[WEIGHT_STEP_LB], WeightUnit.LB),
             weightStepKg = validStep(prefs[WEIGHT_STEP_KG], WeightUnit.KG),
@@ -102,15 +108,13 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             prefs[UNITS] = settings.units.name
             prefs[DEFAULT_REST_SEC] = settings.defaultRestSec
             prefs[WARMUP_REST_SEC] = settings.warmupRestSec
-            prefs[PLATE_INVENTORY_KG] = encodePlates(settings.plateInventoryKg)
+            val plates = settings.customPlatesKg
+            if (plates != null) prefs[PLATE_INVENTORY_KG] = encodePlates(plates) else prefs.remove(PLATE_INVENTORY_KG)
             prefs[REST_BEEP] = settings.restBeep
             prefs[WEIGHT_STEP_LB] = validStep(settings.weightStepLb, WeightUnit.LB)
             prefs[WEIGHT_STEP_KG] = validStep(settings.weightStepKg, WeightUnit.KG)
         }
     }
-
-    private fun decodePlates(encoded: String): List<Double> =
-        parsePlates(encoded) ?: DEFAULT_PLATE_INVENTORY_KG
 
     companion object {
         const val KEY_UNITS = "lifts_units"
@@ -155,5 +159,14 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         /** lb plate set [45, 25, 10, 5, 2.5] stored canonically in kg. */
         val DEFAULT_PLATE_INVENTORY_KG: List<Double> =
             listOf(45.0, 25.0, 10.0, 5.0, 2.5).map(Format::lbToKg)
+
+        /** The standard kg plate set: 25, 20, 15, 10, 5, 2.5 and 1.25 kg. */
+        val DEFAULT_KG_PLATES_KG: List<Double> = listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25)
+
+        /** The plates a lifter who never typed his in has in [unit]. */
+        fun defaultPlatesKg(unit: WeightUnit): List<Double> = when (unit) {
+            WeightUnit.LB -> DEFAULT_PLATE_INVENTORY_KG
+            WeightUnit.KG -> DEFAULT_KG_PLATES_KG
+        }
     }
 }

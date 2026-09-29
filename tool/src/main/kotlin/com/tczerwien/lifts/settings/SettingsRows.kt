@@ -8,6 +8,9 @@ import com.tczerwien.lifts.ui.WeightUnit
  */
 object SettingsRows {
 
+    /** The plates row of a lifter who never typed his in: the unit's standard set, whichever unit. */
+    private const val DEFAULT_PLATES = "default"
+
     /** Rest lengths outside this are not something Lifts wrote; such a row is ignored. */
     private val SANE_REST_SEC = 1..3600
 
@@ -15,7 +18,7 @@ object SettingsRows {
         SettingsStore.KEY_UNITS to settings.units.name,
         SettingsStore.KEY_DEFAULT_REST_SEC to settings.defaultRestSec.toString(),
         SettingsStore.KEY_WARMUP_REST_SEC to settings.warmupRestSec.toString(),
-        SettingsStore.KEY_PLATE_INVENTORY_KG to SettingsStore.encodePlates(settings.plateInventoryKg),
+        SettingsStore.KEY_PLATE_INVENTORY_KG to (settings.customPlatesKg?.let(SettingsStore::encodePlates) ?: DEFAULT_PLATES),
         SettingsStore.KEY_REST_BEEP to settings.restBeep.toString(),
         SettingsStore.KEY_WEIGHT_STEP_LB to settings.weightStepLb.toString(),
         SettingsStore.KEY_WEIGHT_STEP_KG to settings.weightStepKg.toString(),
@@ -32,10 +35,15 @@ object SettingsRows {
                 ?: current.units,
             defaultRestSec = rows[SettingsStore.KEY_DEFAULT_REST_SEC]?.restSec() ?: current.defaultRestSec,
             warmupRestSec = rows[SettingsStore.KEY_WARMUP_REST_SEC]?.restSec() ?: current.warmupRestSec,
-            plateInventoryKg = rows[SettingsStore.KEY_PLATE_INVENTORY_KG]
-                ?.let(SettingsStore::parsePlates)
-                ?.takeIf { plates -> plates.all { it.isFinite() && it > 0 } }
-                ?: current.plateInventoryKg,
+            customPlatesKg = rows[SettingsStore.KEY_PLATE_INVENTORY_KG].let { row ->
+                if (row == DEFAULT_PLATES) {
+                    null
+                } else {
+                    row?.let(SettingsStore::parsePlates)
+                        ?.takeIf { plates -> plates.all { it.isFinite() && it > 0 } }
+                        ?: current.customPlatesKg
+                }
+            },
             restBeep = rows[SettingsStore.KEY_REST_BEEP]?.toBooleanStrictOrNull() ?: current.restBeep,
             weightStepLb = rows[SettingsStore.KEY_WEIGHT_STEP_LB]?.step(WeightUnit.LB) ?: current.weightStepLb,
             weightStepKg = rows[SettingsStore.KEY_WEIGHT_STEP_KG]?.step(WeightUnit.KG) ?: current.weightStepKg,

@@ -32,6 +32,7 @@ class SettingsStoreTest {
         val settings = SettingsStore(FakeDataStore(emptyPreferences())).snapshot()
         assertEquals(SettingsStore.DEFAULT_UNITS, settings.units)
         assertEquals(SettingsStore.DEFAULT_PLATE_INVENTORY_KG, settings.plateInventoryKg)
+        assertEquals(null, settings.customPlatesKg)
         assertTrue(settings.restBeep, "the rest-over beep starts on")
     }
 
@@ -85,6 +86,31 @@ class SettingsStoreTest {
             FakeDataStore(preferencesOf(doublePreferencesKey("lifts_weight_step_kg") to 0.5, stringPreferencesKey("lifts_units") to "KG")),
         )
         assertEquals(2.5, store.snapshot().weightStep)
+    }
+
+    @Test
+    fun untouchedPlatesFollowTheUnitAndHisStay() {
+        val store = SettingsStore(FakeDataStore(emptyPreferences()))
+        assertEquals(SettingsStore.DEFAULT_PLATE_INVENTORY_KG, store.snapshot().plateInventoryKg)
+        runBlocking { store.setUnits(WeightUnit.KG) }
+        assertEquals(listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25), store.snapshot().plateInventoryKg, "kg plates in kg")
+        assertEquals(null, store.snapshot().customPlatesKg)
+        val his = listOf(20.0, 10.0, 1.0)
+        runBlocking {
+            store.setPlateInventoryKg(his)
+            store.setUnits(WeightUnit.LB)
+        }
+        assertEquals(his, store.snapshot().plateInventoryKg, "plates he typed in are real plates in any unit")
+    }
+
+    @Test
+    fun replaceAllWithUntouchedPlatesForgetsStoredOnes() {
+        val store = SettingsStore(FakeDataStore(emptyPreferences()))
+        runBlocking {
+            store.setPlateInventoryKg(listOf(20.0))
+            store.replaceAll(store.snapshot().copy(customPlatesKg = null, units = WeightUnit.KG))
+        }
+        assertEquals(SettingsStore.DEFAULT_KG_PLATES_KG, store.snapshot().plateInventoryKg)
     }
 
     @Test
