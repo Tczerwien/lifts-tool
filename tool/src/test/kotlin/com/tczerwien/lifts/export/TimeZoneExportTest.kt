@@ -65,7 +65,7 @@ class TimeZoneExportTest {
 
     @Test
     fun jsonCarriesTheOffsetAndTheZone() {
-        val json = JsonExport.render(snapshot).replace(" ", "")
+        val json = JsonExport.render(snapshot)
         assertContains(json, "\"timezone\":\"America/Chicago\"")
         assertContains(json, "\"start_time\":\"2026-07-12T23:30:00-05:00\"")
     }

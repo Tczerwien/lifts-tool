@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
-const val EXPORT_SCHEMA_VERSION = "1.2"
+const val EXPORT_SCHEMA_VERSION = "2.0"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -53,8 +53,14 @@ data class ExportSnapshot(
     val bodyweightLog: List<BodyweightPoint>,
     /** Trend derived from [bodyweightLog]; null when there are no bodyweight entries. */
     val bodyweightTrend: SnapshotBodyweightTrend?,
-    /** Only exercises referenced by [workouts], sorted by name. Names are the ones Lifts shows ([displayName]). */
+    /**
+     * Every exercise with something of his in it, sorted by name: done in an exported workout, in a
+     * template, a custom one (used or not), or one with a pinned cue. Names are the ones Lifts shows
+     * ([displayName]).
+     */
     val exercises: List<SnapshotExercise>,
+    /** In the order the Templates screen lists them. */
+    val templates: List<SnapshotTemplate>,
     /** Newest first. */
     val workouts: List<SnapshotWorkout>,
     /** Sorted by exercise name. */
@@ -87,6 +93,27 @@ data class SnapshotExercise(
     val equipment: String?,
     val primaryMuscles: List<String>,
     val secondaryMuscles: List<String>,
+    val isCustom: Boolean,
+    /** A custom exercise he took out of the picker; old workouts still use it. */
+    val hidden: Boolean,
+    /** His form cue, shown above the sets. */
+    val pinnedNote: String?,
+)
+
+data class SnapshotTemplate(val name: String, val exercises: List<SnapshotTemplateExercise>)
+
+data class SnapshotTemplateExercise(
+    val exerciseId: String,
+    val name: String,
+    val targetSets: Int,
+    /** Null: repeat last session's warm-ups. */
+    val warmupSets: Int?,
+    val repMin: Int?,
+    val repMax: Int?,
+    val targetRir: Int?,
+    /** Null: the Settings default. */
+    val restSecWork: Int?,
+    val restSecWarmup: Int?,
 )
 
 data class SnapshotWorkout(
@@ -95,6 +122,7 @@ data class SnapshotWorkout(
     val dateIso: String,
     /** Local ISO-8601 time with its offset, e.g. 2026-07-13T19:30:00-05:00. */
     val startTimeIso: String,
+    val endTimeIso: String,
     val startEpochMillis: Long,
     val name: String,
     /** Rounded minutes. */
@@ -133,6 +161,8 @@ data class SnapshotSet(
     val rpe: Double?,
     /** Seconds since the workout's previous ticked set ([restGapsSec]); null for the first, or after a break. */
     val restSec: Int?,
+    /** When it was ticked, local ISO-8601 with its offset. */
+    val completedAtIso: String,
     val isPr: Boolean,
 )
 
@@ -242,6 +272,7 @@ fun buildSnapshot(
                                 durationSec = set.durationSec,
                                 rpe = set.rpe,
                                 restSec = restGaps[set.id],
+                                completedAtIso = format.dateTime(set.completedAt ?: workout.startedAt),
                                 isPr = set.id in prSetIds,
                             )
                         },
@@ -251,6 +282,7 @@ fun buildSnapshot(
                 id = workout.id,
                 dateIso = format.date(workout.startedAt),
                 startTimeIso = format.dateTime(workout.startedAt),
+                endTimeIso = format.dateTime(workout.endedAt ?: workout.startedAt),
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
                 durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt(),
@@ -262,11 +294,43 @@ fun buildSnapshot(
             )
         }
 
-    val referencedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.map { it.exerciseId } }
+    val templateSlots = rows.templateExercises.groupBy { it.templateId }
+    val snapshotTemplates = rows.templates.sortedWith(compareBy({ it.position }, { it.id })).map { template ->
+        SnapshotTemplate(
+            name = template.name,
+            exercises = templateSlots[template.id].orEmpty().sortedWith(compareBy({ it.position }, { it.id })).map {
+                SnapshotTemplateExercise(
+                    exerciseId = it.exerciseId,
+                    name = names[it.exerciseId] ?: it.exerciseId,
+                    targetSets = it.targetSets,
+                    warmupSets = it.warmupSets,
+                    repMin = it.repMin,
+                    repMax = it.repMax,
+                    targetRir = it.targetRir,
+                    restSecWork = it.restSecWork,
+                    restSecWarmup = it.restSecWarmup,
+                )
+            },
+        )
+    }
+
+    val usedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.map { it.exerciseId } } +
+        rows.templateExercises.map { it.exerciseId }
     val snapshotExercises = exercises
-        .filter { it.id in referencedIds }
-        .map { SnapshotExercise(it.id, names.getValue(it.id), it.equipment, it.primaryMuscles, it.secondaryMuscles) }
-        .sortedBy { it.name }
+        .filter { it.id in usedIds || it.isCustom || it.pinnedNote != null }
+        .map {
+            SnapshotExercise(
+                id = it.id,
+                name = names.getValue(it.id),
+                equipment = it.equipment,
+                primaryMuscles = it.primaryMuscles,
+                secondaryMuscles = it.secondaryMuscles,
+                isCustom = it.isCustom,
+                hidden = it.hidden,
+                pinnedNote = it.pinnedNote,
+            )
+        }
+        .sortedWith(compareBy({ it.name }, { it.id }))
 
     val prs = computePrs(exercises, workouts, workoutExercises, sets)
         .map { pr ->
@@ -325,6 +389,7 @@ fun buildSnapshot(
         bodyweightLog = bodyweightLog,
         bodyweightTrend = trend,
         exercises = snapshotExercises,
+        templates = snapshotTemplates,
         workouts = snapshotWorkouts,
         prs = prs,
         e1RmTrend = SnapshotE1RmTrend(

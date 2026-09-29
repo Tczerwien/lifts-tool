@@ -5,6 +5,8 @@ import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.ui.WeightUnit
@@ -137,14 +139,16 @@ object ExportFixtures {
         zone: ZoneId = ZoneOffset.UTC,
         unit: WeightUnit = WeightUnit.KG,
         exercises: List<ExerciseEntity> = listOf(bench, squat),
+        templates: List<TemplateEntity> = emptyList(),
+        templateExercises: List<TemplateExerciseEntity> = emptyList(),
     ): ExportSnapshot = buildSnapshot(
         rows = LiftsRows(
             exercises = exercises,
             workouts = workouts,
             workoutExercises = slots,
             sets = sets,
-            templates = emptyList(),
-            templateExercises = emptyList(),
+            templates = templates,
+            templateExercises = templateExercises,
             bodyweight = bodyweight,
             bars = bars,
         ),
