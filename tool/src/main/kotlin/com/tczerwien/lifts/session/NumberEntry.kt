@@ -41,7 +41,8 @@ fun parseTypedWeight(text: String, unit: WeightUnit): TypedWeight? {
         .trim()
     if (bare.isEmpty()) return if (text.isBlank()) TypedWeight.Clear else null
     if (!NUMBER.matches(bare)) return null
-    val typed = bare.toDoubleOrNull()?.takeIf { it.isFinite() && it <= MAX_TYPED_WEIGHT } ?: return null
+    val typed = bare.toDoubleOrNull()?.takeIf { it.isFinite() } ?: return null
     val value = if (typedUnit == unit) typed else Format.kgToDisplay(Format.displayToKg(typed, typedUnit), unit)
+    if (value > MAX_TYPED_WEIGHT) return null
     return TypedWeight.Value(Format.roundWeight(value, unit))
 }
