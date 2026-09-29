@@ -2,6 +2,7 @@ package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
@@ -59,12 +60,16 @@ fun alignPrevious(rows: List<SetEntity>, previous: List<SetEntity>): List<SetEnt
     return rows.map { row -> if (row.isWarmup()) warmups.getOrNull(warmupIndex++) else work.getOrNull(workIndex++) }
 }
 
-/** The weight and reps a row shows and logs. */
-data class RowValues(val weightKg: Double?, val reps: Int?)
+/** The weight and reps (or a hold's seconds) a row shows and logs. */
+data class RowValues(val weightKg: Double?, val reps: Int?, val durationSec: Int? = null) {
+    /** Nothing a tick could log: the row needs a number first. */
+    val isEmpty: Boolean get() = weightKg == null && reps == null && durationSec == null
+}
 
 /**
  * What each of [rows] (one slot, in position order) logs if ticked as it stands, worked out per
- * field, weight and reps separately:
+ * field, weight, reps and seconds separately, then only the fields the exercise's [tracking]
+ * records (a reps-only row never logs a weight left from before its type changed):
  * 1. the row's own value;
  * 2. the value of today's previous row of the same kind (warm-up or work), if you changed it from
  *    last time and last time the two rows matched (straight sets): 5 lb on set 1 carries to set 2,
@@ -75,7 +80,12 @@ data class RowValues(val weightKg: Double?, val reps: Int?)
  * "Today's previous row" means its value as worked out here, so a change carries down the sets.
  * Weights compare as they show in [unit], so stepping up and back down again is no change.
  */
-fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>, unit: WeightUnit): List<RowValues> {
+fun seedRows(
+    rows: List<SetEntity>,
+    aligned: List<SetEntity?>,
+    unit: WeightUnit,
+    tracking: Tracking = Tracking.WEIGHT_REPS,
+): List<RowValues> {
     val sameWeight = { a: Double?, b: Double? ->
         a != null && b != null &&
             Format.roundWeight(Format.kgToDisplay(a, unit)) == Format.roundWeight(Format.kgToDisplay(b, unit))
@@ -98,10 +108,20 @@ fun seedRows(rows: List<SetEntity>, aligned: List<SetEntity?>, unit: WeightUnit)
             ?: earlier?.reps?.takeIf { carries(it, earlierPrevious?.reps, previous?.reps) { a, b -> a == b } }
             ?: previous?.reps
             ?: earlier?.reps
-        result += RowValues(weight, reps)
+        val durationSec = row.durationSec
+            ?: earlier?.durationSec?.takeIf { carries(it, earlierPrevious?.durationSec, previous?.durationSec) { a, b -> a == b } }
+            ?: previous?.durationSec
+            ?: earlier?.durationSec
+        result += RowValues(weight, reps, durationSec)
         if (row.isWarmup()) lastWarmup = index else lastWork = index
     }
-    return result
+    return result.map { values ->
+        RowValues(
+            weightKg = values.weightKg?.takeIf { tracking.takesWeight },
+            reps = values.reps?.takeIf { tracking.takesReps },
+            durationSec = values.durationSec?.takeIf { tracking.takesDuration },
+        )
+    }
 }
 
 /**
@@ -114,8 +134,13 @@ private fun <T : Any> carries(earlier: T, earlierPrevious: T?, previous: T?, sam
         (if (earlierPrevious == null) previous == null else same(earlierPrevious, previous))
 
 /** [seedRows] for one row. */
-fun seedFor(rows: List<SetEntity>, index: Int, aligned: List<SetEntity?>, unit: WeightUnit): RowValues =
-    seedRows(rows, aligned, unit)[index]
+fun seedFor(
+    rows: List<SetEntity>,
+    index: Int,
+    aligned: List<SetEntity?>,
+    unit: WeightUnit,
+    tracking: Tracking = Tracking.WEIGHT_REPS,
+): RowValues = seedRows(rows, aligned, unit, tracking)[index]
 
 /**
  * Set types a new slot starts with, from [lastTime] (the matching slot group from last session).

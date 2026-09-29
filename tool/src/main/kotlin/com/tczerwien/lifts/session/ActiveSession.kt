@@ -181,7 +181,8 @@ class ActiveSession(
     )
 
     /**
-     * Marks [set] completed with the given values, selects the rest duration (exercise
+     * Marks [set] completed with the given values (a hold's [durationSec]; its RIR stays as the row
+     * has it), selects the rest duration (exercise
      * override else settings default; warm-up pair for warm-up sets), and persists the rest
      * end timestamp — the DataStore keys are written on set completion, as the timer contract
      * requires. PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
@@ -195,10 +196,11 @@ class ActiveSession(
         reps: Int?,
         type: String,
         now: Long = System.currentTimeMillis(),
+        durationSec: Int? = null,
     ): SetCompletion? {
         val slots = repository.exercisesForWorkout(workoutId)
         val slot = slots.firstOrNull { it.id == set.workoutExerciseId }
-        val completed = set.copy(weightKg = weightKg, reps = reps, type = type, completedAt = now)
+        val completed = set.copy(weightKg = weightKg, reps = reps, durationSec = durationSec, type = type, completedAt = now)
         if (!updateSet(workoutId, completed)) return null
 
         val snapshot = settings.snapshot()

@@ -305,6 +305,21 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a tick logs a hold's seconds and keeps the row's RIR`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        session.addExercise(workoutId, "plank")!!
+        val row = store.setsForWorkout(workoutId).first()
+        store.updateSetValues(row.copy(rpe = 8.0))
+        val logged = session.completeSet(workoutId, store.setById(row.id)!!, null, null, n, now = 60_000, durationSec = 45)!!
+        assertEquals(45, logged.set.durationSec)
+        val stored = store.setById(row.id)!!
+        assertEquals(45, stored.durationSec)
+        assertEquals(8.0, stored.rpe)
+        assertNull(stored.reps)
+        assertEquals(60_000L, stored.completedAt)
+    }
+
+    @Test
     fun `the summary carries that day's weigh-in, looked up rather than stored`() {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = session.addExercise(workoutId, "bench")!!

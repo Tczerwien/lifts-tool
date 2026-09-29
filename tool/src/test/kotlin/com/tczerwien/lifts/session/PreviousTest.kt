@@ -2,6 +2,7 @@ package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
@@ -189,6 +190,32 @@ class PreviousTest {
         assertEquals(RowValues(61.0, 5), seedFor(today, 1, alignPrevious(today, previous), WeightUnit.KG))
     }
 
+    @Test
+    fun `a hold's seconds carry like reps`() {
+        val previous = listOf(hold(1, 45), hold(2, 45), hold(3, 30))
+        val today = listOf(set(11, position = 0).copy(durationSec = 60, completedAt = 1L), set(12, position = 1), set(13, position = 2))
+        val seeds = seedRows(today, alignPrevious(today, previous), WeightUnit.LB, Tracking.DURATION)
+        assertEquals(RowValues(null, null, 60), seeds[1], "60 s on set 1 carries through the straight sets")
+        assertEquals(RowValues(null, null, 30), seeds[2], "not onto last time's shorter third hold")
+        assertEquals(RowValues(null, null, 45), seedFor(listOf(set(12, position = 0)), 0, listOf(previous[0]), WeightUnit.LB, Tracking.DURATION))
+    }
+
+    @Test
+    fun `a row offers only what its exercise records`() {
+        // Logged as weight x reps before its type changed: a reps-only row neither shows nor logs the weight.
+        val previous = listOf(prev(1, n, weightKg = 10.0, reps = 12))
+        val today = listOf(set(11, position = 0))
+        val aligned = alignPrevious(today, previous)
+        assertEquals(RowValues(null, 12), seedFor(today, 0, aligned, WeightUnit.KG, Tracking.REPS_ONLY))
+        assertEquals(RowValues(10.0, 12), seedFor(today, 0, aligned, WeightUnit.KG, Tracking.WEIGHTED_BODYWEIGHT))
+        assertEquals(RowValues(null, null), seedFor(today, 0, aligned, WeightUnit.KG, Tracking.DURATION))
+        assertEquals(true, seedFor(today, 0, aligned, WeightUnit.KG, Tracking.DURATION).isEmpty)
+        // Assistance (negative) carries like any weight.
+        val assisted = listOf(prev(1, n, weightKg = -20.0, reps = 8), prev(2, n, weightKg = -20.0, reps = 8))
+        val rows = listOf(set(11, position = 0, weightKg = -15.0, reps = 8, completedAt = 1L), set(12, position = 1))
+        assertEquals(RowValues(-15.0, 8), seedFor(rows, 1, alignPrevious(rows, assisted), WeightUnit.KG, Tracking.ASSISTED_BODYWEIGHT))
+    }
+
     // --- New slots ---
 
     @Test
@@ -300,6 +327,9 @@ class PreviousTest {
 
     private fun prev(id: Long, type: String, weightKg: Double? = 50.0, reps: Int? = 5) =
         set(id, slot = 9, position = id.toInt(), type = type, weightKg = weightKg, reps = reps, completedAt = id)
+
+    private fun hold(id: Long, seconds: Int) =
+        set(id, slot = 9, position = id.toInt(), completedAt = id).copy(durationSec = seconds)
 
     private fun set(
         id: Long,
