@@ -5,6 +5,7 @@ import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import kotlin.math.roundToInt
 
 /**
  * Pure decision logic for an active workout session: rest-duration selection, wall-clock
@@ -15,6 +16,47 @@ import com.tczerwien.lifts.data.WorkoutExerciseEntity
 const val SET_TYPE_NORMAL = "normal"
 const val SET_TYPE_WARMUP = "warmup"
 const val SET_TYPE_FAILURE = "failure"
+const val SET_TYPE_DROP = "drop"
+
+/**
+ * The type a tap on a row's marker moves the set to. An unticked row cycles normal → warm-up →
+ * failure → drop → normal. A tap never moves a ticked set into or out of the warm-ups, which would
+ * take it out of (or put it into) his volume and records unnoticed: a ticked work set cycles normal →
+ * failure → drop → normal, and a ticked warm-up stays one (untick it to change it).
+ */
+fun nextSetType(type: String, ticked: Boolean): String = when {
+    ticked && type == SET_TYPE_WARMUP -> SET_TYPE_WARMUP
+    ticked -> when (type) {
+        SET_TYPE_FAILURE -> SET_TYPE_DROP
+        SET_TYPE_DROP -> SET_TYPE_NORMAL
+        else -> SET_TYPE_FAILURE
+    }
+    else -> when (type) {
+        SET_TYPE_NORMAL -> SET_TYPE_WARMUP
+        SET_TYPE_WARMUP -> SET_TYPE_FAILURE
+        SET_TYPE_FAILURE -> SET_TYPE_DROP
+        else -> SET_TYPE_NORMAL
+    }
+}
+
+/** The highest RIR the set rows offer: 5 reps left in the tank is already far from a hard set. */
+const val MAX_RIR = 5
+
+/**
+ * RIR (reps in reserve) for a stored [rpe]: the rpe column holds RPE = 10 − RIR, the scale the
+ * exports use. Null for a set without one.
+ */
+fun rirOf(rpe: Double?): Int? = rpe?.let { (10.0 - it).roundToInt() }
+
+/** The RPE a set stores for [rir] reps in reserve (RPE = 10 − RIR); null clears it. */
+fun rpeOf(rir: Int?): Double? = rir?.let { 10.0 - it }
+
+/** A tap on a row's RIR cell: blank → 0 → 1 … [MAX_RIR] → blank. */
+fun nextRir(rir: Int?): Int? = when {
+    rir == null -> 0
+    rir >= MAX_RIR || rir < 0 -> null
+    else -> rir + 1
+}
 
 /**
  * Rest to start after completing a set: the exercise's per-slot override when present,

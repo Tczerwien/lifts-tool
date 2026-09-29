@@ -84,6 +84,42 @@ class SessionLogicTest {
         assertEquals(900.0, totalVolumeKg(sets), 1e-9)
     }
 
+    // --- set types and RIR ---
+
+    @Test
+    fun `an unticked row's marker cycles through warm-up, failure and drop`() {
+        val cycle = generateSequence(SET_TYPE_NORMAL) { nextSetType(it, ticked = false) }.take(5).toList()
+        assertEquals(listOf(SET_TYPE_NORMAL, SET_TYPE_WARMUP, SET_TYPE_FAILURE, SET_TYPE_DROP, SET_TYPE_NORMAL), cycle)
+    }
+
+    @Test
+    fun `a ticked set never becomes a warm-up or stops being one by a tap`() {
+        val cycle = generateSequence(SET_TYPE_NORMAL) { nextSetType(it, ticked = true) }.take(4).toList()
+        assertEquals(listOf(SET_TYPE_NORMAL, SET_TYPE_FAILURE, SET_TYPE_DROP, SET_TYPE_NORMAL), cycle)
+        assertEquals(SET_TYPE_WARMUP, nextSetType(SET_TYPE_WARMUP, ticked = true))
+    }
+
+    @Test
+    fun `RIR cycles blank then 0 to 5 then blank and is stored as RPE`() {
+        var rir: Int? = null
+        val cycle = List(8) { rir.also { rir = nextRir(it) } }
+        assertEquals(listOf(null, 0, 1, 2, 3, 4, 5, null), cycle)
+        assertEquals(8.0, rpeOf(2))
+        assertEquals(10.0, rpeOf(0))
+        assertNull(rpeOf(null))
+        assertEquals(2, rirOf(8.0))
+        assertNull(rirOf(null))
+        // An RPE from elsewhere out of the cycle's range still reads, and the next tap clears it.
+        assertEquals(7, rirOf(3.0))
+        assertNull(nextRir(7))
+        assertNull(nextRir(-1))
+    }
+
+    @Test
+    fun `drop sets are work sets for rest`() {
+        assertEquals(240, restDurationSec(SET_TYPE_DROP, 240, 45, 180, 90))
+    }
+
     @Test
     fun `volume ignores sets missing weight or reps`() {
         val sets = listOf(
