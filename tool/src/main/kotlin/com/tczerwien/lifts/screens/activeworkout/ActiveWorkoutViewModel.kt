@@ -360,10 +360,11 @@ class ActiveWorkoutViewModel(
         val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
         pending?.let { pendingAdvance.value = it }
         val workoutId = _uiState.value.workoutId
-        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) {
+        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { logged ->
             settle(edit)
             // Its rest is saved now, so the move can be timed by it; unless a tap has cancelled it since.
-            pending?.let { pendingAdvance.compareAndSet(it, it.copy(restSaved = true)) }
+            // Nothing logged (the workout closed meanwhile): no move either.
+            pending?.let { pendingAdvance.compareAndSet(it, if (logged != null) it.copy(restSaved = true) else null) }
         }
     }
 
