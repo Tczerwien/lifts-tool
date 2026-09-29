@@ -148,7 +148,8 @@ class WorkoutDetailViewModel(
     }
 
     fun startEditNotes() {
-        if (deleting) return
+        // Not before the note has loaded: the editor would open blank and SUBMIT replace it.
+        if (deleting || !_uiState.value.loaded) return
         deleteArm.disarm()
         _uiState.update {
             it.copy(editingNotes = true, notesEditSession = it.notesEditSession + 1)
