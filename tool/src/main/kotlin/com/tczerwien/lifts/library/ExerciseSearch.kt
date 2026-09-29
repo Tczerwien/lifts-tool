@@ -163,6 +163,8 @@ internal val ALIASES: Map<String, List<String>> = mapOf(
     "abs" to listOf("crunch", "ab roller", "sit up"),
     "farmer carry" to listOf("farmer walk"),
     "farmers carry" to listOf("farmer walk"),
+    // The catalog's own spelling of the EZ bar ("E-Z Curl Bar"); its lifts say "EZ-Bar".
+    "e z" to listOf("ez"),
 )
 
 private val ALIAS_PHRASES: Map<List<String>, List<List<String>>> =

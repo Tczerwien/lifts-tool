@@ -112,6 +112,7 @@ class ExerciseSearchTest {
         // The EZ bar's equipment doesn't make every EZ-bar lift a curl.
         assertFalse("ez-bar-skullcrusher" in search("ez curl"))
         assertEquals("ez-bar-curl", search("ez curl").first())
+        assertEquals("ez-bar-curl", search("e-z curl").first())
     }
 
     @Test
