@@ -56,6 +56,11 @@ android {
         }
     }
 
+    // BuildConfig carries lighttool.toml's versionName, which Settings > About shows.
+    buildFeatures {
+        buildConfig = true
+    }
+
     lint {
         warningsAsErrors = false
         error += "RestrictedApi"

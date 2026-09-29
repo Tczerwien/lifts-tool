@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.BuildConfig
 import com.tczerwien.lifts.backup.BackupManager
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
@@ -381,7 +382,7 @@ class SettingsScreen(
     }
 
     companion object {
-        /** Tool label + versionName from tool/lighttool.toml (no generated config to read them from). */
-        private const val ABOUT_VALUE = "Lifts 0.1"
+        /** Tool label + versionName, which the SDK plugin takes from tool/lighttool.toml. */
+        private const val ABOUT_VALUE = "Lifts ${BuildConfig.VERSION_NAME}"
     }
 }
