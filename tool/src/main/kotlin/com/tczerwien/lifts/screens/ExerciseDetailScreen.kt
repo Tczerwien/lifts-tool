@@ -515,7 +515,9 @@ class ExerciseDetailScreen(
     private fun RecordsTab(uiState: ExerciseDetailViewModel.UiState, modifier: Modifier) {
         val records = uiState.records
         if (records == null) {
-            if (uiState.loaded) EmptyTabMessage("No sets logged yet", modifier)
+            // Sets only in today's open workout: History shows them, Records waits for the finish.
+            val text = if (uiState.history.isEmpty()) "No sets logged yet" else "No finished sets yet"
+            if (uiState.loaded) EmptyTabMessage(text, modifier)
             return
         }
         LightScrollView(modifier = modifier) {
