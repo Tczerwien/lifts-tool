@@ -2,7 +2,6 @@ package com.tczerwien.lifts.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -336,7 +335,6 @@ class ExercisePickerScreen(
                 .height(FILTER_ROW_HEIGHT_UNITS.gridUnitsAsDp())
                 .padding(horizontal = (1f - CHIP_PADDING_UNITS).gridUnitsAsDp())
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy((1f - 2 * CHIP_PADDING_UNITS).gridUnitsAsDp()),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val query = uiState.searchQuery
@@ -381,8 +379,11 @@ class ExercisePickerScreen(
 private const val EXERCISE_ROW_HEIGHT_UNITS = 3f
 private const val FILTER_ROW_HEIGHT_UNITS = 2f
 
-/** Each chip's padding, active or not; the gap between chip texts stays 1gu. */
-private const val CHIP_PADDING_UNITS = 0.5f
+/**
+ * Each chip's padding, active or not, so the gap between chip names is 0.6gu: the eight chips then take
+ * about 980 of the row's 1000px (at 1gu, CORE was cut at the edge).
+ */
+private const val CHIP_PADDING_UNITS = 0.3f
 
 /** How many exercises Recent lists: a program's week and then some. */
 private const val RECENT_LIMIT = 30
