@@ -319,6 +319,8 @@ class ActiveSessionTest {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = session.addExercise(workoutId, "bench")!!
         val (first, second) = store.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }
+        // A second exercise with nothing ticked: while open, the menu could remove it.
+        val untouched = session.addExercise(workoutId, "squat")!!
         session.completeSet(workoutId, first, 100.0, 5, n, now = 60_000)
         assertTrue(session.closeIfStale(workoutId, now = 60_000 + 5 * 3_600_000L))
         val logged = store.setsForWorkout(workoutId)
@@ -333,7 +335,7 @@ class ActiveSessionTest {
 
         // Nor do the menu's removals: RESUME brings the finished workout back with its unticked rows.
         assertFalse(session.removeSet(workoutId, second.id))
-        assertFalse(session.removeExercise(workoutId, slotId))
+        assertFalse(session.removeExercise(workoutId, untouched))
         assertEquals(logged, store.setsForWorkout(workoutId))
     }
 
