@@ -162,7 +162,7 @@ class HistoryScreen(
                                     },
                                     right = {
                                         LightText(
-                                            text = "${row.setCount} sets · ${row.durationMin} min",
+                                            text = "${Format.count(row.setCount, "set")} · ${row.durationMin} min",
                                             variant = LightTextVariant.Detail,
                                             lighten = true,
                                             maxLines = 1,

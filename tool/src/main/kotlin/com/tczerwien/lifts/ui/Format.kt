@@ -131,6 +131,10 @@ object Format {
     fun bodyweight(kg: Double, unit: WeightUnit): String =
         trimTrailingZero(roundBodyweight(kgToDisplay(kg, unit)))
 
+    /** "1 set", "3 sets": [count] with the word in the number it needs ([plural] when it isn't 1). */
+    fun count(count: Int, singular: String, plural: String = singular + "s"): String =
+        "$count ${if (count == 1) singular else plural}"
+
     // --- Clocks and durations ---
 
     /** Seconds -> "m:ss", e.g. 95 -> "1:35". */

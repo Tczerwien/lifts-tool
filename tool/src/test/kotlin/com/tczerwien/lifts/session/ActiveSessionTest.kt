@@ -57,6 +57,16 @@ class ActiveSessionTest {
     // --- Starting a workout ---
 
     @Test
+    fun `an empty workout is named by the time of day in the phone's zone`() {
+        val utc = ActiveSession(store, SettingsStore(dataStore), dataStore, alarm, ZoneOffset.UTC)
+        assertEquals("Morning Workout", store.workoutById(utc.startEmpty(now = 7 * 3_600_000L))!!.name)
+        assertEquals("Evening Workout", store.workoutById(utc.startEmpty(now = 18 * 3_600_000L))!!.name)
+        // A template keeps its own name.
+        val template = store.addTemplate("Upper A", "bench" to 3)
+        assertEquals("Upper A", store.workoutById(utc.startFromTemplate(template, now = 18 * 3_600_000L))!!.name)
+    }
+
+    @Test
     fun `a template starts each slot with last session's warm-ups, then its target sets, all empty`() {
         store.addFinishedWorkout(
             startedAt = 1_000_000,

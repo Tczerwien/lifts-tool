@@ -6,6 +6,8 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import java.time.Instant
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /**
@@ -39,6 +41,20 @@ fun nextSetType(type: String, ticked: Boolean): String = when {
         else -> SET_TYPE_NORMAL
     }
 }
+
+/**
+ * The name a workout started empty gets, from the local hour it started in [zone], as Strong names
+ * them: "Morning Workout" 5:00–11:59, "Afternoon Workout" 12:00–16:59, "Evening Workout"
+ * 17:00–20:59, "Night Workout" 21:00–4:59. History then tells an empty Tuesday evening from the
+ * morning after, and the "…" menu renames it.
+ */
+fun defaultWorkoutName(startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+    when (Instant.ofEpochMilli(startedAt).atZone(zone).hour) {
+        in 5..11 -> "Morning Workout"
+        in 12..16 -> "Afternoon Workout"
+        in 17..20 -> "Evening Workout"
+        else -> "Night Workout"
+    }
 
 /** The highest RIR the set rows offer: 5 reps left in the tank is already far from a hard set. */
 const val MAX_RIR = 5

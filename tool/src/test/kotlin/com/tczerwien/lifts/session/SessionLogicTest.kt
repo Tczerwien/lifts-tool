@@ -94,6 +94,24 @@ class SessionLogicTest {
         assertEquals(80.0, totalVolumeKg(sets), 1e-9)
     }
 
+    // --- workout names ---
+
+    @Test
+    fun `an empty workout is named by the time of day it starts`() {
+        val chicago = java.time.ZoneId.of("America/Chicago")
+        fun at(time: String) = java.time.LocalDateTime.parse("2026-09-29T$time").atZone(chicago).toInstant().toEpochMilli()
+        assertEquals("Night Workout", defaultWorkoutName(at("04:59"), chicago))
+        assertEquals("Morning Workout", defaultWorkoutName(at("05:00"), chicago))
+        assertEquals("Morning Workout", defaultWorkoutName(at("11:59"), chicago))
+        assertEquals("Afternoon Workout", defaultWorkoutName(at("12:00"), chicago))
+        assertEquals("Afternoon Workout", defaultWorkoutName(at("16:59"), chicago))
+        assertEquals("Evening Workout", defaultWorkoutName(at("17:00"), chicago))
+        assertEquals("Evening Workout", defaultWorkoutName(at("20:59"), chicago))
+        assertEquals("Night Workout", defaultWorkoutName(at("21:00"), chicago))
+        // The phone's zone decides: 19:30 in Chicago is past midnight in UTC.
+        assertEquals("Night Workout", defaultWorkoutName(at("19:30"), java.time.ZoneOffset.UTC))
+    }
+
     // --- set types and RIR ---
 
     @Test

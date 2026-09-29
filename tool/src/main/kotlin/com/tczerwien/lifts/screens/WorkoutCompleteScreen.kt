@@ -172,7 +172,7 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Mono("${summary.completedSetCount}", LightTextVariant.Copy)
-            LightText(text = " sets · ", variant = LightTextVariant.Copy)
+            LightText(text = if (summary.completedSetCount == 1) " set · " else " sets · ", variant = LightTextVariant.Copy)
             Mono(volumeDisplay(summary.totalVolumeKg, units), LightTextVariant.Copy)
             LightText(text = " ${units.suffix} volume", variant = LightTextVariant.Copy)
         }

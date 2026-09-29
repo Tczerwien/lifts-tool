@@ -67,6 +67,14 @@ class FormatTest {
     }
 
     @Test
+    fun `counts take the word in the number they need`() {
+        assertEquals("1 set", Format.count(1, "set"))
+        assertEquals("0 sets", Format.count(0, "set"))
+        assertEquals("12 sets", Format.count(12, "set"))
+        assertEquals("2 reps", Format.count(2, "rep"))
+    }
+
+    @Test
     fun `Weight Step cycles through what the unit offers`() {
         assertEquals(2.5, WeightUnit.LB.nextWeightStep(5.0))
         assertEquals(5.0, WeightUnit.LB.nextWeightStep(2.5))

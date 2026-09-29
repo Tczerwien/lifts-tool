@@ -34,6 +34,8 @@ class ActiveSession(
     private val dataStore: DataStore<Preferences>,
     /** Told of every rest saved or moved here ([RestAlarm.arm]); the process's own outside tests. */
     private val alarm: RestAlarm = RestAlarm.process,
+    /** The zone a new workout's name reads the time of day in: the phone's, a fixed one in tests. */
+    private val zone: ZoneId = ZoneId.systemDefault(),
 ) {
 
     // --- Session lifecycle ---
@@ -56,7 +58,7 @@ class ActiveSession(
         val template = repository.templateById(templateId)
         val workoutId = repository.addWorkout(
             WorkoutEntity(
-                name = template?.name ?: DEFAULT_WORKOUT_NAME,
+                name = template?.name ?: defaultWorkoutName(now, zone),
                 startedAt = now,
                 templateId = template?.id,
             ),
@@ -91,9 +93,12 @@ class ActiveSession(
     private fun previousGroupsOf(exerciseId: String): List<List<SetEntity>> =
         previousGroups(repository.previousPerformance(exerciseId), repository.previousSlotIds(exerciseId))
 
-    /** Creates an empty workout; like [startFromTemplate] it clears any leftover rest. */
+    /**
+     * Creates an empty workout named by the time of day ([defaultWorkoutName]); like
+     * [startFromTemplate] it clears any leftover rest.
+     */
     fun startEmpty(now: Long = System.currentTimeMillis()): Long {
-        val workoutId = repository.addWorkout(WorkoutEntity(name = DEFAULT_WORKOUT_NAME, startedAt = now))
+        val workoutId = repository.addWorkout(WorkoutEntity(name = defaultWorkoutName(now, zone), startedAt = now))
         runBlocking { clearRest() }
         return workoutId
     }
@@ -414,8 +419,6 @@ class ActiveSession(
     suspend fun clearRest() = rest.clear()
 
     companion object {
-        const val DEFAULT_WORKOUT_NAME = "Workout"
-
         /**
          * Forgets the in-workout state kept in DataStore: the exercise last on screen and the saved
          * rest. A restore calls it, because the restored database can reuse workout and slot ids, so a

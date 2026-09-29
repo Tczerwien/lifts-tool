@@ -412,7 +412,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                                 },
                                 right = {
                                     LightText(
-                                        text = "${Format.dateShort(recent.dateMillis)} · ${recent.setCount} sets",
+                                        text = "${Format.dateShort(recent.dateMillis)} · ${Format.count(recent.setCount, "set")}",
                                         variant = LightTextVariant.Detail,
                                         lighten = true,
                                         maxLines = 1,
