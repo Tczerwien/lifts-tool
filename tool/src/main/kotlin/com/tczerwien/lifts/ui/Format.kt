@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.ui
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -158,6 +159,9 @@ object Format {
     /** "Jul 18" */
     fun dateShort(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
         dateShortFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
+
+    /** "Jul 18" for a calendar day (epoch day, as bodyweight is stored). */
+    fun dayShort(epochDay: Long): String = dateShortFormatter.format(LocalDate.ofEpochDay(epochDay))
 
     /** "Jul 18 14:05", for files rewritten several times a day (exports, backups). */
     fun dateTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =

@@ -91,8 +91,9 @@ class WorkoutCompleteViewModel(
 /**
  * Post-finish summary (design/screens/workout-complete.html): duration, completed sets +
  * volume in display units, the New Records list (star per line), and the bodyweight line
- * when the workout logged one. No back chevron. DONE returns to Active Workout, which pops
- * straight on to Home; RESUME has Active Workout reopen the workout for more sets.
+ * when there is a weigh-in for the workout (that day's, else one from the days before). No back
+ * chevron. DONE returns to Active Workout, which pops straight on to Home; RESUME has Active Workout
+ * reopen the workout for more sets.
  */
 class WorkoutCompleteScreen(
     private val sealedActivity: SealedLightActivity,
@@ -200,17 +201,18 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
             }
         }
 
-        summary.bodyweightKg?.let { bodyweightKg ->
+        // That day's weigh-in, or the latest from the few days before, dated then.
+        summary.bodyweight?.let { bodyweight ->
             Gap(1.5f)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LightText(
-                    text = "Bodyweight logged: ",
+                    text = if (bodyweight.sameDay) "Bodyweight logged: " else "Bodyweight: ",
                     variant = LightTextVariant.Detail,
                     lighten = true,
                 )
-                Mono(Format.bodyweight(bodyweightKg, units), LightTextVariant.Detail, lighten = true)
+                Mono(Format.bodyweight(bodyweight.weightKg, units), LightTextVariant.Detail, lighten = true)
                 LightText(
-                    text = " ${units.suffix}",
+                    text = " ${units.suffix}" + if (bodyweight.sameDay) "" else " (${Format.dayShort(bodyweight.epochDay)})",
                     variant = LightTextVariant.Detail,
                     lighten = true,
                 )

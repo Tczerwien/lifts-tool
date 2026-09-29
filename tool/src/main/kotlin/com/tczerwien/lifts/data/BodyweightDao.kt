@@ -14,4 +14,7 @@ interface BodyweightDao {
 
     @Query("SELECT * FROM bodyweight ORDER BY epochDay")
     fun listAll(): List<BodyweightEntity>
+
+    @Query("SELECT * FROM bodyweight WHERE epochDay BETWEEN :fromDay AND :toDay ORDER BY epochDay")
+    fun between(fromDay: Long, toDay: Long): List<BodyweightEntity>
 }

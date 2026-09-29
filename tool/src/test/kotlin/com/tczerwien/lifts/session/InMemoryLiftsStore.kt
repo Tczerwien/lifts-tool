@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.session
 
+import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
@@ -120,6 +121,11 @@ class InMemoryLiftsStore : LiftsStore {
             .groupBy { slots.getValue(it.workoutExerciseId).exerciseId }
 
     override fun templateById(id: Long): TemplateEntity? = templates[id]
+
+    val bodyweight = mutableListOf<BodyweightEntity>()
+
+    override fun bodyweightBetween(fromEpochDay: Long, toEpochDay: Long): List<BodyweightEntity> =
+        bodyweight.filter { it.epochDay in fromEpochDay..toEpochDay }.sortedBy { it.epochDay }
 
     override fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity> =
         templateExercises.values.filter { it.templateId == templateId }.sortedBy { it.position }

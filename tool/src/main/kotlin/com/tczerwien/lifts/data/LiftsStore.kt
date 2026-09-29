@@ -63,4 +63,7 @@ interface LiftsStore {
 
     /** A template's exercises in position order. */
     fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity>
+
+    /** Weigh-ins from [fromEpochDay] to [toEpochDay], both included, oldest first. */
+    fun bodyweightBetween(fromEpochDay: Long, toEpochDay: Long): List<BodyweightEntity>
 }

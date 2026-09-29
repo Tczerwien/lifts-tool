@@ -102,7 +102,10 @@ object MarkdownExport {
         for (workout in snapshot.workouts) {
             append("\n### ").append(workout.dateIso).append(" — ").append(workout.name)
             val parts = mutableListOf("${workout.durationMin}m")
-            workout.bodyweightKg?.let { parts.add("BW ${Format.bodyweight(it, snapshot.unit)} ${snapshot.unit.suffix}") }
+            workout.bodyweight?.let { bodyweight ->
+                val weight = "BW ${Format.bodyweight(bodyweight.weightKg, snapshot.unit)} ${snapshot.unit.suffix}"
+                parts.add(if (bodyweight.sameDay) weight else "$weight from ${bodyweight.dateIso}")
+            }
             if (parts.isNotEmpty()) append(" (").append(parts.joinToString(", ")).append(')')
             append('\n')
             workout.notes?.let { append("\nNotes: ").append(it).append('\n') }

@@ -199,6 +199,9 @@ class LiftsRepository private constructor(
 
     fun listBodyweight(): List<BodyweightEntity> = db.bodyweightDao.listAll()
 
+    override fun bodyweightBetween(fromEpochDay: Long, toEpochDay: Long): List<BodyweightEntity> =
+        db.bodyweightDao.between(fromEpochDay, toEpochDay)
+
     // --- Bars ---
 
     fun addBar(bar: BarEntity): Long = db.barDao.insert(bar)

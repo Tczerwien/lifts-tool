@@ -3,12 +3,15 @@ package com.tczerwien.lifts.session
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.tczerwien.lifts.analytics.WorkoutBodyweight
+import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.settings.SettingsStore
 import java.io.File
 import java.nio.file.Files
+import java.time.ZoneOffset
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -269,6 +272,20 @@ class ActiveSessionTest {
         assertEquals(1_025.0, summary.totalVolumeKg, 1e-9)
         assertEquals(listOf(PrRecord("bench", "Bench Press", 102.5, 5)), summary.prs)
         assertEquals(240, summary.durationSec)
+        assertNull(summary.bodyweight, "no weigh-in near the workout")
+    }
+
+    @Test
+    fun `the summary carries that day's weigh-in, looked up rather than stored`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "bench")
+        session.completeSet(workoutId, store.setsForWorkout(workoutId).first { it.workoutExerciseId == slotId }, 100.0, 5, n, now = 60_000)
+        session.finishOrDiscard(workoutId, now = 120_000)
+        // Logged after the workout, on its day (epoch day 0 in UTC); the day before is older.
+        store.bodyweight += BodyweightEntity(id = 1, epochDay = -1, weightKg = 81.0)
+        store.bodyweight += BodyweightEntity(id = 2, epochDay = 0, weightKg = 80.5)
+
+        assertEquals(WorkoutBodyweight(80.5, 0, sameDay = true), session.summarize(workoutId, ZoneOffset.UTC)!!.bodyweight)
     }
 
     // --- Home's cleanup ---

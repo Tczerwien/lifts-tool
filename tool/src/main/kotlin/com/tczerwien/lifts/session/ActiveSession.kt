@@ -4,12 +4,16 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.tczerwien.lifts.analytics.WORKOUT_BODYWEIGHT_LOOKBACK_DAYS
+import com.tczerwien.lifts.analytics.workoutBodyweight
+import com.tczerwien.lifts.analytics.workoutEpochDay
 import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.displayName
+import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -307,11 +311,11 @@ class ActiveSession(
 
     /**
      * Summary of [workoutId]: duration, completed-set count (any type), volume
-     * (non-warmup), PR records replayed against prior history, and the bodyweight
-     * passthrough. Works for already-finished workouts (Workout Complete recomputes
-     * from its constructor id).
+     * (non-warmup), PR records replayed against prior history, and the weigh-in that goes with
+     * it ([workoutBodyweight], by the local day in [zone]). Works for already-finished workouts
+     * (Workout Complete recomputes from its constructor id).
      */
-    fun summarize(workoutId: Long): WorkoutSummary? {
+    fun summarize(workoutId: Long, zone: ZoneId = ZoneId.systemDefault()): WorkoutSummary? {
         val workout = repository.workoutById(workoutId) ?: return null
         val slots = repository.exercisesForWorkout(workoutId)
         val sets = repository.setsForWorkout(workoutId)
@@ -320,6 +324,8 @@ class ActiveSession(
         val prIds = prSetIds(slots, sets, priorHistory)
         val names = exerciseIds.associateWith { id -> repository.exerciseById(id)?.let(::displayName) ?: id }
         val end = workout.endedAt ?: workout.startedAt
+        val day = workoutEpochDay(workout.startedAt, zone)
+        val weighIns = repository.bodyweightBetween(day - WORKOUT_BODYWEIGHT_LOOKBACK_DAYS, day)
         return WorkoutSummary(
             workoutId = workoutId,
             name = workout.name,
@@ -327,7 +333,7 @@ class ActiveSession(
             completedSetCount = completedSetCount(sets),
             totalVolumeKg = totalVolumeKg(sets),
             prs = prRecords(slots, sets, prIds, names),
-            bodyweightKg = null, // not stored per workout; comes from the bodyweight log later
+            bodyweight = workoutBodyweight(workout.startedAt, weighIns, zone),
         )
     }
 

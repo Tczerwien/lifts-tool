@@ -278,6 +278,48 @@ class AnalyticsTest {
         assertEquals(listOf(0, 1), workoutsPerWeek(sundayEvening, weeks = 2, todayEpochDay = day("2026-07-14"), zone = ZoneOffset.UTC))
     }
 
+    // --- restGapsSec ---
+
+    @Test
+    fun restGapsRunAcrossExercisesInTickOrder() {
+        val t0 = millis("2026-07-13T10:00:00Z")
+        val sets = listOf(
+            // Ticked out of position order and across two slots (a superset).
+            SetEntity(id = 1, workoutExerciseId = 1, position = 0, type = "warmup", reps = 8, completedAt = t0),
+            SetEntity(id = 3, workoutExerciseId = 2, position = 0, type = "normal", reps = 8, completedAt = t0 + 150_000),
+            SetEntity(id = 2, workoutExerciseId = 1, position = 1, type = "normal", reps = 5, completedAt = t0 + 90_000),
+            // A break of more than 15 minutes: the gap says nothing about the set.
+            SetEntity(id = 4, workoutExerciseId = 2, position = 1, type = "normal", reps = 8, completedAt = t0 + 150_000 + 901_000),
+            SetEntity(id = 5, workoutExerciseId = 2, position = 2, type = "normal", reps = 8, completedAt = t0 + 150_000 + 901_000 + 900_000),
+            // Never ticked: no gap, and it doesn't break the chain.
+            SetEntity(id = 6, workoutExerciseId = 2, position = 3, type = "normal", reps = 8),
+        )
+
+        assertEquals(mapOf(2L to 90, 3L to 60, 5L to 900), restGapsSec(sets))
+    }
+
+    // --- workoutBodyweight ---
+
+    @Test
+    fun workoutBodyweightPrefersThatDayThenLooksBackThreeDays() {
+        val chicago = ZoneId.of("America/Chicago")
+        // Sunday 2026-07-12, 23:30 in Chicago (04:30 UTC on the 13th).
+        val startedAt = millis("2026-07-13T04:30:00Z")
+        val sunday = day("2026-07-12")
+        fun entry(id: Long, epochDay: Long, kg: Double) = BodyweightEntity(id = id, epochDay = epochDay, weightKg = kg)
+
+        // Logged the same local day (even after the workout): that one.
+        val sameDay = workoutBodyweight(startedAt, listOf(entry(1, sunday - 1, 80.0), entry(2, sunday, 80.5), entry(3, sunday + 1, 79.0)), chicago)
+        assertEquals(WorkoutBodyweight(80.5, sunday, sameDay = true), sameDay)
+        // None that day: the latest of the three days before, marked as an earlier day.
+        val earlier = workoutBodyweight(startedAt, listOf(entry(1, sunday - 3, 81.0), entry(2, sunday - 2, 80.8)), chicago)
+        assertEquals(WorkoutBodyweight(80.8, sunday - 2, sameDay = false), earlier)
+        // Four days back is too old, and the day after never counts.
+        assertNull(workoutBodyweight(startedAt, listOf(entry(1, sunday - 4, 81.0), entry(2, sunday + 1, 80.0)), chicago))
+        // In UTC the same instant is Monday the 13th, whose entry is the Monday one.
+        assertEquals(sunday + 1, workoutBodyweight(startedAt, listOf(entry(2, sunday, 80.5), entry(3, sunday + 1, 79.0)), ZoneOffset.UTC)?.epochDay)
+    }
+
     // --- weeksSince ---
 
     @Test

@@ -82,8 +82,9 @@ class MarkdownExportTest {
 
     @Test
     fun workoutsAreNewestFirstWithHeadingsAndNotes() {
-        val newer = markdown.indexOf("### 2026-07-13 — Push Day (98m)")
-        val older = markdown.indexOf("### 2026-07-06 — Push Day (44m)")
+        // Each carries that day's weigh-in.
+        val newer = markdown.indexOf("### 2026-07-13 — Push Day (98m, BW 80.5 kg)")
+        val older = markdown.indexOf("### 2026-07-06 — Push Day (44m, BW 81 kg)")
         assertTrue(newer >= 0, "newest workout heading missing")
         assertTrue(older >= 0, "oldest workout heading missing")
         assertTrue(newer < older, "workouts must be newest-first")
@@ -98,10 +99,11 @@ class MarkdownExportTest {
 
     @Test
     fun setNotationLineIsExact() {
-        // Warmup prefixed "w", RPE "@8", PR marker, joined with "; ".
-        assertContains(lines, "  w60x8; 102.5x5 @8 — **PR**; 95x5")
+        // Warmup prefixed "w", RPE "@8", the 10 minutes since the set before "r600", PR marker, joined
+        // with "; ". The first set of a workout has no rest gap.
+        assertContains(lines, "  w60x8; 102.5x5 @8 r600 — **PR**; 95x5 r600")
         // First working set ever is a PR too.
-        assertContains(lines, "  w60x8; 100x5 @8 — **PR**; 100x5")
+        assertContains(lines, "  w60x8; 100x5 @8 r600 — **PR**; 100x5 r600")
     }
 
     @Test

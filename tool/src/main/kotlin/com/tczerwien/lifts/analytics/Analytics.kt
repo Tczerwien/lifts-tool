@@ -272,6 +272,54 @@ fun workoutsPerWeek(
 }
 
 /**
+ * The longest gap that still reads as a rest between two sets. Past it he took a break, answered the
+ * phone or moved on to something else, and the gap says nothing about the next set.
+ */
+const val REST_GAP_MAX_SEC = 15 * 60
+
+/**
+ * Seconds from the previous ticked set of the same workout to each ticked set, by set id, taken from
+ * when they were ticked: the rest before the set plus the time the set itself took, so a little
+ * longer than the rest alone. Sets are ordered by completion time across all of the workout's
+ * exercises. The first set has none, and neither has a set after a gap over [REST_GAP_MAX_SEC].
+ * Pass one workout's sets; unticked ones are ignored.
+ */
+fun restGapsSec(sets: List<SetEntity>): Map<Long, Int> {
+    val ordered = sets.filter { it.completedAt != null }.sortedWith(compareBy({ it.completedAt }, { it.id }))
+    val gaps = HashMap<Long, Int>()
+    for (i in 1 until ordered.size) {
+        val gapSec = ((ordered[i].completedAt!! - ordered[i - 1].completedAt!!) / 1000L).toInt()
+        if (gapSec <= REST_GAP_MAX_SEC) gaps[ordered[i].id] = gapSec
+    }
+    return gaps
+}
+
+/** How many days before a workout a weigh-in may be and still stand for it. */
+const val WORKOUT_BODYWEIGHT_LOOKBACK_DAYS = 3
+
+/** The bodyweight that goes with a workout: [sameDay] when it was logged the day the workout started. */
+data class WorkoutBodyweight(val weightKg: Double, val epochDay: Long, val sameDay: Boolean)
+
+/**
+ * The weigh-in for a workout started at [startedAt]: the entry of that local day in [zone] (logged
+ * before or after the workout), else the latest one from the [WORKOUT_BODYWEIGHT_LOOKBACK_DAYS] days
+ * before it; null when there is none. Worked out when needed rather than stored, so a weigh-in logged
+ * after the workout, or corrected later, still shows.
+ */
+fun workoutBodyweight(startedAt: Long, entries: List<BodyweightEntity>, zone: ZoneId): WorkoutBodyweight? {
+    val day = workoutEpochDay(startedAt, zone)
+    val entry = entries
+        .filter { it.epochDay in (day - WORKOUT_BODYWEIGHT_LOOKBACK_DAYS)..day }
+        .maxWithOrNull(compareBy({ it.epochDay }, { it.id }))
+        ?: return null
+    return WorkoutBodyweight(entry.weightKg, entry.epochDay, sameDay = entry.epochDay == day)
+}
+
+/** The local day (epoch day in [zone]) a workout started at [startedAt] belongs to. */
+fun workoutEpochDay(startedAt: Long, zone: ZoneId): Long =
+    Instant.ofEpochMilli(startedAt).atZone(zone).toLocalDate().toEpochDay()
+
+/**
  * ISO weeks from the week of [firstEpochMillis] (in [zone]) through [todayEpochDay]'s week, counting
  * both: the window [workoutsPerWeek] needs to cover a whole history. At least 1, so a workout dated in
  * a future week (a clock set wrong when it was logged) can't make an empty window.

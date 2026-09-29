@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.session
 
+import com.tczerwien.lifts.analytics.WorkoutBodyweight
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
@@ -142,7 +143,8 @@ data class WorkoutSummary(
     val completedSetCount: Int,
     val totalVolumeKg: Double,
     val prs: List<PrRecord>,
-    val bodyweightKg: Double?,
+    /** The weigh-in that goes with the workout ([workoutBodyweight]), null without one. */
+    val bodyweight: WorkoutBodyweight?,
 )
 
 /** The set the lifter is resting toward, with its 1-based number within its exercise. */

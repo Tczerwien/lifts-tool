@@ -3,7 +3,9 @@ package com.tczerwien.lifts.export
 import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.computePrs
+import com.tczerwien.lifts.analytics.restGapsSec
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
+import com.tczerwien.lifts.analytics.workoutBodyweight
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.ui.WeightUnit
@@ -86,10 +88,19 @@ data class SnapshotWorkout(
     val name: String,
     /** Rounded minutes. */
     val durationMin: Int,
-    val bodyweightKg: Double?,
+    /** That day's weigh-in, else the latest from the few days before ([workoutBodyweight]). */
+    val bodyweight: SnapshotWorkoutBodyweight?,
     val notes: String?,
     /** Ordered by position; only slots with at least one completed set. */
     val exercises: List<SnapshotWorkoutExercise>,
+)
+
+data class SnapshotWorkoutBodyweight(
+    val weightKg: Double,
+    /** yyyy-MM-dd of the weigh-in. */
+    val dateIso: String,
+    /** Logged the day the workout started. */
+    val sameDay: Boolean,
 )
 
 data class SnapshotWorkoutExercise(
@@ -109,6 +120,7 @@ data class SnapshotSet(
     val reps: Int?,
     val durationSec: Int?,
     val rpe: Double?,
+    /** Seconds since the workout's previous ticked set ([restGapsSec]); null for the first, or after a break. */
     val restSec: Int?,
     val isPr: Boolean,
 )
@@ -173,6 +185,11 @@ fun buildSnapshot(
 
     val setsBySlot = completedSets.groupBy { it.workoutExerciseId }
     val slotsByWorkout = validSlots.groupBy { it.workoutId }
+    // Rest gaps run across all of a workout's exercises, in the order the sets were ticked.
+    val restGaps = completedSets
+        .groupBy { slotsById.getValue(it.workoutExerciseId).workoutId }
+        .values
+        .fold(HashMap<Long, Int>()) { gaps, workoutSets -> gaps.apply { putAll(restGapsSec(workoutSets)) } }
 
     val snapshotWorkouts = workouts
         .filter { workout -> slotsByWorkout[workout.id].orEmpty().any { it.id in setsBySlot } }
@@ -198,7 +215,7 @@ fun buildSnapshot(
                                 reps = set.reps,
                                 durationSec = set.durationSec,
                                 rpe = set.rpe,
-                                restSec = null, // rest taken isn't recorded yet
+                                restSec = restGaps[set.id],
                                 isPr = set.id in prSetIds,
                             )
                         },
@@ -211,7 +228,9 @@ fun buildSnapshot(
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
                 durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt(),
-                bodyweightKg = null, // not stored per workout; comes from the bodyweight log later
+                bodyweight = workoutBodyweight(workout.startedAt, bodyweight, zone)?.let {
+                    SnapshotWorkoutBodyweight(it.weightKg, LocalDate.ofEpochDay(it.epochDay).toString(), it.sameDay)
+                },
                 notes = workout.notes,
                 exercises = slots,
             )

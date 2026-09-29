@@ -18,8 +18,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.SetRun
+import com.tczerwien.lifts.analytics.WORKOUT_BODYWEIGHT_LOOKBACK_DAYS
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.setNotation
+import com.tczerwien.lifts.analytics.workoutBodyweight
+import com.tczerwien.lifts.analytics.workoutEpochDay
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
@@ -49,6 +52,7 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
+import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,7 +79,7 @@ class WorkoutDetailViewModel(
         val subtitle: String = "",
         val notes: String? = null,
         val blocks: List<ExerciseBlock> = emptyList(),
-        /** "182.4 lb", null when the workout has no bodyweight. */
+        /** "182.4 lb", or "182.4 lb (Sep 11)" from an earlier day ([workoutBodyweight]); null without one. */
         val bodyweightText: String? = null,
         val editingNotes: Boolean = false,
         /** Bumped per edit session so the editor state resets. */
@@ -176,6 +180,13 @@ class WorkoutDetailViewModel(
         }
 
         val durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt() }
+        val zone = ZoneId.systemDefault()
+        val day = workoutEpochDay(workout.startedAt, zone)
+        val bodyweight = workoutBodyweight(
+            workout.startedAt,
+            repository.bodyweightBetween(day - WORKOUT_BODYWEIGHT_LOOKBACK_DAYS, day),
+            zone,
+        )
         _uiState.update { state ->
             state.copy(
                 loaded = true,
@@ -184,7 +195,10 @@ class WorkoutDetailViewModel(
                     (durationMin?.let { minutes -> " · $minutes min" } ?: ""),
                 notes = workout.notes,
                 blocks = blocks,
-                bodyweightText = null, // not stored per workout; comes from the bodyweight log later
+                bodyweightText = bodyweight?.let {
+                    "${Format.bodyweight(it.weightKg, unit)} ${unit.suffix}" +
+                        if (it.sameDay) "" else " (${Format.dayShort(it.epochDay)})"
+                },
             )
         }
     }

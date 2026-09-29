@@ -46,7 +46,8 @@ object JsonExport {
                     startTime = workout.startTimeIso,
                     durationMin = workout.durationMin,
                     routine = workout.name,
-                    bodyweightKg = workout.bodyweightKg,
+                    bodyweightKg = workout.bodyweight?.weightKg,
+                    bodyweightDate = workout.bodyweight?.dateIso,
                     notes = workout.notes,
                     exercises = workout.exercises.map { exercise ->
                         JsonWorkoutExercise(
@@ -145,6 +146,8 @@ data class JsonWorkout(
     @SerialName("duration_min") val durationMin: Int? = null,
     val routine: String,
     @SerialName("bodyweight_kg") val bodyweightKg: Double? = null,
+    /** The day of that weigh-in: the workout's, or up to 3 days before. */
+    @SerialName("bodyweight_date") val bodyweightDate: String? = null,
     val notes: String? = null,
     val exercises: List<JsonWorkoutExercise>,
 )
