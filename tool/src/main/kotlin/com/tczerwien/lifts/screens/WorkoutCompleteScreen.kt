@@ -20,6 +20,7 @@ import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.PrRecord
 import com.tczerwien.lifts.session.WorkoutSummary
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
@@ -190,7 +191,7 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    Mono(prSetDisplay(pr.weightKg, pr.reps, units), LightTextVariant.Copy)
+                    Mono(prSetDisplay(pr, units), LightTextVariant.Copy)
                     LightIcon(
                         icon = LightIcons.STAR_OUTLINE,
                         size = 1.1f,
@@ -237,9 +238,9 @@ private fun Mono(text: String, variant: LightTextVariant, lighten: Boolean = fal
     )
 }
 
-/** "165 × 5", or "× 15" for a pull-up record ([setNotation]). */
-private fun prSetDisplay(weightKg: Double?, reps: Int?, units: WeightUnit): String =
-    setNotation(weightKg, reps, units, NotationStyle.SINGLE).orEmpty()
+/** "165 × 5", "× 15" for a pull-up record, "-25 × 8" with help, "45s" for a hold ([setNotation]). */
+private fun prSetDisplay(pr: PrRecord, units: WeightUnit): String =
+    setNotation(pr.weightKg, pr.reps, units, NotationStyle.SINGLE, durationSec = pr.durationSec).orEmpty()
 
 /** Volume in display units with a thousands separator, e.g. "12,440". */
 private fun volumeDisplay(volumeKg: Double, units: WeightUnit): String =
