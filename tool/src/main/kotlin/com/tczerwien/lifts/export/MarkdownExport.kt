@@ -1,10 +1,16 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.setNotation
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
+
 /**
  * Renders `training-log.md` — the markdown-first, AI-readable export: YAML front matter,
  * a precomputed summary (PRs, weekly sets per muscle, bodyweight), then per-workout
- * compact lifting notation ("102.5x5 @8 r180"), newest workout first.
- * All weights are kilograms.
+ * compact lifting notation ("225x5 @8 r180", [setNotation]), newest workout first.
+ * Weights are in the unit Lifts shows ([ExportSnapshot.unit]), rounded as the screens round them, so
+ * a 135 lb set reads "135x8"; the front matter names the unit.
  */
 object MarkdownExport {
 
@@ -21,7 +27,7 @@ object MarkdownExport {
         append("exported_at: ").append(snapshot.exportedAtIso).append('\n')
         append("timezone: ").append(snapshot.zone.id).append('\n')
         append("units:\n")
-        append("  weight: kg\n")
+        append("  weight: ").append(snapshot.unit.suffix).append('\n')
         if (snapshot.goals != null || snapshot.injuries.isNotEmpty()) {
             append("athlete:\n")
             snapshot.goals?.let { append("  goals: ").append(it).append('\n') }
@@ -48,19 +54,23 @@ object MarkdownExport {
     }
 
     private fun StringBuilder.appendSummary(snapshot: ExportSnapshot) {
+        val unit = snapshot.unit
         append("\n## Summary\n")
         if (snapshot.prs.isNotEmpty()) {
             append("\n### Current PRs\n\n")
             for (pr in snapshot.prs) {
                 append("- ").append(pr.exerciseName).append(": ")
                 if (pr.bestE1RmKg != null) {
-                    append("e1RM ").append(ExportFormat.rounded1(pr.bestE1RmKg))
-                    append(" kg (").append(pr.bestE1RmDateIso).append(')')
+                    append("e1RM ").append(Format.weight(pr.bestE1RmKg, unit))
+                    append(' ').append(unit.suffix).append(" (").append(pr.bestE1RmDateIso).append(')')
                 } else {
-                    append("max ").append(ExportFormat.number(pr.maxWeightKg))
-                    append(" kg (").append(pr.maxWeightDateIso).append(')')
+                    append("max ").append(Format.weight(pr.maxWeightKg, unit))
+                    append(' ').append(unit.suffix).append(" (").append(pr.maxWeightDateIso).append(')')
                 }
-                append(" — best set ").append(pr.bestSetNotation).append('\n')
+                setNotation(pr.bestSetWeightKg, pr.bestSetReps, unit, NotationStyle.EXPORT)?.let {
+                    append(" — best set ").append(it)
+                }
+                append('\n')
             }
         }
         if (snapshot.weeklySetsPerMuscle.isNotEmpty()) {
@@ -75,13 +85,14 @@ object MarkdownExport {
         val trend = snapshot.bodyweightTrend
         if (trend != null) {
             append("\n### Bodyweight\n\n")
-            append("- Current: ").append(ExportFormat.number(trend.currentKg))
-            append(" kg (").append(trend.currentDateIso).append(")\n")
+            append("- Current: ").append(Format.bodyweight(trend.currentKg, unit))
+            append(' ').append(unit.suffix).append(" (").append(trend.currentDateIso).append(")\n")
             trend.rateKgPerWeek?.let {
-                append("- Rate: ").append(ExportFormat.signed2(it)).append(" kg/week over last 4 weeks\n")
+                append("- Rate: ").append(ExportFormat.signed2(Format.kgToDisplay(it, unit)))
+                append(' ').append(unit.suffix).append("/week over last 4 weeks\n")
             }
             append("- ").append(trend.weeklyAvgKg.size).append("-week avg: ")
-            append(trend.weeklyAvgKg.joinToString(", ") { avg -> avg?.let { ExportFormat.rounded1(it) } ?: "—" })
+            append(trend.weeklyAvgKg.joinToString(", ") { avg -> avg?.let { Format.bodyweight(it, unit) } ?: "—" })
             append('\n')
         }
     }
@@ -91,7 +102,7 @@ object MarkdownExport {
         for (workout in snapshot.workouts) {
             append("\n### ").append(workout.dateIso).append(" — ").append(workout.name)
             val parts = mutableListOf("${workout.durationMin}m")
-            workout.bodyweightKg?.let { parts.add("BW ${ExportFormat.number(it)} kg") }
+            workout.bodyweightKg?.let { parts.add("BW ${Format.bodyweight(it, snapshot.unit)} ${snapshot.unit.suffix}") }
             if (parts.isNotEmpty()) append(" (").append(parts.joinToString(", ")).append(')')
             append('\n')
             workout.notes?.let { append("\nNotes: ").append(it).append('\n') }
@@ -99,7 +110,7 @@ object MarkdownExport {
                 append("\n- **").append(exercise.name).append("**")
                 muscleTag(exercise)?.let { append(' ').append(it) }
                 append('\n')
-                append("  ").append(exercise.sets.joinToString("; ") { setNotation(it) }).append('\n')
+                append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit) }).append('\n')
                 exercise.notes?.let { append("  Notes: ").append(it).append('\n') }
             }
         }
@@ -115,26 +126,18 @@ object MarkdownExport {
         return groups.joinToString("; ", prefix = "[", postfix = "]")
     }
 
-    /**
-     * Compact set notation: warmups prefixed "w" ("w60x8"), working sets "100x5",
-     * " @8" when RPE is present, " r180" when rest was recorded, " — **PR**" on PR sets.
-     * Reps-only sets render "x12", duration sets "45s".
-     */
-    private fun setNotation(set: SnapshotSet): String {
-        val core = buildString {
-            if (set.type == "warmup") append('w')
-            val weight = set.weightKg?.let { ExportFormat.number(it) }
-            when {
-                weight != null && set.reps != null -> append(weight).append('x').append(set.reps)
-                weight != null && set.durationSec != null -> append(weight).append('x').append(set.durationSec).append('s')
-                weight != null -> append(weight)
-                set.reps != null -> append('x').append(set.reps)
-                set.durationSec != null -> append(set.durationSec).append('s')
-                else -> append('-')
-            }
-            set.rpe?.let { append(" @").append(ExportFormat.number(it)) }
-            set.restSec?.let { append(" r").append(it) }
-        }
+    /** One set ([setNotation], with the rest gap) and " — **PR**" when it was a record when lifted. */
+    private fun notation(set: SnapshotSet, unit: WeightUnit): String {
+        val core = setNotation(
+            weightKg = set.weightKg,
+            reps = set.reps,
+            unit = unit,
+            style = NotationStyle.EXPORT,
+            type = set.type,
+            durationSec = set.durationSec,
+            rpe = set.rpe,
+            restSec = set.restSec,
+        ) ?: "-"
         return if (set.isPr) "$core — **PR**" else core
     }
 }

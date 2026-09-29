@@ -4,6 +4,7 @@ import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.ui.WeightUnit
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -43,6 +44,7 @@ class TimeZoneExportTest {
         ),
         exportedAtMillis = ExportFixtures.millis("2026-07-14T12:00:00Z"),
         zone = chicago,
+        unit = WeightUnit.KG,
         goals = null,
         injuries = emptyList(),
     )

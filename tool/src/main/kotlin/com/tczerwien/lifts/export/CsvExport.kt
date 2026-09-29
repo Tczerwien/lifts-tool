@@ -1,12 +1,16 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.analytics.plainNumber
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
+
 /**
  * Renders `strong-compat.csv` — a Strong-iOS-compatible CSV for migrating history into
  * other trackers (Hevy, Reps, Arvo can all import this format).
  *
- * IMPORTANT: the Weight column is always KILOGRAMS (the canonical storage unit). The
- * Strong iOS format has no Weight Unit column, so importers assume the app's unit
- * setting — pick kg when importing.
+ * The Weight column is in the unit Lifts shows (Settings), rounded as the screens round it: 135,
+ * not 61.2349…. Strong writes its own unit the same way and the format has no unit column, so
+ * importers assume their unit setting; set the other app to the same unit before importing.
  *
  * Format notes (mirroring Strong iOS exports):
  * - One row per completed set, chronological (oldest workout first).
@@ -24,11 +28,11 @@ object CsvExport {
     const val HEADER =
         "Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,Notes,Workout Notes,RPE"
 
-    const val BODYWEIGHT_HEADER = "Date,Weight"
 
     fun render(snapshot: ExportSnapshot): String = buildString {
         append(HEADER).append('\n')
         val format = ExportFormat(snapshot.zone)
+        val unit = snapshot.unit
         // Snapshot is newest-first; Strong exports chronologically.
         for (workout in snapshot.workouts.asReversed()) {
             val date = format.csvDateTime(workout.startEpochMillis)
@@ -41,13 +45,13 @@ object CsvExport {
                         duration,
                         exercise.name,
                         set.index.toString(),
-                        set.weightKg?.let { ExportFormat.number(it) } ?: "0",
+                        set.weightKg?.takeIf { it > 0.0 }?.let { Format.weight(it, unit) } ?: "0",
                         (set.reps ?: 0).toString(),
                         "0",
                         (set.durationSec ?: 0).toString(),
                         exercise.notes ?: "",
                         workout.notes ?: "",
-                        set.rpe?.let { ExportFormat.number(it) } ?: "",
+                        set.rpe?.let { plainNumber(it) } ?: "",
                     )
                     append(fields.joinToString(",") { quote(it) }).append('\n')
                 }
@@ -57,16 +61,19 @@ object CsvExport {
 
     /**
      * Renders `bodyweight.csv` — one row per bodyweight entry, chronological (oldest
-     * first). Date is the local yyyy-MM-dd it was logged on; Weight is always KILOGRAMS, trailing zeros
-     * trimmed ("82", "80.5"). Same RFC-4180 rules as [render].
+     * first). Date is the local yyyy-MM-dd it was logged on; Weight is in the display unit, which the
+     * header names ("Weight (lb)"), to 0.1 ("182.4", "82"). Same RFC-4180 rules as [render].
      */
     fun renderBodyweight(snapshot: ExportSnapshot): String = buildString {
-        append(BODYWEIGHT_HEADER).append('\n')
+        append(bodyweightHeader(snapshot.unit)).append('\n')
         for (point in snapshot.bodyweightLog) {
-            val fields = listOf(point.dateIso, ExportFormat.number(point.weightKg))
+            val fields = listOf(point.dateIso, Format.bodyweight(point.weightKg, snapshot.unit))
             append(fields.joinToString(",") { quote(it) }).append('\n')
         }
     }
+
+    /** "Date,Weight (lb)". */
+    fun bodyweightHeader(unit: WeightUnit): String = "Date,Weight (${unit.suffix})"
 
     /** "1h 38m" for 98 minutes, "44m" below one hour. */
     private fun formatDuration(minutes: Int): String {

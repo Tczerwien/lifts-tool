@@ -7,6 +7,7 @@ import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.ui.WeightUnit
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -134,9 +135,11 @@ object ExportFixtures {
         workouts: List<WorkoutEntity> = listOf(workout1, workout2),
         slots: List<WorkoutExerciseEntity> = ExportFixtures.slots,
         zone: ZoneId = ZoneOffset.UTC,
+        unit: WeightUnit = WeightUnit.KG,
+        exercises: List<ExerciseEntity> = listOf(bench, squat),
     ): ExportSnapshot = buildSnapshot(
         rows = LiftsRows(
-            exercises = listOf(bench, squat),
+            exercises = exercises,
             workouts = workouts,
             workoutExercises = slots,
             sets = sets,
@@ -147,6 +150,7 @@ object ExportFixtures {
         ),
         exportedAtMillis = millis(EXPORTED_AT),
         zone = zone,
+        unit = unit,
         goals = GOALS,
         injuries = listOf("left knee"),
     )

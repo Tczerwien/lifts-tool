@@ -35,7 +35,7 @@ class LiftsShare private constructor(
 
     val exportsDir = File(root, LiftsToolManager.EXPORTS)
 
-    val exports = ExportWriter(exportsDir, LiftsIo.scope) { renderExports(repository) }
+    val exports = ExportWriter(exportsDir, LiftsIo.scope) { renderExports(repository, settings) }
 
     val backups = BackupManager(File(root, LiftsToolManager.BACKUPS), repository, settings)
 

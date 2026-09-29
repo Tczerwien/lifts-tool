@@ -41,8 +41,8 @@ fun epleyE1RmKg(weightKg: Double, reps: Int): Double? {
  * @property maxWeightDate epoch millis of the set that first achieved [maxWeightKg]
  * @property bestE1RmKg best Epley estimate, null when no completed set had 1..12 reps
  * @property bestE1RmDate epoch millis of the set that first achieved [bestE1RmKg]
- * @property bestSetNotation compact notation ("102.5x5") of the best-e1RM set,
- *   falling back to the max-weight set when no e1RM exists
+ * @property bestSet the best-e1RM set, falling back to the max-weight set when no e1RM exists;
+ *   the export writes it in the display unit ([setNotation])
  */
 data class ExercisePr(
     val exerciseId: String,
@@ -50,7 +50,7 @@ data class ExercisePr(
     val maxWeightDate: Long,
     val bestE1RmKg: Double?,
     val bestE1RmDate: Long?,
-    val bestSetNotation: String,
+    val bestSet: SetEntity,
 )
 
 /**
@@ -118,7 +118,7 @@ fun computePrs(
                 maxWeightDate = maxWeightDate,
                 bestE1RmKg = bestE1Rm,
                 bestE1RmDate = bestE1RmDate,
-                bestSetNotation = setNotation(notationSet),
+                bestSet = notationSet,
             ),
         )
     }
@@ -302,14 +302,3 @@ fun longestStreak(weeklyCounts: List<Int>, threshold: Int): Int {
     }
     return best
 }
-
-/** Compact "102.5x5" notation; weight-only sets render as just the weight. */
-private fun setNotation(set: SetEntity): String {
-    val weight = set.weightKg?.let { formatNumber(it) } ?: return "-"
-    val reps = set.reps ?: return weight
-    return "${weight}x$reps"
-}
-
-/** Formats a double without trailing ".0" (100.0 -> "100", 102.5 -> "102.5"). */
-private fun formatNumber(value: Double): String =
-    if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()

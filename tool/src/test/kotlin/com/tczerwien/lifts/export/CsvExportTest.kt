@@ -67,7 +67,7 @@ class CsvExportTest {
         val bodyweight = CsvExport.renderBodyweight(ExportFixtures.snapshot())
         val bodyweightRows = parseCsv(bodyweight)
 
-        assertEquals("Date,Weight", bodyweight.substringBefore('\n'))
+        assertEquals("Date,Weight (kg)", bodyweight.substringBefore('\n'))
         // Header + 6 entries, oldest first.
         assertEquals(7, bodyweightRows.size)
         assertEquals(listOf("2026-06-15", "82"), bodyweightRows[1])

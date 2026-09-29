@@ -2,6 +2,7 @@ package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.settings.SettingsStore
 import java.time.ZoneId
 
 /**
@@ -11,12 +12,13 @@ import java.time.ZoneId
  * built off the lane, so a long history never holds up a tick. Storage is canonical kg and the
  * generators own all formatting.
  */
-suspend fun renderExports(repository: LiftsRepository): Map<String, String> {
-    val rows = LiftsIo.inLane { repository.readAll() }
+suspend fun renderExports(repository: LiftsRepository, settings: SettingsStore): Map<String, String> {
+    val (rows, unit) = LiftsIo.inLane { repository.readAll() to settings.snapshot().units }
     val snapshot = buildSnapshot(
         rows = rows,
         exportedAtMillis = System.currentTimeMillis(),
         zone = ZoneId.systemDefault(),
+        unit = unit,
         goals = null,
         injuries = emptyList(),
     )

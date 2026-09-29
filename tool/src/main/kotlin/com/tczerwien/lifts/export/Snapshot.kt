@@ -6,6 +6,8 @@ import com.tczerwien.lifts.analytics.computePrs
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
+import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.displayName
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -32,6 +34,8 @@ data class ExportSnapshot(
     val exportedAtIso: String,
     /** The zone every date and time is in, e.g. America/Chicago. */
     val zone: ZoneId,
+    /** The unit Lifts shows weights in: training-log.md and the CSVs use it; workouts.json stays in kg. */
+    val unit: WeightUnit,
     val goals: String?,
     val injuries: List<String>,
     /** User-defined implements, ordered by position. */
@@ -40,7 +44,7 @@ data class ExportSnapshot(
     val bodyweightLog: List<BodyweightPoint>,
     /** Trend derived from [bodyweightLog]; null when there are no bodyweight entries. */
     val bodyweightTrend: SnapshotBodyweightTrend?,
-    /** Only exercises referenced by [workouts], sorted by name. */
+    /** Only exercises referenced by [workouts], sorted by name. Names are the ones Lifts shows ([displayName]). */
     val exercises: List<SnapshotExercise>,
     /** Newest first. */
     val workouts: List<SnapshotWorkout>,
@@ -116,7 +120,9 @@ data class SnapshotPr(
     val maxWeightDateIso: String,
     val bestE1RmKg: Double?,
     val bestE1RmDateIso: String?,
-    val bestSetNotation: String,
+    /** The best-e1RM set (else the heaviest): its weight and reps. */
+    val bestSetWeightKg: Double?,
+    val bestSetReps: Int?,
 )
 
 /**
@@ -133,6 +139,7 @@ data class SnapshotPr(
  *
  * @param exportedAtMillis when the export was made
  * @param zone the phone's zone: every date, time and week is local to it
+ * @param unit the display unit (Settings), for the files people read
  * @param goals optional free-text athlete goals for the front matter / profile
  * @param injuries current injuries/limitations, possibly empty
  */
@@ -140,6 +147,7 @@ fun buildSnapshot(
     rows: LiftsRows,
     exportedAtMillis: Long,
     zone: ZoneId,
+    unit: WeightUnit,
     goals: String?,
     injuries: List<String>,
 ): ExportSnapshot {
@@ -153,6 +161,7 @@ fun buildSnapshot(
     val bars = rows.bars
     val format = ExportFormat(zone)
     val exercisesById = exercises.associateBy { it.id }
+    val names = exercises.associate { it.id to displayName(it) }
     val workoutIds = workouts.mapTo(HashSet()) { it.id }
     val validSlots = workoutExercises.filter { it.workoutId in workoutIds }
     val slotsById = validSlots.associateBy { it.id }
@@ -177,7 +186,7 @@ fun buildSnapshot(
                     val orderedSets = setsBySlot.getValue(slot.id).sortedBy { it.position }
                     SnapshotWorkoutExercise(
                         exerciseId = slot.exerciseId,
-                        name = exercise?.name ?: slot.exerciseId,
+                        name = names[slot.exerciseId] ?: slot.exerciseId,
                         primaryMuscles = exercise?.primaryMuscles ?: emptyList(),
                         secondaryMuscles = exercise?.secondaryMuscles ?: emptyList(),
                         notes = slot.notes,
@@ -211,19 +220,20 @@ fun buildSnapshot(
     val referencedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.map { it.exerciseId } }
     val snapshotExercises = exercises
         .filter { it.id in referencedIds }
+        .map { SnapshotExercise(it.id, names.getValue(it.id), it.equipment, it.primaryMuscles, it.secondaryMuscles) }
         .sortedBy { it.name }
-        .map { SnapshotExercise(it.id, it.name, it.equipment, it.primaryMuscles, it.secondaryMuscles) }
 
     val prs = computePrs(exercises, workouts, workoutExercises, sets)
         .map { pr ->
             SnapshotPr(
                 exerciseId = pr.exerciseId,
-                exerciseName = exercisesById[pr.exerciseId]?.name ?: pr.exerciseId,
+                exerciseName = names[pr.exerciseId] ?: pr.exerciseId,
                 maxWeightKg = pr.maxWeightKg,
                 maxWeightDateIso = format.date(pr.maxWeightDate),
                 bestE1RmKg = pr.bestE1RmKg,
                 bestE1RmDateIso = pr.bestE1RmDate?.let { format.date(it) },
-                bestSetNotation = pr.bestSetNotation,
+                bestSetWeightKg = pr.bestSet.weightKg,
+                bestSetReps = pr.bestSet.reps,
             )
         }
         .sortedBy { it.exerciseName }
@@ -258,6 +268,7 @@ fun buildSnapshot(
         schemaVersion = EXPORT_SCHEMA_VERSION,
         exportedAtIso = format.dateTime(exportedAtMillis),
         zone = zone,
+        unit = unit,
         goals = goals,
         injuries = injuries,
         bars = bars.sortedBy { it.position }.map { SnapshotBar(it.name, it.weightKg) },

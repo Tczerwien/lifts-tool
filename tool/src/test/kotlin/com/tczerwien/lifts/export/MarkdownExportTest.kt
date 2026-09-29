@@ -33,8 +33,8 @@ class MarkdownExportTest {
     @Test
     fun summaryHasPrsAndWeeklyVolume() {
         assertContains(lines, "## Summary")
-        // 102.5 * (1 + 5/30) = 119.583… -> rounded to 119.6.
-        assertContains(lines, "- Bench Press (Barbell): e1RM 119.6 kg (2026-07-13) — best set 102.5x5")
+        // 102.5 * (1 + 5/30) = 119.583… -> 119.5 on the 0.5 kg grid the screens use.
+        assertContains(lines, "- Bench Press (Barbell): e1RM 119.5 kg (2026-07-13) — best set 102.5x5")
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
         assertContains(lines, "- triceps: 0, 0, 0, 0, 0, 0, 1, 1")
     }

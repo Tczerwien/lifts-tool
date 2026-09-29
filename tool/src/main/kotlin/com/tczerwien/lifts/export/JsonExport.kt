@@ -1,5 +1,8 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.setNotation
+
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -74,7 +77,7 @@ object JsonExport {
                         maxWeightDate = it.maxWeightDateIso,
                         bestE1RmKg = it.bestE1RmKg,
                         bestE1RmDate = it.bestE1RmDateIso,
-                        bestSet = it.bestSetNotation,
+                        bestSet = setNotation(it.bestSetWeightKg, it.bestSetReps, snapshot.unit, NotationStyle.EXPORT).orEmpty(),
                     )
                 },
                 weeklySetsPerMuscle = snapshot.weeklySetsPerMuscle,

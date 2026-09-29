@@ -72,7 +72,7 @@ class AnalyticsTest {
         assertEquals(millis("2026-07-06T10:20:00Z"), pr.maxWeightDate)
         assertEquals(119.58333333333333, pr.bestE1RmKg!!, 1e-9)
         assertEquals(millis("2026-07-06T10:20:00Z"), pr.bestE1RmDate)
-        assertEquals("102.5x5", pr.bestSetNotation)
+        assertEquals(102.5 to 5, pr.bestSet.weightKg to pr.bestSet.reps)
     }
 
     @Test
@@ -89,7 +89,7 @@ class AnalyticsTest {
         assertEquals(60.0, pr.maxWeightKg)
         assertNull(pr.bestE1RmKg)
         assertNull(pr.bestE1RmDate)
-        assertEquals("60x20", pr.bestSetNotation)
+        assertEquals(60.0 to 20, pr.bestSet.weightKg to pr.bestSet.reps)
     }
 
     // --- weeklySetsPerMuscle ---
