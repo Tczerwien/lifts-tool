@@ -25,7 +25,9 @@ import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.analytics.workoutBodyweight
 import com.tczerwien.lifts.analytics.workoutEpochDay
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
@@ -70,8 +72,11 @@ class WorkoutDetailViewModel(
     private val workoutId: Long,
 ) : LightViewModel<Unit>() {
 
-    /** One exercise's logged sets, one run per set ("w95×10; 140×8F @9"), PRs starred. */
-    data class ExerciseBlock(val exerciseId: String, val name: String, val runs: List<SetRun>)
+    /**
+     * One exercise's logged sets, one run per set ("w95×10; 140×8F RIR1"), PRs starred, and his note
+     * on it for this workout, if any.
+     */
+    data class ExerciseBlock(val exerciseId: String, val name: String, val runs: List<SetRun>, val notes: String? = null)
 
     data class UiState(
         val loaded: Boolean = false,
@@ -184,18 +189,20 @@ class WorkoutDetailViewModel(
         val setsBySlot = repository.setsForWorkout(workoutId)
             .filter { it.completedAt != null }
             .groupBy { it.workoutExerciseId }
+        val exercises = repository.exercisesByIds(slots.map { it.exerciseId })
 
-        val prSetIds = computePrSetIds(slots.mapTo(HashSet()) { it.exerciseId })
+        val prSetIds = computePrSetIds(exercises.keys + slots.map { it.exerciseId }, exercises.mapValues { it.value.tracking })
 
         val blocks = slots.sortedBy { it.position }.mapNotNull { slot ->
             val completed = setsBySlot[slot.id]?.sortedBy { it.position }
                 ?: return@mapNotNull null
             ExerciseBlock(
                 exerciseId = slot.exerciseId,
-                name = repository.exerciseById(slot.exerciseId)?.let { displayName(it) } ?: UNKNOWN_EXERCISE,
+                name = exercises[slot.exerciseId]?.let { displayName(it) } ?: UNKNOWN_EXERCISE,
                 runs = completed.map { set ->
                     SetRun(setNotation(set, unit, NotationStyle.LIST) ?: "-", set.id in prSetIds, 1)
                 },
+                notes = slot.notes?.takeIf { it.isNotBlank() },
             )
         }
 
@@ -225,16 +232,16 @@ class WorkoutDetailViewModel(
 
     /**
      * Ids of sets (across all workouts) that were PRs when logged, for the exercises in
-     * [exerciseIds]: the shared records engine over one history query.
+     * [exerciseIds]: the shared records engine over one history query, each exercise by its [tracking].
      */
-    private fun computePrSetIds(exerciseIds: Set<String>): Set<Long> =
-        chronologicalPrSetIds(repository.completedSetsByExercise(exerciseIds))
+    private fun computePrSetIds(exerciseIds: Set<String>, tracking: Map<String, Tracking>): Set<Long> =
+        chronologicalPrSetIds(repository.completedSetsByExercise(exerciseIds), tracking)
 }
 
 /**
  * Workout Detail (design/screens/workout-detail.html): read-only log of a completed
- * session — notes, per-exercise compact set-notation lines with inline PR stars, and the
- * bodyweight line. The top-bar pencil edits the workout NOTES only (SDK editor as a
+ * session — notes, per-exercise compact set-notation lines with inline PR stars and his note on
+ * each exercise, and the bodyweight line. The top-bar pencil edits the workout NOTES only (SDK editor as a
  * screen mode, weather idiom); full past-workout editing is deliberately out of scope.
  * The bottom-bar trash deletes the whole workout after a second tap.
  */
@@ -341,6 +348,14 @@ class WorkoutDetailScreen(
                                         LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
                                     }
                                     SetLine(runs = block.runs, lighten = true)
+                                    // His note on this exercise, in his words.
+                                    block.notes?.let { note ->
+                                        LightText(
+                                            text = "“$note”",
+                                            variant = LightTextVariant.Detail,
+                                            modifier = Modifier.padding(top = 0.25f.gridUnitsAsDp()),
+                                        )
+                                    }
                                 }
                             }
 
