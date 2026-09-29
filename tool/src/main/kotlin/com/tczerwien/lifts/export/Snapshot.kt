@@ -31,7 +31,7 @@ import kotlin.math.roundToInt
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
-const val EXPORT_SCHEMA_VERSION = "2.0"
+const val EXPORT_SCHEMA_VERSION = "2.1"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8

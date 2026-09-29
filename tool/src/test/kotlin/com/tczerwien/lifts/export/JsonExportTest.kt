@@ -88,7 +88,7 @@ class JsonExportTest {
             "workouts[].exercises[].notes", "workouts[].exercises[].sets", "workouts[].exercises[].sets[].completed_at",
             "workouts[].exercises[].sets[].duration_seconds", "workouts[].exercises[].sets[].index",
             "workouts[].exercises[].sets[].is_pr", "workouts[].exercises[].sets[].reps",
-            "workouts[].exercises[].sets[].rest_seconds", "workouts[].exercises[].sets[].rpe",
+            "workouts[].exercises[].sets[].seconds_since_previous_set", "workouts[].exercises[].sets[].rpe",
             "workouts[].exercises[].sets[].type", "workouts[].exercises[].sets[].weight_kg",
             "workouts[].id", "workouts[].notes", "workouts[].start_time", "workouts[].title",
         )
@@ -112,7 +112,7 @@ class JsonExportTest {
 
     @Test
     fun topLevelFields() {
-        assertEquals("2.0", decoded.schemaVersion)
+        assertEquals("2.1", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals(JsonUnits(weight = "kg", display = "kg"), decoded.units)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)
@@ -193,7 +193,7 @@ class JsonExportTest {
         assertEquals(1, warmup.index)
         assertEquals("warmup", warmup.type)
         assertEquals(false, warmup.isPr)
-        assertEquals(null, warmup.restSeconds, "the first set of a workout has no rest gap")
+        assertEquals(null, warmup.secondsSincePreviousSet, "the first set of a workout has no rest gap")
         assertEquals("2026-07-13T10:05:00Z", warmup.completedAt)
 
         val prSet = exercise.sets[1]

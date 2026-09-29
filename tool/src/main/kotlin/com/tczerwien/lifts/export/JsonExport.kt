@@ -20,6 +20,9 @@ import kotlinx.serialization.json.Json
  * week_starts, e1rm_trend, completed_at, bodyweight_date, is_custom, hidden, pinned_note, every custom
  * exercise, and a name on each workout and template exercise; and is written on one line (1.x was
  * indented).
+ *
+ * 2.1 (B8) renamed sets[].rest_seconds → seconds_since_previous_set: it is the gap since the previous
+ * tick, not a rest setting as in Hevy (templates keep rest_seconds, which is one).
  */
 object JsonExport {
 
@@ -91,7 +94,7 @@ object JsonExport {
                                     reps = set.reps,
                                     durationSeconds = set.durationSec,
                                     rpe = set.rpe,
-                                    restSeconds = set.restSec,
+                                    secondsSincePreviousSet = set.restSec,
                                     completedAt = set.completedAtIso,
                                     isPr = set.isPr,
                                 )
@@ -240,8 +243,11 @@ data class JsonSet(
     val reps: Int? = null,
     @SerialName("duration_seconds") val durationSeconds: Int? = null,
     val rpe: Double? = null,
-    /** Seconds since the workout's previous ticked set (rest plus the set itself); absent for the first set or after 15 min. */
-    @SerialName("rest_seconds") val restSeconds: Int? = null,
+    /**
+     * Seconds since the workout's previous ticked set (rest plus the set itself), not a rest setting
+     * (Hevy's rest_seconds); absent for the first set or after 15 min.
+     */
+    @SerialName("seconds_since_previous_set") val secondsSincePreviousSet: Int? = null,
     @SerialName("completed_at") val completedAt: String,
     @SerialName("is_pr") val isPr: Boolean,
 )
