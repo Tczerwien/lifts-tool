@@ -88,7 +88,7 @@ class CatalogEntry(
 
 /** A name split into lowercase words, plus its words run together, for matching. */
 internal class SearchName(val text: String) {
-    val words: List<String> = words(text)
+    val words: List<String> = searchWords(text)
     val compact: String = words.joinToString("")
 
     /** Where each word starts inside [compact]. */
@@ -100,6 +100,12 @@ internal fun words(text: String): List<String> =
     text.lowercase().split(NON_WORD).filter { it.isNotEmpty() }
 
 private val NON_WORD = Regex("[^a-z0-9]+")
+
+/** Fly, flye, flyes and flies are one word to search and to the duplicate checks. */
+private val FLY_FORMS = mapOf("flye" to "fly", "flyes" to "fly", "flies" to "fly")
+
+/** [words], with the fly forms as one ("Dumbbell Flyes" and "chest flies" both say fly). */
+internal fun searchWords(text: String): List<String> = words(text).map { FLY_FORMS[it] ?: it }
 
 private val NOT_EQUIPMENT = setOf("other", "body only", "none")
 
@@ -144,7 +150,6 @@ internal val ALIASES: Map<String, List<String>> = mapOf(
     "machine fly" to listOf("butterfly"),
     "chest fly" to listOf("butterfly", "dumbbell fly", "cable fly", "cable crossover"),
     "cable fly" to listOf("cable crossover"),
-    "flies" to listOf("fly"),
     "calves" to listOf("calf"),
     "abs" to listOf("crunch", "ab roller", "sit up"),
     "farmer carry" to listOf("farmer walk"),
@@ -174,6 +179,10 @@ private fun singulars(word: String): List<String> = buildList {
     if (word.length >= 4 && word.endsWith("s") && !word.endsWith("ss")) add(word.dropLast(1))
 }
 
+/** [word] less a plural ending, for finding shorthand: short shorthand drops a bare s too ("dbs"). */
+private fun shorthandSingulars(word: String): List<String> =
+    singulars(word) + listOfNotNull(word.dropLast(1).takeIf { word.length == 3 && word.endsWith("s") })
+
 /** A typed word this long that begins a shorthand ("dum" of dumbbell) takes its spellings. */
 private const val MIN_BEGUN_LENGTH = 3
 
@@ -195,7 +204,7 @@ internal class Query(val terms: List<Term>) {
 private const val MAX_FORMS = 64
 
 internal fun parseQuery(raw: String): Query {
-    val typed = words(raw)
+    val typed = searchWords(raw)
     val terms = mutableListOf<Term>()
     var at = 0
     while (at < typed.size) {
@@ -203,7 +212,7 @@ internal fun parseQuery(raw: String): Query {
         val found = (minOf(LONGEST_ALIAS, typed.size - at) downTo 1).asSequence()
             .map { typed.subList(at, at + it) }
             .firstNotNullOfOrNull { phrase ->
-                (listOf(phrase) + singulars(phrase.last()).map { phrase.dropLast(1) + it })
+                (listOf(phrase) + shorthandSingulars(phrase.last()).map { phrase.dropLast(1) + it })
                     .firstOrNull { it in ALIAS_PHRASES }
                     ?.let { key -> phrase to key }
             }
@@ -375,7 +384,6 @@ fun nameKeys(name: String): Set<String> {
 /** [a] and [b] are one name to the duplicate checks ([nameKeys]). */
 fun sameName(a: String, b: String): Boolean = nameKeys(a).any { it in nameKeys(b) }
 
-private val FLY_FORMS = mapOf("flye" to "fly", "flyes" to "fly", "flies" to "fly")
 
 /**
  * The exercise, other than [selfId], that already answers to [name] (the name Lifts shows for it,
