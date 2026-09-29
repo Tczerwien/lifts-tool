@@ -14,10 +14,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -48,9 +48,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** Duration heuristic: ~3.5 min per working set, rounded to the nearest 5 min. */
@@ -95,10 +92,20 @@ class TemplatesViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    private val mutationMutex = Mutex()
+    @Volatile
+    private var cleared = false
 
+    override fun onCleared() {
+        cleared = true
+        super.onCleared()
+    }
+
+    /**
+     * Refreshes on the write lane, behind any write still pending, so a template just saved or
+     * deleted shows as it is and an older refresh can never land after a newer one.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        mutate {}
+        LiftsIo.write { refresh() }
     }
 
     fun openNameEntry() {
@@ -112,38 +119,49 @@ class TemplatesViewModel(
     }
 
     /**
-     * Creates a template from the editor text (trimmed; blank cancels) and invokes
-     * [onCreated] on Main with the new row id so the screen can push its editor.
+     * Creates a template from the editor text (trimmed; blank cancels) on the write lane, so Back
+     * can't drop it, and invokes [onCreated] on Main with the new row id so the screen can push its
+     * editor (unless the screen is already gone). workouts.json lists the templates, so the exports
+     * catch up.
      */
     fun createTemplate(raw: CharSequence, onCreated: (Long) -> Unit) {
         val name = raw.toString().trim()
         _uiState.update { it.copy(mode = Mode.Overview) }
         if (name.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val id = mutationMutex.withLock {
-                val position = (repository.listTemplates().maxOfOrNull { it.position } ?: -1) + 1
-                val newId = repository.addTemplate(TemplateEntity(name = name, position = position))
-                share.logChanged()
-                refresh()
-                newId
-            }
-            withContext(Dispatchers.Main) { onCreated(id) }
+        LiftsIo.write({
+            val position = (repository.listTemplates().maxOfOrNull { it.position } ?: -1) + 1
+            repository.addTemplate(TemplateEntity(name = name, position = position)).also { refresh() }
+        }) { id ->
+            share.logChanged()
+            withContext(Dispatchers.Main) { if (!cleared) onCreated(id) }
         }
     }
 
-    /** Swaps the template with its neighbor ([delta] = ±1) and renumbers positions 0..n-1. */
-    fun moveTemplate(id: Long, delta: Int) = mutate {
-        val templates = repository.listTemplates().toMutableList()
-        val index = templates.indexOfFirst { it.id == id }
-        val target = index + delta
-        if (index < 0 || target !in templates.indices) return@mutate
-        templates[index] = templates[target].also { templates[target] = templates[index] }
-        repository.inTransaction {
-            templates.forEachIndexed { position, template ->
-                if (template.position != position) {
-                    repository.updateTemplate(template.copy(position = position))
+    /**
+     * Swaps the template with its neighbor ([delta] = ±1) and renumbers positions 0..n-1, on the write
+     * lane (serial, survives Back); the exports catch up when anything moved.
+     */
+    fun moveTemplate(id: Long, delta: Int) {
+        LiftsIo.write({
+            val templates = repository.listTemplates().toMutableList()
+            val index = templates.indexOfFirst { it.id == id }
+            val target = index + delta
+            if (index < 0 || target !in templates.indices) {
+                refresh()
+                return@write false
+            }
+            templates[index] = templates[target].also { templates[target] = templates[index] }
+            repository.inTransaction {
+                templates.forEachIndexed { position, template ->
+                    if (template.position != position) {
+                        repository.updateTemplate(template.copy(position = position))
+                    }
                 }
             }
+            refresh()
+            true
+        }) { moved ->
+            if (moved) share.logChanged()
         }
     }
 
@@ -153,20 +171,6 @@ class TemplatesViewModel(
             return true
         }
         return false
-    }
-
-    /**
-     * Runs [block] then a refresh serially on IO so read-modify-writes never interleave. workouts.json
-     * lists the templates, so the exports catch up.
-     */
-    private fun mutate(block: () -> Unit) {
-        viewModelScope.launch(Dispatchers.IO) {
-            mutationMutex.withLock {
-                block()
-                share.logChanged()
-                refresh()
-            }
-        }
     }
 
     private fun refresh() {

@@ -19,6 +19,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFieldRow
@@ -142,8 +143,9 @@ class CustomExerciseViewModel(
         val primaryMuscle = state.primaryMuscle
         if (!state.valid || primaryMuscle == null || saving) return
         saving = true
-        viewModelScope.launch(Dispatchers.IO) {
-            val id = "custom-${UUID.randomUUID()}"
+        val id = "custom-${UUID.randomUUID()}"
+        // On the write lane, so Back can't drop it half-way.
+        LiftsIo.write({
             repository.addExercise(
                 ExerciseEntity(
                     id = id,
@@ -157,6 +159,7 @@ class CustomExerciseViewModel(
                     isCustom = true,
                 ),
             )
+        }) {
             // workouts.json lists every custom exercise, used or not.
             share.logChanged()
             _uiState.value = _uiState.value.copy(createdId = id)

@@ -119,8 +119,9 @@ class TemplateEditorViewModel(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
 
+    /** Queued behind any write still pending; only reads, so the exports are left alone. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        mutate {}
+        LiftsIo.write { refresh() }
     }
 
     fun openRename() {
