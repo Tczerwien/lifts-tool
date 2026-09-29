@@ -18,8 +18,14 @@ America/Chicago):
   - Bodyweight every 3 days, drifting from about 182 lb down to 179 lb.
   - Templates "Upper A" and "Lower A".
 
+With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
+exercise catalog and bars are copied in, and the things he types himself are added, so every export
+field has data: the incline dumbbell press renamed "Low Incline DB Press", a pinned cue on the squat,
+and a custom exercise "Cable Y-Raise" (with a cue) in the Upper A template. Without it the catalog is
+left empty, as before.
+
 Usage:
-  python3 tool/scripts/fixture_db.py OUT.db [--now 2026-09-24T12:00] [--schema-version 1]
+  python3 tool/scripts/fixture_db.py OUT.db [--now 2026-09-24T12:00] [--schema-version 1] [--catalog-from SEEDED.db]
 
 Then push it with: tool/scripts/lifts-adb.sh push-db OUT.db
 
@@ -202,6 +208,33 @@ def gym(conn, now):
 
 SCENARIOS = {"gym": gym}
 
+RENAMED_INCLINE = "Low Incline DB Press"
+SQUAT_CUE = "Brace, then sit between the heels"
+CUSTOM_ID = "custom-fixture-cable-y-raise"
+
+
+def own_data(conn, seeded):
+    """Copies the seeded catalog and bars, then adds a rename, cues and a custom exercise."""
+    conn.execute("ATTACH DATABASE ? AS seeded", (seeded,))
+    conn.execute("INSERT INTO exercises SELECT * FROM seeded.exercises")
+    conn.execute("INSERT INTO bars SELECT * FROM seeded.bars")
+    conn.commit()
+    conn.execute("DETACH DATABASE seeded")
+    conn.execute("UPDATE exercises SET name = ? WHERE id = ?", (RENAMED_INCLINE, INCLINE))
+    conn.execute("UPDATE exercises SET pinnedNote = ? WHERE id = ?", (SQUAT_CUE, SQUAT))
+    conn.execute(
+        "INSERT INTO exercises (id, name, equipment, primaryMuscles, secondaryMuscles, category, level, instructions,"
+        " isCustom, pinnedNote, trackingType, perSide, hidden)"
+        " VALUES (?, 'Cable Y-Raise', 'cable', ?, ?, 'strength', NULL, '[]', 1, 'Thumbs up', 'weight_reps', 0, 0)",
+        (CUSTOM_ID, json.dumps(["shoulders"], separators=(",", ":")), json.dumps(["traps"], separators=(",", ":"))),
+    )
+    upper = conn.execute("SELECT id FROM templates WHERE name = 'Upper A'").fetchone()[0]
+    position = conn.execute("SELECT COUNT(*) FROM template_exercises WHERE templateId = ?", (upper,)).fetchone()[0]
+    conn.execute(
+        "INSERT INTO template_exercises (templateId, exerciseId, position, targetSets, restSecWork) VALUES (?, ?, ?, 2, 60)",
+        (upper, CUSTOM_ID, position),
+    )
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
@@ -209,6 +242,7 @@ def main():
     parser.add_argument("--scenario", default="gym", choices=sorted(SCENARIOS))
     parser.add_argument("--now", help="local time in America/Chicago, e.g. 2026-09-24T12:00 (default: now)")
     parser.add_argument("--schema-version", type=int, default=1)
+    parser.add_argument("--catalog-from", help="a pulled, seeded lifts.db: copy its catalog and add his own data")
     args = parser.parse_args()
 
     now = dt.datetime.fromisoformat(args.now).replace(tzinfo=ZONE) if args.now else dt.datetime.now(ZONE)
@@ -219,7 +253,10 @@ def main():
     create_schema(conn, args.schema_version)
     SCENARIOS[args.scenario](conn, now)
     conn.commit()
-    counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("workouts", "workout_exercises", "sets", "templates", "bodyweight")}
+    if args.catalog_from:
+        own_data(conn, args.catalog_from)
+        conn.commit()
+    counts = {t: conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ("exercises", "workouts", "workout_exercises", "sets", "templates", "bodyweight")}
     conn.close()
     print(f"wrote {args.out}: {counts}", file=sys.stderr)
 
