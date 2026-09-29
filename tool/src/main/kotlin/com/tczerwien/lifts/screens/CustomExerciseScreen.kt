@@ -48,6 +48,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class CustomExerciseViewModel(
@@ -164,7 +165,8 @@ class CustomExerciseViewModel(
         }) {
             // workouts.json lists every custom exercise, used or not.
             share.logChanged()
-            _uiState.value = _uiState.value.copy(createdId = id)
+            // Atomic: a mode tap on Main in the same instant must not write createdId back to null.
+            _uiState.update { it.copy(createdId = id) }
         }
     }
 

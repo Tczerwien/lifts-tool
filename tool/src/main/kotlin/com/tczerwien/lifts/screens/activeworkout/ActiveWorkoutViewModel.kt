@@ -333,12 +333,11 @@ class ActiveWorkoutViewModel(
     fun toggleComplete(setId: Long) {
         val tapAt = System.currentTimeMillis()
         val unticked = lastToggle
-        val current = locate(setId)?.let { it.block.sets[it.index] } ?: return
-        val firstTapAt = current.completedAt ?: unticked?.takeIf { it.first == setId }?.second
-        if (firstTapAt != null && isDoubleTap(firstTapAt, tapAt)) return
-        if (!beginRowAction()) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
+        val firstTapAt = set.completedAt ?: unticked?.takeIf { it.first == setId }?.second
+        if (firstTapAt != null && isDoubleTap(firstTapAt, tapAt)) return
+        if (!beginRowAction()) return
         if (set.completedAt != null) {
             lastToggle = setId to tapAt
             val edit = applySetChange(setId) { it.copy(completedAt = null) } ?: return
@@ -447,8 +446,9 @@ class ActiveWorkoutViewModel(
     /** Result of the exercise list: that exercise, on its first unticked set. */
     fun jumpTo(slotId: Long) {
         if (!beginAction()) return
-        val state = _uiState.value
-        if (state.exercises.getOrNull(state.currentIndex)?.slot?.id != slotId) rowsMovedUnderFinger()
+        // Even back to the same exercise: a bounce aimed at the list must not tick a row, which is
+        // worse than one tap dropped in the next second.
+        rowsMovedUnderFinger()
         showExercise(slotId)
     }
 
