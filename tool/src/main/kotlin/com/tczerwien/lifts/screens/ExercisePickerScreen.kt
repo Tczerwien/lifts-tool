@@ -29,16 +29,13 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.BodyPart
 import com.tczerwien.lifts.library.CatalogEntry
-import com.tczerwien.lifts.library.catalogEntry
+import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.inBodyPart
-import com.tczerwien.lifts.library.isRenamed
 import com.tczerwien.lifts.library.nameFromQuery
 import com.tczerwien.lifts.library.searchExercises
-import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.ui.KeptListState
 import com.tczerwien.lifts.ui.LiftsFrame
-import com.tczerwien.lifts.ui.knownCatalogName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -155,21 +152,9 @@ class ExercisePickerViewModel(
         _uiState.update { it.copy(searchQuery = null).withRows() }
     }
 
-    /**
-     * Names come from the light projection, without the instructions. A lift he renamed also answers
-     * to its catalog name; the whole seed is parsed for that only when one of them isn't a lift with a
-     * short name.
-     */
+    /** From the light projection, without the instructions ([catalogEntries]). */
     private fun load() {
-        val summaries = repository.exerciseSummaries().filterNot { it.hidden }
-        val seedNames = if (summaries.any { isRenamed(it) && knownCatalogName(it.id) == null }) {
-            SeedParser.parse().associate { it.id to it.name }
-        } else {
-            emptyMap()
-        }
-        catalog = summaries
-            .map { catalogEntry(it, knownCatalogName(it.id) ?: seedNames[it.id]) }
-            .sortedWith(compareBy({ it.shown.lowercase() }, { it.id }))
+        catalog = catalogEntries(repository.exerciseSummaries().filterNot { it.hidden })
         val shown = catalog.mapTo(HashSet()) { it.id }
         recentIds = repository.recentExerciseIds(RECENT_LIMIT).filter { it in shown }
         val hasRecent = recentIds.isNotEmpty()

@@ -1,7 +1,9 @@
 package com.tczerwien.lifts.library
 
 import com.tczerwien.lifts.data.ExerciseSummary
+import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.ui.displayName
+import com.tczerwien.lifts.ui.knownCatalogName
 
 /**
  * Exercise search for the picker. Pure, so it is tested against the real catalog.
@@ -25,6 +27,22 @@ fun catalogEntry(exercise: ExerciseSummary, catalogName: String? = null): Catalo
     equipment = exercise.equipment,
     category = exercise.category,
 )
+
+/**
+ * [summaries] as the search and the name checks see them, by shown name. A lift he renamed also
+ * answers to its catalog name; the seed is parsed for that only when one of them has no short name.
+ * Blocking when it parses: call it off the main thread.
+ */
+fun catalogEntries(summaries: List<ExerciseSummary>): List<CatalogEntry> {
+    val seedNames = if (summaries.any { isRenamed(it) && knownCatalogName(it.id) == null }) {
+        SeedParser.parse().associate { it.id to it.name }
+    } else {
+        emptyMap()
+    }
+    return summaries
+        .map { catalogEntry(it, knownCatalogName(it.id) ?: seedNames[it.id]) }
+        .sortedWith(compareBy({ it.shown.lowercase() }, { it.id }))
+}
 
 /**
  * A catalog lift whose stored name is no longer its catalog name: he renamed it. Unrenamed, a catalog
