@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -58,9 +59,10 @@ class BackupsViewModel(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
-        // Every backup that ends (or fails) re-reads the folder.
+        // Every backup that lands, fails or changes the folder re-reads it, including the ones a
+        // restore takes, which leave the status as it was.
         viewModelScope.launch(Dispatchers.IO) {
-            backups.status.collect { status -> reload(status) }
+            combine(backups.status, backups.changes) { status, _ -> status }.collect { status -> reload(status) }
         }
     }
 

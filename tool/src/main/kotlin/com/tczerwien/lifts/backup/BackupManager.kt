@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Backups of the whole log and the settings, in [dir] (files/shared/backups, which Tool Manager
@@ -46,6 +47,14 @@ class BackupManager(
     private val _status = MutableStateFlow<Status>(Status.Idle)
     val status: StateFlow<Status> = _status.asStateFlow()
 
+    private val _changes = MutableStateFlow(0L)
+
+    /**
+     * Bumped each time the folder changes (a backup written, old ones pruned), including the backups
+     * a restore takes, which leave [status] as it was.
+     */
+    val changes: StateFlow<Long> = _changes.asStateFlow()
+
     /** A dated backup, queued on the write lane: Finish and Back up now. */
     fun request() {
         requested.incrementAndGet()
@@ -68,6 +77,7 @@ class BackupManager(
         }) { publish() }
     }
 
+    @Synchronized
     private fun publish() {
         val failure = lastFailure
         _status.value = when {
@@ -107,6 +117,7 @@ class BackupManager(
             if (!temp.renameTo(target)) throw IOException("cannot name ${target.name}")
             if (kind == BackupPolicy.Kind.DATED) replaceLatest(target)
             prune(now, keep + target.name)
+            _changes.update { it + 1 }
             Log.i(TAG, "Backup ${target.name}: ${target.length()} B in ${(System.nanoTime() - started) / 1_000_000} ms")
             return target
         } finally {
