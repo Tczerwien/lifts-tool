@@ -142,9 +142,14 @@ class ExerciseSearchTest {
     @Test
     fun `a long query nothing answers offers the names that miss one word`() {
         assertEquals("dumbbell-shoulder-press", search("seated db shoulder press").first())
+        // A typed word keeps its shorthand in a near miss: db is also dumbbell.
+        assertTrue("seated-dumbbell-press" in search("seated db shoulder press"))
         assertEquals("hanging-leg-raise", search("hanging knee raise").first())
         // Three typed words, though shorthand makes them two terms ("cable fly").
-        assertTrue("cable-rear-delt-fly" in search("reverse cable fly").take(3), "${search("reverse cable fly")}")
+        val reverseCableFly = search("reverse cable fly")
+        assertTrue("cable-rear-delt-fly" in reverseCableFly.take(8), "$reverseCableFly")
+        // Two of the three words, not either of two terms: the crossover has only "cable".
+        assertFalse("cable-crossover" in reverseCableFly, "$reverseCableFly")
         // Two words must both match: no near misses.
         assertEquals(emptyList(), search("hanging kneez"))
     }

@@ -275,10 +275,20 @@ private const val LAST_EXACT_RANK = 1
 private const val NEAR_MISS_RANK = 7
 private const val NEAR_MISS_MIN_TERMS = 3
 
-private fun nearMiss(entry: CatalogEntry, query: Query): Boolean =
+private fun nearMiss(entry: CatalogEntry, terms: List<Term>): Boolean =
     (listOf(entry.shownName) + entry.otherNames).any { name ->
-        query.terms.count { !it.matches(name.words, entry.equipmentWords) } == 1
+        terms.count { !it.matches(name.words, entry.equipmentWords) } == 1
     }
+
+/**
+ * The words he typed, each its own term with its one-word shorthand ("db" is also dumbbell): near
+ * misses count typed words, so "reverse cable fly" is three words even though "cable fly" is one
+ * shorthand phrase, and a near miss must have two of them, not either of two terms.
+ */
+private fun wordTerms(raw: String): List<Term> = searchWords(raw).map { word ->
+    val keys = listOf(word) + shorthandSingulars(word)
+    Term((listOf(listOf(word)) + keys.flatMap { ALIAS_PHRASES[listOf(it)].orEmpty() }).distinct())
+}
 
 /**
  * The entries that answer [raw], best first: lifts before stretches and jumps ("split squat" is a lift
@@ -297,9 +307,10 @@ fun searchExercises(
     val query = parseQuery(raw)
     if (query.terms.isEmpty()) return emptyList()
     var ranked = entries.mapNotNull { entry -> rank(entry, query)?.let { entry to it } }
-    // Counted in the words he typed: shorthand joins two of them into one term ("reverse cable fly").
-    if (ranked.isEmpty() && words(raw).size >= NEAR_MISS_MIN_TERMS) {
-        ranked = entries.filter { nearMiss(it, query) }.map { it to NEAR_MISS_RANK }
+    // Counted in the words he typed: shorthand would join two of them into one term ("reverse cable fly").
+    val typedTerms = wordTerms(raw)
+    if (ranked.isEmpty() && typedTerms.size >= NEAR_MISS_MIN_TERMS) {
+        ranked = entries.filter { nearMiss(it, typedTerms) }.map { it to NEAR_MISS_RANK }
     }
     val recency = recentIds.withIndex().associate { (index, id) -> id to index }
     return ranked
