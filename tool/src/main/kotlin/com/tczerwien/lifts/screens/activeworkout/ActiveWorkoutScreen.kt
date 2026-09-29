@@ -24,9 +24,11 @@ import com.tczerwien.lifts.screens.WorkoutCompleteScreen
 import com.tczerwien.lifts.screens.WorkoutMenuAction
 import com.tczerwien.lifts.screens.WorkoutMenuScreen
 import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.SET_TYPE_DROP
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.pendingSetCount
 import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
@@ -203,13 +205,17 @@ class ActiveWorkoutScreen(
                                             completed = set.completedAt != null,
                                             warmup = set.type == SET_TYPE_WARMUP,
                                             failure = set.type == SET_TYPE_FAILURE,
+                                            drop = set.type == SET_TYPE_DROP,
                                             pr = set.id in uiState.prSetIds,
+                                            rir = rirOf(set.rpe)?.toString(),
+                                            rirShown = set.type != SET_TYPE_WARMUP,
                                         ),
                                         onRowClick = { viewModel.onRowTapped(set.id) },
                                         onMarkerClick = { viewModel.onMarkerTapped(set.id) },
                                         onPreviousClick = previous
                                             ?.takeIf { set.completedAt == null }
                                             ?.let { { viewModel.autofill(set.id) } },
+                                        onRirClick = { viewModel.onRirTapped(set.id) },
                                         onCheckToggle = { viewModel.toggleComplete(set.id) },
                                     )
                                 }

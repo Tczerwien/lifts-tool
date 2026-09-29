@@ -10,16 +10,18 @@ import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RowValues
-import com.tczerwien.lifts.session.SET_TYPE_FAILURE
-import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
 import com.tczerwien.lifts.session.autoAdvanceSlotId
 import com.tczerwien.lifts.session.nextExerciseSlotId
+import com.tczerwien.lifts.session.nextRir
+import com.tczerwien.lifts.session.nextSetType
 import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
+import com.tczerwien.lifts.session.rirOf
+import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
 import com.tczerwien.lifts.session.isDoubleTap
@@ -300,11 +302,30 @@ class ActiveWorkoutViewModel(
         _uiState.update { it.copy(activeSetId = setId) }
     }
 
-    /** A tap on the set marker cycles the set type (normal → warm-up → failure) and targets the row. */
+    /**
+     * A tap on the set marker targets the row and cycles its type ([nextSetType]: normal → warm-up →
+     * failure → drop). A ticked set never becomes a warm-up or stops being one this way.
+     */
     fun onMarkerTapped(setId: Long) {
         if (!beginRowAction()) return
-        val edit = applySetChange(setId) { it.copy(type = nextType(it.type)) } ?: return
+        val located = locate(setId) ?: return
+        val set = located.block.sets[located.index]
+        val next = nextSetType(set.type, ticked = set.completedAt != null)
         _uiState.update { it.copy(activeSetId = setId) }
+        if (next == set.type) return
+        val edit = applySetChange(setId) { it.copy(type = next) } ?: return
+        persistSet(edit)
+    }
+
+    /**
+     * A tap on a row's RIR cell cycles it (blank, 0–5, blank; [nextRir]), stored as RPE = 10 − RIR.
+     * Ticked rows too: the effort is known once the set is done, usually while resting. It rates the
+     * set without moving the steppers or cancelling a pending move to the next exercise, but a tap in
+     * the second after the screen moved on was aimed at the rows before and is dropped.
+     */
+    fun onRirTapped(setId: Long) {
+        if (locked || tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis())) return
+        val edit = applySetChange(setId) { it.copy(rpe = rpeOf(nextRir(rirOf(it.rpe)))) } ?: return
         persistSet(edit)
     }
 
@@ -680,12 +701,6 @@ class ActiveWorkoutViewModel(
     private fun persistSet(edit: PendingEdit) {
         val workoutId = _uiState.value.workoutId
         LiftsIo.write({ session.updateSet(workoutId, edit.set) }) { settle(edit) }
-    }
-
-    private fun nextType(type: String): String = when (type) {
-        SET_TYPE_WARMUP -> SET_TYPE_FAILURE
-        SET_TYPE_FAILURE -> SET_TYPE_NORMAL
-        else -> SET_TYPE_WARMUP
     }
 
     /** Guards [refreshesStarted], [refreshApplied] and [pendingEdits]. */

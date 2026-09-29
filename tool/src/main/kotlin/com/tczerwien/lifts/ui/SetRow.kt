@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,11 +31,11 @@ import com.thelightphone.sdk.ui.lightClickable
 /**
  * State of one row in the set grid (design/components/set-row.html).
  *
- * Grid columns: 2gu marker | 8gu previous | fill | 5gu weight | 4gu reps | 3gu checkbox,
+ * Grid columns: 2gu marker | 7gu previous | fill | 5gu weight | 4gu reps | 2gu RIR | 3gu checkbox,
  * inside 1gu of padding at the start and 2gu at the end, where the list's scrollbar floats
  * (LightScrollBarPosition.Inside): the rows keep their width whether or not the list scrolls, so
  * they stay under [SetRowHeader]. Row height is exactly 3gu (LightLazyScrollView uniform height
- * contract).
+ * contract). PREVIOUS gave 1gu of its 8 to the RIR column; "102.5 × 10" still fits in 7.
  */
 data class SetRowState(
     /** "1".."n" for work sets, "W" for warm-up sets. */
@@ -57,6 +58,12 @@ data class SetRowState(
     val warmup: Boolean = false,
     /** Taken to failure: superfine "F" after the marker. */
     val failure: Boolean = false,
+    /** A drop set: superfine "D" after the marker. */
+    val drop: Boolean = false,
+    /** Reps in reserve, "0".."5"; null renders a dim dash to tap. */
+    val rir: String? = null,
+    /** The row takes an RIR: work sets only (a warm-up is not effort). */
+    val rirShown: Boolean = true,
     /** Personal record: star after reps. */
     val pr: Boolean = false,
 )
@@ -64,9 +71,10 @@ data class SetRowState(
 private const val ROW_HEIGHT_UNITS = 3f
 private const val HEADER_HEIGHT_UNITS = 1.5f
 private const val COL_MARKER_UNITS = 2f
-private const val COL_PREVIOUS_UNITS = 8f
+private const val COL_PREVIOUS_UNITS = 7f
 private const val COL_WEIGHT_UNITS = 5f
 private const val COL_REPS_UNITS = 4f
+private const val COL_RIR_UNITS = 2f
 private const val COL_CHECK_UNITS = 3f
 private const val CHECKBOX_UNITS = 2f
 private const val CHECKMARK_UNITS = 0.9f
@@ -100,6 +108,9 @@ fun SetRowHeader(unit: WeightUnit, modifier: Modifier = Modifier) {
         Box(Modifier.width(COL_REPS_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.CenterEnd) {
             HeaderLabel("REPS")
         }
+        Box(Modifier.width(COL_RIR_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.Center) {
+            HeaderLabel("RIR")
+        }
         Box(Modifier.width(COL_CHECK_UNITS.gridUnitsAsDp()))
     }
 }
@@ -110,13 +121,15 @@ private fun HeaderLabel(text: String) {
 }
 
 /**
- * One set row. All six design states (upcoming / active / completed / completed+PR /
- * warm-up / failure) derive from [state] flags.
+ * One set row. All the design states (upcoming / active / completed / completed+PR /
+ * warm-up / failure / drop) derive from [state] flags.
  *
  * @param onRowClick selects the row as the stepper target.
  * @param onMarkerClick taps the set marker (number / "W") to change the set type. Kept apart from
  *   [onRowClick] so a near-miss on the row can never silently turn a work set into a warm-up.
  * @param onPreviousClick taps previous performance to autofill.
+ * @param onRirClick taps the RIR cell to cycle it (blank, 0–5, blank); ticked rows too, since the
+ *   effort is known once the set is done.
  * @param onCheckToggle toggles set completion.
  */
 @Composable
@@ -126,6 +139,7 @@ fun SetRow(
     onRowClick: (() -> Unit)? = null,
     onMarkerClick: (() -> Unit)? = null,
     onPreviousClick: (() -> Unit)? = null,
+    onRirClick: (() -> Unit)? = null,
     onCheckToggle: (() -> Unit)? = null,
 ) {
     val colors = LightThemeTokens.colors
@@ -140,8 +154,9 @@ fun SetRow(
             .padding(start = PAD_START_UNITS.gridUnitsAsDp(), end = PAD_END_UNITS.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Marker (set number / "W", + superfine "F" for failure) — tap to change the set type. The
-        // active row's marker is inverted, so the set being logged stands out at arm's length.
+        // Marker (set number / "W", + superfine "F" for failure, "D" for a drop set) — tap to change
+        // the set type. The active row's marker is inverted, so the set being logged stands out at
+        // arm's length.
         Box(
             modifier = Modifier
                 .width(COL_MARKER_UNITS.gridUnitsAsDp())
@@ -155,16 +170,21 @@ fun SetRow(
                     .padding(horizontal = MARKER_PAD_UNITS.gridUnitsAsDp()),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val suffix = when {
+                    state.failure -> " F"
+                    state.drop -> " D"
+                    else -> null
+                }
                 LightText(
                     text = state.marker,
                     variant = LightTextVariant.Detail,
-                    lighten = !state.failure,
+                    lighten = suffix == null,
                     maxLines = 1,
                     color = markerColor,
                 )
-                if (state.failure) {
+                if (suffix != null) {
                     LightText(
-                        text = " F",
+                        text = suffix,
                         variant = LightTextVariant.Superfine,
                         maxLines = 1,
                         color = markerColor,
@@ -223,6 +243,25 @@ fun SetRow(
                     modifier = Modifier
                         .padding(start = 0.4f.gridUnitsAsDp())
                         .size(PR_STAR_UNITS.gridUnitsAsDp()),
+                )
+            }
+        }
+
+        // Reps in reserve: a dim dash to tap until it has one.
+        Box(
+            modifier = Modifier
+                .width(COL_RIR_UNITS.gridUnitsAsDp())
+                .fillMaxHeight()
+                .let { m -> if (state.rirShown && onRirClick != null) m.lightClickable(onClick = onRirClick) else m },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (state.rirShown) {
+                LightText(
+                    text = state.rir ?: "–",
+                    variant = LightTextVariant.Copy,
+                    lighten = state.rir == null || valuesLighten,
+                    monospace = true,
+                    maxLines = 1,
                 )
             }
         }
