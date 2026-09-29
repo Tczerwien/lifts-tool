@@ -259,6 +259,9 @@ internal fun rank(entry: CatalogEntry, query: Query): Int? {
 
 private const val EQUIPMENT_RANK = 6
 
+/** Ranks 0 and 1 are an exact name (shown or other). */
+private const val LAST_EXACT_RANK = 1
+
 /** Near misses: a name that has all but one of his words, for a long query nothing else answers. */
 private const val NEAR_MISS_RANK = 7
 private const val NEAR_MISS_MIN_TERMS = 3
@@ -270,8 +273,9 @@ private fun nearMiss(entry: CatalogEntry, query: Query): Boolean =
 
 /**
  * The entries that answer [raw], best first: lifts before stretches and jumps ("split squat" is a lift
- * before it is the "Split Squats" jump); then by [rank]; then what he has done before, most recent
- * first ([recentIds]); then shorter shown names, the plain lift before its variants ("Overhead Press"
+ * before it is the "Split Squats" jump); then a name he typed exactly; then what he has done before,
+ * most recent first ([recentIds]), so "db press" finds his DB Shoulder Press before closer phrases;
+ * then by [rank]; then shorter shown names, the plain lift before its variants ("Overhead Press"
  * before "Seated Barbell Military Press"); then by name. When nothing answers a query of three words
  * or more, the names that miss only one of them are offered instead ("seated db shoulder press" finds
  * "DB Shoulder Press").
@@ -292,8 +296,10 @@ fun searchExercises(
     return ranked
         .sortedWith(
             compareBy<Pair<CatalogEntry, Int>> { if (it.first.isLift) 0 else 1 }
-                .thenBy { it.second }
+                // A name he typed exactly wins; below that, what he did recently beats a closer fit.
+                .thenBy { if (it.second <= LAST_EXACT_RANK) 0 else 1 }
                 .thenBy { recency[it.first.id] ?: Int.MAX_VALUE }
+                .thenBy { it.second }
                 .thenBy { it.first.shownName.words.size }
                 .thenBy { it.first.shown.lowercase() }
                 .thenBy { it.first.id },
