@@ -332,11 +332,10 @@ fun nameFromQuery(raw: String): String =
         }
     }
 
-/** Shorthand this short is written in capitals (DB, RDL, OHP); "dumbbell" is a word. */
-private const val SHORTHAND_MAX_LENGTH = 4
+/** Shorthand written in capitals in a name (DB, RDL, OHP); "abs" and "dumbbell" are words. */
+private val CAPITALS = setOf("db", "bb", "kb", "rdl", "sldl", "ohp", "bss")
 
-private fun isShorthand(word: String): Boolean =
-    word.length <= SHORTHAND_MAX_LENGTH && listOf(word.lowercase()) in ALIAS_PHRASES
+private fun isShorthand(word: String): Boolean = word.lowercase() in CAPITALS
 
 /**
  * The picker's body-part chips, in gym order, over the catalog's 17 muscles. Neck has no chip: its 8
