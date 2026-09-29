@@ -25,6 +25,12 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 
 private const val LIST_ROW_HEIGHT_UNITS = 3f
+
+/**
+ * A row with a name over a detail line: the SDK's line heights put the pair at about 3gu, so in a 3gu
+ * row the detail sat on the divider. 4gu clears it (and leaves room at a larger text size).
+ */
+const val TWO_LINE_ROW_HEIGHT_UNITS = 4f
 private const val TAB_ROW_HEIGHT_UNITS = 2f
 private const val DIVIDER_ALPHA = 0.3f
 
@@ -34,6 +40,7 @@ private const val ROW_SLOT_GAP_UNITS = 0.5f
 /**
  * Uniform 3gu list row with left/right slots and 1gu horizontal padding
  * (tokens.css .listrow). Safe inside LightLazyScrollView(uniformItemHeightGridUnits = 3f).
+ * Two-line rows pass [heightUnits] = [TWO_LINE_ROW_HEIGHT_UNITS].
  * The right slot is measured first and keeps its full width; the left takes what is left, less a
  * 0.5gu gap, so a long name is cut ([RowName]) instead of pushing "5 exercises" off the row.
  */
@@ -41,13 +48,14 @@ private const val ROW_SLOT_GAP_UNITS = 0.5f
 fun LiftsListRow(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
+    heightUnits: Float = LIST_ROW_HEIGHT_UNITS,
     right: (@Composable () -> Unit)? = null,
     left: @Composable () -> Unit,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(LIST_ROW_HEIGHT_UNITS.gridUnitsAsDp())
+            .height(heightUnits.gridUnitsAsDp())
             .let { m -> if (onClick != null) m.lightClickable(onClick = onClick) else m }
             .padding(horizontal = 1f.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,

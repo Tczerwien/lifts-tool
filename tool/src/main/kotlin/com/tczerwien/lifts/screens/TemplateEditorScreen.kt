@@ -31,6 +31,7 @@ import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
+import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
 import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -313,7 +314,7 @@ class TemplateEditorViewModel(
 }
 
 /**
- * Template editor (design/screens/template-editor.html): uniform 3gu exercise rows
+ * Template editor (design/screens/template-editor.html): uniform 4gu exercise rows
  * ("name" + "N sets · rest M:SS"), up/down reorder, "+ Add Exercise" via the picker,
  * rename via the tappable top-bar center, trash with a two-tap confirm. Tapping a row
  * opens the card's documented overlay as a full-screen MODE takeover (top bar + Sets /
@@ -409,6 +410,7 @@ class TemplateEditorScreen(
                     if (index > 0) RowDivider()
                     LiftsListRow(
                         onClick = { viewModel.openEdit(row.id) },
+                        heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                         left = {
                             Column(modifier = Modifier.fillMaxWidth(ROW_LEFT_WIDTH_FRACTION)) {
                                 RowName(row.name)

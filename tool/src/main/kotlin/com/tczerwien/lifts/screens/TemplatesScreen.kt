@@ -24,6 +24,7 @@ import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
+import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -208,7 +209,7 @@ class TemplatesViewModel(
 }
 
 /**
- * Template list (design/screens/templates.html): uniform 3gu rows of name +
+ * Template list (design/screens/templates.html): uniform 4gu rows of name +
  * "N exercises · ~M min", up/down arrows swap order, tap opens the editor. The top-bar
  * and bottom-bar plus both open the SDK text editor (screen mode, weather idiom) for a
  * new template's name, then push straight into its editor.
@@ -300,6 +301,7 @@ class TemplatesScreen(
                         onClick = {
                             navigateTo({ TemplateEditorScreen(it, templateId = row.id) })
                         },
+                        heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                         left = {
                             Column(modifier = Modifier.fillMaxWidth(ROW_LEFT_WIDTH_FRACTION)) {
                                 RowName(row.name)

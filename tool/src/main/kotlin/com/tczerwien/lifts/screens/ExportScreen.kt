@@ -17,6 +17,7 @@ import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
+import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -142,6 +143,7 @@ class ExportScreen(
                     uiState.files.forEachIndexed { index, file ->
                         if (index > 0) RowDivider()
                         LiftsListRow(
+                            heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                             left = {
                                 Column {
                                     LightText(

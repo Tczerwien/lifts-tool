@@ -19,6 +19,7 @@ import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
+import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -38,7 +39,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /** Uniform list-row height (LightLazyScrollView scrollbar contract). */
-private const val ROW_HEIGHT_UNITS = 3f
 
 class HistoryViewModel(
     private val repository: LiftsRepository,
@@ -85,7 +85,7 @@ class HistoryViewModel(
 }
 
 /**
- * History (design/screens/history.html): finished workouts newest first as uniform 3gu
+ * History (design/screens/history.html): finished workouts newest first as uniform 4gu
  * rows — name over date on the left, "N sets · M min" on the right — each opening its
  * [WorkoutDetailScreen].
  */
@@ -130,17 +130,18 @@ class HistoryScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
-                        uniformItemHeightGridUnits = ROW_HEIGHT_UNITS,
+                        uniformItemHeightGridUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                     ) {
                         items(uiState.rows.size) { index ->
                             val row = uiState.rows[index]
-                            // The divider lives inside the 3gu item so every lazy item
+                            // The divider lives inside the 4gu item so every lazy item
                             // keeps the uniform height the scrollbar math requires.
                             Box {
                                 LiftsListRow(
                                     onClick = {
                                         navigateTo({ WorkoutDetailScreen(it, workoutId = row.workoutId) })
                                     },
+                                    heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                                     left = {
                                         Column {
                                             RowName(row.name)
