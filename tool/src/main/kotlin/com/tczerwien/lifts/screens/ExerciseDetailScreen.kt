@@ -277,7 +277,9 @@ class ExerciseDetailViewModel(
             )
         }
 
-        val records = recordsFor(allSets, unit)
+        // Records count finished workouts only: a mistaken tick in today's workout isn't a record until
+        // the workout is done. Today's row and its live stars stay, as Active Workout shows them.
+        val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit)
         // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
         _uiState.update { state ->
             state.copy(
