@@ -17,6 +17,8 @@ object SettingsRows {
         SettingsStore.KEY_WARMUP_REST_SEC to settings.warmupRestSec.toString(),
         SettingsStore.KEY_PLATE_INVENTORY_KG to SettingsStore.encodePlates(settings.plateInventoryKg),
         SettingsStore.KEY_REST_BEEP to settings.restBeep.toString(),
+        SettingsStore.KEY_WEIGHT_STEP_LB to settings.weightStepLb.toString(),
+        SettingsStore.KEY_WEIGHT_STEP_KG to settings.weightStepKg.toString(),
     )
 
     /**
@@ -35,7 +37,12 @@ object SettingsRows {
                 ?.takeIf { plates -> plates.all { it.isFinite() && it > 0 } }
                 ?: current.plateInventoryKg,
             restBeep = rows[SettingsStore.KEY_REST_BEEP]?.toBooleanStrictOrNull() ?: current.restBeep,
+            weightStepLb = rows[SettingsStore.KEY_WEIGHT_STEP_LB]?.step(WeightUnit.LB) ?: current.weightStepLb,
+            weightStepKg = rows[SettingsStore.KEY_WEIGHT_STEP_KG]?.step(WeightUnit.KG) ?: current.weightStepKg,
         )
 
     private fun String.restSec(): Int? = toIntOrNull()?.takeIf { it in SANE_REST_SEC }
+
+    /** A weight step [unit] offers, else null (the current one stays). */
+    private fun String.step(unit: WeightUnit): Double? = toDoubleOrNull()?.takeIf { it in unit.weightSteps }
 }

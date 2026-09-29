@@ -71,7 +71,7 @@ fun holdSchedule(repeat: Int, bigSteps: Boolean = false): HoldStep = HoldStep(
  * and speeds up as it goes ([holdSchedule]). Disabled targets dim to 40% with contentSecondary glyphs.
  *
  * @param onStep called with the number of steps to move, +1 or -1 (or ±[HOLD_BIG_STEPS] late in a
- *   hold with [bigSteps]); the caller applies the unit-specific increment ([WeightUnit.weightStep] /
+ *   hold with [bigSteps]); the caller applies the increment (Settings' weight step /
  *   [WeightUnit.bodyweightStep] / 1 rep).
  * @param bigSteps a long hold moves several steps at a time: for weights, never counts or times.
  * @param label optional superfine label centered above the row, e.g. "WEIGHT (LB)".

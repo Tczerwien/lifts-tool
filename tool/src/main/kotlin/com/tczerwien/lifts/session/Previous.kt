@@ -88,7 +88,7 @@ fun seedRows(
 ): List<RowValues> {
     val sameWeight = { a: Double?, b: Double? ->
         a != null && b != null &&
-            Format.roundWeight(Format.kgToDisplay(a, unit)) == Format.roundWeight(Format.kgToDisplay(b, unit))
+            Format.roundWeight(Format.kgToDisplay(a, unit), unit) == Format.roundWeight(Format.kgToDisplay(b, unit), unit)
     }
     val result = ArrayList<RowValues>(rows.size)
     var lastWarmup: Int? = null

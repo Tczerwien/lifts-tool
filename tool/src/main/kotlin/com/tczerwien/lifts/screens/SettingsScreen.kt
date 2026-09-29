@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.BuildConfig
+import com.tczerwien.lifts.analytics.plainNumber
 import com.tczerwien.lifts.backup.BackupManager
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
@@ -109,6 +110,19 @@ class SettingsViewModel(
         LiftsIo.write({ settingsStore.setUnits(next) }) { share.logChanged() }
     }
 
+    /** Weight Step: the next increment on offer in the current unit (5 / 2.5 lb; 2.5 / 1.25 / 1 kg). */
+    fun cycleWeightStep() {
+        val settings = _uiState.value.settings ?: return
+        val unit = settings.units
+        val next = unit.nextWeightStep(settings.weightStep)
+        val updated = when (unit) {
+            WeightUnit.LB -> settings.copy(weightStepLb = next)
+            WeightUnit.KG -> settings.copy(weightStepKg = next)
+        }
+        _uiState.update { it.copy(settings = updated) }
+        LiftsIo.write { settingsStore.setWeightStep(unit, next) }
+    }
+
     /** The rest-over beep on or off; the flash and keep-awake stay either way. */
     fun toggleRestBeep() {
         val settings = _uiState.value.settings ?: return
@@ -189,8 +203,8 @@ class SettingsViewModel(
 }
 
 /**
- * Settings (design/screens/settings.html): field rows for Units (tap toggles LB/KG),
- * the two rest durations (tap opens a ±15 s stepper mode), Rest-over Beep (tap toggles
+ * Settings (design/screens/settings.html): field rows for Units (tap toggles LB/KG), Weight Step
+ * (tap cycles the steppers' increment on offer in that unit), the two rest durations (tap opens a ±15 s stepper mode), Rest-over Beep (tap toggles
  * ON/OFF), Plate Inventory (tap opens the SDK text editor with a comma list in display
  * units), Bar Weights and Export (navigate), and a static About row.
  */
@@ -264,6 +278,12 @@ class SettingsScreen(
                     label = "Units",
                     value = settings.units.name,
                     onClick = { viewModel.toggleUnits() },
+                    chevron = true,
+                )
+                LiftsFieldRow(
+                    label = "Weight Step",
+                    value = "${plainNumber(settings.weightStep)} ${settings.units.suffix}",
+                    onClick = { viewModel.cycleWeightStep() },
                     chevron = true,
                 )
                 LiftsFieldRow(

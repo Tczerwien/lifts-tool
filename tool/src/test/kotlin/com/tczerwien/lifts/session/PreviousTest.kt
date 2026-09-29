@@ -158,7 +158,7 @@ class PreviousTest {
         // Last time was logged in kg (60 kg = 132.3 lb). In lb the steppers snap to 132.5, so +5 then
         // -5 stores 60.10 kg: the same on screen, and it must not carry as if set 1 were raised.
         val previous = listOf(prev(1, n, weightKg = 60.0, reps = 8), prev(2, n, weightKg = 60.0, reps = 8))
-        val stepped = Format.displayToKg(Format.roundWeight(Format.kgToDisplay(60.0, WeightUnit.LB)), WeightUnit.LB)
+        val stepped = Format.displayToKg(Format.roundWeight(Format.kgToDisplay(60.0, WeightUnit.LB), WeightUnit.LB), WeightUnit.LB)
         val today = listOf(set(11, position = 0, weightKg = stepped, reps = 8, completedAt = 1L), set(12, position = 1))
         assertEquals(60.0, seedFor(today, 1, alignPrevious(today, previous), WeightUnit.LB).weightKg)
     }

@@ -29,11 +29,30 @@ enum class WeightUnit {
             KG -> "kg"
         }
 
-    /** Weight stepper increment in display units (±5 lb / ±2.5 kg). */
-    val weightStep: Double
+    /**
+     * The weight steppers' increments Settings offers in this unit, the default first: 5 or 2.5 lb
+     * (2.5 for 12.5 and 17.5 lb dumbbells); 2.5, 1.25 or 1 kg.
+     */
+    val weightSteps: List<Double>
         get() = when (this) {
-            LB -> 5.0
-            KG -> 2.5
+            LB -> listOf(5.0, 2.5)
+            KG -> listOf(2.5, 1.25, 1.0)
+        }
+
+    /** The weight step until Settings says otherwise (±5 lb / ±2.5 kg). */
+    val defaultWeightStep: Double get() = weightSteps.first()
+
+    /** A tap on Settings' Weight Step: the next step on offer after [current], round and round. */
+    fun nextWeightStep(current: Double): Double = weightSteps[(weightSteps.indexOf(current) + 1) % weightSteps.size]
+
+    /**
+     * What weights round to and show, in display units: 0.5 lb, 0.25 kg. Every step Settings offers
+     * lands on it, so a 1.25 kg step stays 21.25 and never becomes 21.5.
+     */
+    val resolution: Double
+        get() = when (this) {
+            LB -> 0.5
+            KG -> 0.25
         }
 
     /** Bodyweight stepper increment in display units (±0.2 lb / ±0.1 kg). */
@@ -72,8 +91,9 @@ object Format {
 
     // --- Rounding (display units) ---
 
-    /** Weights render to the nearest 0.5 display unit. */
-    fun roundWeight(display: Double): Double = (display * 2).roundToLong() / 2.0
+    /** Weights render to the nearest [WeightUnit.resolution]: 0.5 lb, 0.25 kg. */
+    fun roundWeight(display: Double, unit: WeightUnit): Double =
+        (display / unit.resolution).roundToLong() * unit.resolution
 
     /** Bodyweight renders to the nearest 0.1 display unit. */
     fun roundBodyweight(display: Double): Double = (display * 10).roundToLong() / 10.0
@@ -96,13 +116,13 @@ object Format {
 
     // --- Weight strings ---
 
-    /** Canonical kg -> rounded display string without suffix, e.g. "135" or "62.5". */
+    /** Canonical kg -> rounded display string without suffix, e.g. "135", "62.5" or "21.25" (kg). */
     fun weight(kg: Double, unit: WeightUnit): String =
-        trimTrailingZero(roundWeight(kgToDisplay(kg, unit)))
+        trimTrailingZero(roundWeight(kgToDisplay(kg, unit), unit))
 
     /**
      * Canonical kg -> plate or bar weight with up to 3 decimals and no trailing zeros, e.g. "45",
-     * "1.25", "20.412". Not snapped to the 0.5 weight grid: a 1.25 kg plate must never read 1.5.
+     * "1.25", "20.412". Not snapped to the weight grid ([roundWeight]): a 1.25 lb plate must never read 1.5.
      */
     fun plate(kg: Double, unit: WeightUnit): String =
         "%.3f".format(Locale.US, kgToDisplay(kg, unit)).trimEnd('0').trimEnd('.')
@@ -171,10 +191,11 @@ object Format {
     fun dateWithYear(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
         dateWithYearFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
 
+    /** "135", "62.5", "21.25": up to two decimals, no trailing zeros. */
     private fun trimTrailingZero(value: Double): String =
         if (value == value.toLong().toDouble()) {
             value.toLong().toString()
         } else {
-            "%.1f".format(Locale.US, value)
+            "%.2f".format(Locale.US, value).trimEnd('0').trimEnd('.')
         }
 }

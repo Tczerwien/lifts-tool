@@ -62,9 +62,11 @@ class PlateCalculatorViewModel(
 
     data class UiState(
         val units: WeightUnit = SettingsStore.DEFAULT_UNITS,
+        /** Settings' weight step in [units]: the target moves by it. */
+        val weightStep: Double = SettingsStore.DEFAULT_UNITS.defaultWeightStep,
         val bars: List<BarEntity> = emptyList(),
         val selectedBarIndex: Int = 0,
-        /** Stepper value in display units, kept on the rounded 0.5 grid. */
+        /** Stepper value in display units, kept on the unit's rounding grid ([Format.roundWeight]). */
         val targetDisplay: Double = 0.0,
         val plateInventoryKg: List<Double> = emptyList(),
         val loadout: PlateMath.Loadout? = null,
@@ -96,12 +98,14 @@ class PlateCalculatorViewModel(
                 firstLoad -> initialTargetDisplay(settings, barKg)
                 state.units != settings.units -> Format.roundWeight(
                     Format.kgToDisplay(Format.displayToKg(state.targetDisplay, state.units), settings.units),
+                    settings.units,
                 )
                 else -> state.targetDisplay
             }
             derive(
                 state.copy(
                     units = settings.units,
+                    weightStep = settings.weightStep,
                     bars = bars,
                     selectedBarIndex = selectedBarIndex,
                     targetDisplay = targetDisplay,
@@ -114,16 +118,17 @@ class PlateCalculatorViewModel(
 
     /** Prefilled target, else bar + one largest plate per side — a sensible first load. */
     private fun initialTargetDisplay(settings: SettingsStore.Settings, barKg: Double): Double {
-        initialTargetKg?.let { return Format.roundWeight(Format.kgToDisplay(it, settings.units)) }
-        val barDisplay = Format.roundWeight(Format.kgToDisplay(barKg, settings.units))
+        val unit = settings.units
+        initialTargetKg?.let { return Format.roundWeight(Format.kgToDisplay(it, unit), unit) }
+        val barDisplay = Format.roundWeight(Format.kgToDisplay(barKg, unit), unit)
         val largestPlateKg = settings.plateInventoryKg.maxOrNull() ?: return barDisplay
-        return barDisplay + 2 * Format.roundWeight(Format.kgToDisplay(largestPlateKg, settings.units))
+        return barDisplay + 2 * Format.roundWeight(Format.kgToDisplay(largestPlateKg, unit), unit)
     }
 
-    /** Moves the target [delta] steps of [WeightUnit.weightStep] along the grid ([Format.stepWeight]). */
+    /** Moves the target [delta] of Settings' weight steps along the grid ([Format.stepWeight]). */
     fun stepTarget(delta: Int) {
         _uiState.update { state ->
-            val next = Format.stepWeight(state.targetDisplay, delta, state.units.weightStep)
+            val next = Format.stepWeight(state.targetDisplay, delta, state.weightStep)
             derive(state.copy(targetDisplay = next))
         }
     }

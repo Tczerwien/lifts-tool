@@ -61,7 +61,7 @@ fun setNotation(
     restSec: Int? = null,
     withUnit: Boolean = false,
 ): String? {
-    val weight = weightKg?.takeIf { Format.roundWeight(Format.kgToDisplay(it, unit)) > 0.0 }?.let { kg ->
+    val weight = weightKg?.takeIf { Format.roundWeight(Format.kgToDisplay(it, unit), unit) > 0.0 }?.let { kg ->
         Format.weight(kg, unit) + if (withUnit && style == NotationStyle.SINGLE) " ${unit.suffix}" else ""
     }
     val times = when (style) {

@@ -3,6 +3,7 @@ package com.tczerwien.lifts.settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -33,7 +34,19 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         val plateInventoryKg: List<Double>,
         /** Beep when a rest ends; the flash and keep-awake don't depend on it. */
         val restBeep: Boolean,
-    )
+        /** The weight steppers' increment when the unit is lb (one of [WeightUnit.weightSteps]). */
+        val weightStepLb: Double = WeightUnit.LB.defaultWeightStep,
+        /** The same when the unit is kg: each unit keeps its own, so switching back finds it as it was. */
+        val weightStepKg: Double = WeightUnit.KG.defaultWeightStep,
+    ) {
+        /** The weight steppers' increment in the current unit, in display units. */
+        val weightStep: Double get() = weightStepFor(units)
+
+        fun weightStepFor(unit: WeightUnit): Double = when (unit) {
+            WeightUnit.LB -> weightStepLb
+            WeightUnit.KG -> weightStepKg
+        }
+    }
 
     /** [Settings.restBeep] as it changes, for the rest-over alert on every screen. */
     val restBeep: Flow<Boolean> = dataStore.data.map { it[REST_BEEP] ?: DEFAULT_REST_BEEP }.distinctUntilChanged()
@@ -50,7 +63,15 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             plateInventoryKg = prefs[PLATE_INVENTORY_KG]?.let(::decodePlates)
                 ?: DEFAULT_PLATE_INVENTORY_KG,
             restBeep = prefs[REST_BEEP] ?: DEFAULT_REST_BEEP,
+            weightStepLb = validStep(prefs[WEIGHT_STEP_LB], WeightUnit.LB),
+            weightStepKg = validStep(prefs[WEIGHT_STEP_KG], WeightUnit.KG),
         )
+    }
+
+    /** Saves [step] as the weight step for [unit]; a step that unit doesn't offer is ignored. */
+    suspend fun setWeightStep(unit: WeightUnit, step: Double) {
+        if (step !in unit.weightSteps) return
+        dataStore.edit { prefs -> prefs[weightStepKey(unit)] = step }
     }
 
     suspend fun setUnits(units: WeightUnit) {
@@ -83,6 +104,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             prefs[WARMUP_REST_SEC] = settings.warmupRestSec
             prefs[PLATE_INVENTORY_KG] = encodePlates(settings.plateInventoryKg)
             prefs[REST_BEEP] = settings.restBeep
+            prefs[WEIGHT_STEP_LB] = validStep(settings.weightStepLb, WeightUnit.LB)
+            prefs[WEIGHT_STEP_KG] = validStep(settings.weightStepKg, WeightUnit.KG)
         }
     }
 
@@ -95,12 +118,24 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         const val KEY_WARMUP_REST_SEC = "lifts_warmup_rest_sec"
         const val KEY_PLATE_INVENTORY_KG = "lifts_plate_inventory_kg"
         const val KEY_REST_BEEP = "lifts_rest_beep"
+        const val KEY_WEIGHT_STEP_LB = "lifts_weight_step_lb"
+        const val KEY_WEIGHT_STEP_KG = "lifts_weight_step_kg"
 
         private val UNITS = stringPreferencesKey(KEY_UNITS)
         private val DEFAULT_REST_SEC = intPreferencesKey(KEY_DEFAULT_REST_SEC)
         private val WARMUP_REST_SEC = intPreferencesKey(KEY_WARMUP_REST_SEC)
         private val PLATE_INVENTORY_KG = stringPreferencesKey(KEY_PLATE_INVENTORY_KG)
         private val REST_BEEP = booleanPreferencesKey(KEY_REST_BEEP)
+        private val WEIGHT_STEP_LB = doublePreferencesKey(KEY_WEIGHT_STEP_LB)
+        private val WEIGHT_STEP_KG = doublePreferencesKey(KEY_WEIGHT_STEP_KG)
+
+        private fun weightStepKey(unit: WeightUnit) = when (unit) {
+            WeightUnit.LB -> WEIGHT_STEP_LB
+            WeightUnit.KG -> WEIGHT_STEP_KG
+        }
+
+        /** [step] when [unit] offers it, else that unit's default: nothing else ever reaches a stepper. */
+        fun validStep(step: Double?, unit: WeightUnit): Double = step?.takeIf { it in unit.weightSteps } ?: unit.defaultWeightStep
 
         private val json = Json
         private val PLATES_SERIALIZER = ListSerializer(Double.serializer())

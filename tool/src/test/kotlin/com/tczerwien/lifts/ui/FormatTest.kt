@@ -30,11 +30,48 @@ class FormatTest {
     // --- Rounding ---
 
     @Test
-    fun `weights round to nearest half display unit`() {
-        assertEquals(135.0, Format.roundWeight(135.2), 1e-9)
-        assertEquals(135.5, Format.roundWeight(135.3), 1e-9)
-        assertEquals(135.5, Format.roundWeight(135.65), 1e-9)
-        assertEquals(136.0, Format.roundWeight(135.8), 1e-9)
+    fun `lb weights round to the nearest half pound`() {
+        assertEquals(135.0, Format.roundWeight(135.2, WeightUnit.LB), 1e-9)
+        assertEquals(135.5, Format.roundWeight(135.3, WeightUnit.LB), 1e-9)
+        assertEquals(135.5, Format.roundWeight(135.65, WeightUnit.LB), 1e-9)
+        assertEquals(136.0, Format.roundWeight(135.8, WeightUnit.LB), 1e-9)
+    }
+
+    @Test
+    fun `kg weights round to a quarter, so a 1_25 kg step stays exact`() {
+        assertEquals(21.25, Format.roundWeight(21.3, WeightUnit.KG), 1e-9)
+        assertEquals(21.25, Format.roundWeight(Format.stepWeight(20.0, +1, 1.25), WeightUnit.KG), 1e-9)
+        assertEquals("21.25", Format.weight(21.25, WeightUnit.KG))
+        assertEquals("102.75", Format.weight(102.75, WeightUnit.KG))
+        assertEquals("21.5", Format.weight(21.5, WeightUnit.KG))
+        assertEquals("21", Format.weight(21.0, WeightUnit.KG))
+        // In lb a 1.25 kg step's 21.25 kg is 46.85 lb, which shows on the half-pound grid.
+        assertEquals("47", Format.weight(21.25, WeightUnit.LB))
+        assertEquals("-30", Format.weight(Format.lbToKg(-30.0), WeightUnit.LB))
+    }
+
+    @Test
+    fun `every offered step lands on its unit's grid`() {
+        for (unit in WeightUnit.entries) {
+            assertEquals(unit.weightSteps.first(), unit.defaultWeightStep)
+            for (step in unit.weightSteps) {
+                var display = 0.0
+                repeat(40) {
+                    display = Format.stepWeight(display, +1, step)
+                    assertEquals(display, Format.roundWeight(display, unit), 1e-9, "$unit $step")
+                }
+            }
+        }
+        assertEquals(listOf(5.0, 2.5), WeightUnit.LB.weightSteps)
+        assertEquals(listOf(2.5, 1.25, 1.0), WeightUnit.KG.weightSteps)
+    }
+
+    @Test
+    fun `Weight Step cycles through what the unit offers`() {
+        assertEquals(2.5, WeightUnit.LB.nextWeightStep(5.0))
+        assertEquals(5.0, WeightUnit.LB.nextWeightStep(2.5))
+        assertEquals(listOf(1.25, 1.0, 2.5), listOf(2.5, 1.25, 1.0).map(WeightUnit.KG::nextWeightStep))
+        assertEquals(2.5, WeightUnit.KG.nextWeightStep(7.0), "anything else starts the cycle over")
     }
 
     @Test
@@ -64,10 +101,10 @@ class FormatTest {
 
     @Test
     fun `60 kg shown in lb never steps back to a weight that stores a sliver off 60 kg`() {
-        val shown = Format.roundWeight(Format.kgToDisplay(60.0, WeightUnit.LB))
+        val shown = Format.roundWeight(Format.kgToDisplay(60.0, WeightUnit.LB), WeightUnit.LB)
         assertEquals(132.5, shown, 1e-9)
-        val up = Format.stepWeight(shown, +1, WeightUnit.LB.weightStep)
-        val upThenDown = Format.stepWeight(up, -1, WeightUnit.LB.weightStep)
+        val up = Format.stepWeight(shown, +1, WeightUnit.LB.defaultWeightStep)
+        val upThenDown = Format.stepWeight(up, -1, WeightUnit.LB.defaultWeightStep)
         assertEquals(130.0, upThenDown, 1e-9)
         // 130 lb is a whole plate step lighter, not 60.10 kg passing for a new best.
         assertEquals(58.967, Format.displayToKg(upThenDown, WeightUnit.LB), 1e-3)

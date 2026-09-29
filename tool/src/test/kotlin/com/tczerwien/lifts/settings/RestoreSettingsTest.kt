@@ -50,6 +50,8 @@ class RestoreSettingsTest {
         warmupRestSec = 60,
         plateInventoryKg = listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25),
         restBeep = false,
+        weightStepLb = 2.5,
+        weightStepKg = 1.25,
     )
 
     @Test
@@ -93,6 +95,8 @@ class RestoreSettingsTest {
             SettingsStore.KEY_WARMUP_REST_SEC to "99999",
             SettingsStore.KEY_PLATE_INVENTORY_KG to "[20.0, -5.0]",
             SettingsStore.KEY_REST_BEEP to "yes",
+            SettingsStore.KEY_WEIGHT_STEP_LB to "3.0",
+            SettingsStore.KEY_WEIGHT_STEP_KG to "2.5.1",
         )
         assertEquals(his, SettingsRows.decode(rows, current = his))
     }

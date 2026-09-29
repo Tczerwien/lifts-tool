@@ -89,6 +89,8 @@ class ActiveWorkoutViewModel(
         val restEndMillis: Long? = null,
         val restTotalSec: Int = 0,
         val units: WeightUnit = SettingsStore.DEFAULT_UNITS,
+        /** Settings' weight step in [units], in display units. */
+        val weightStep: Double = SettingsStore.DEFAULT_UNITS.defaultWeightStep,
         val defaultRestSec: Int = SettingsStore.DEFAULT_REST_SEC_VALUE,
         val warmupRestSec: Int = SettingsStore.DEFAULT_WARMUP_REST_SEC_VALUE,
         /**
@@ -380,13 +382,16 @@ class ActiveWorkoutViewModel(
 
     // --- Steppers (operate on the active row) ---
 
-    /** Moves the active row's weight [steps] grid steps ([Format.stepWeight]); a long hold sends several. */
+    /**
+     * Moves the active row's weight [steps] steps of Settings' weight step along its grid
+     * ([Format.stepWeight]); a long hold sends several.
+     */
     fun stepWeight(steps: Int) {
         if (!beginAction()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val base = currentWeightDisplay(state, set)
-        val next = Format.roundWeight(Format.stepWeight(base, steps, state.units.weightStep))
+        val next = Format.roundWeight(Format.stepWeight(base, steps, state.weightStep), state.units)
         val edit = applySetChange(set.id) {
             it.copy(weightKg = Format.displayToKg(next, state.units))
         } ?: return
@@ -421,7 +426,7 @@ class ActiveWorkoutViewModel(
     private fun currentWeightDisplay(state: UiState, set: SetEntity): Double {
         val located = locate(set.id)
         val kg = set.weightKg ?: located?.block?.seeds?.getOrNull(located.index)?.weightKg ?: return 0.0
-        return Format.roundWeight(Format.kgToDisplay(kg, state.units))
+        return Format.roundWeight(Format.kgToDisplay(kg, state.units), state.units)
     }
 
     /** The active row's reps as they show: its own, else its starting value, else 0. */
@@ -814,6 +819,7 @@ class ActiveWorkoutViewModel(
                     activeSetId = activeSetId,
                     prSetIds = prIds,
                     units = settings.units,
+                    weightStep = settings.weightStep,
                     defaultRestSec = settings.defaultRestSec,
                     warmupRestSec = settings.warmupRestSec,
                 )

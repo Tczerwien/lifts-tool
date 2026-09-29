@@ -2,6 +2,7 @@ package com.tczerwien.lifts.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
@@ -59,6 +60,31 @@ class SettingsStoreTest {
         val settings = store.snapshot()
         assertEquals(WeightUnit.KG, settings.units)
         assertEquals(listOf(25.0, 1.25), settings.plateInventoryKg)
+    }
+
+    @Test
+    fun weightStepIsKeptPerUnitAndOnlyFromTheOffer() {
+        val store = SettingsStore(FakeDataStore(emptyPreferences()))
+        assertEquals(5.0, store.snapshot().weightStep, "lb starts at 5")
+        runBlocking {
+            store.setWeightStep(WeightUnit.LB, 2.5)
+            store.setWeightStep(WeightUnit.KG, 1.25)
+            store.setWeightStep(WeightUnit.KG, 3.0)
+        }
+        val lb = store.snapshot()
+        assertEquals(2.5, lb.weightStep)
+        runBlocking { store.setUnits(WeightUnit.KG) }
+        assertEquals(1.25, store.snapshot().weightStep, "kg keeps its own step; 3 kg is not on offer")
+        runBlocking { store.setUnits(WeightUnit.LB) }
+        assertEquals(2.5, store.snapshot().weightStep, "and switching back finds lb's as it was")
+    }
+
+    @Test
+    fun aStoredStepOffTheOfferReadsAsTheDefault() {
+        val store = SettingsStore(
+            FakeDataStore(preferencesOf(doublePreferencesKey("lifts_weight_step_kg") to 0.5, stringPreferencesKey("lifts_units") to "KG")),
+        )
+        assertEquals(2.5, store.snapshot().weightStep)
     }
 
     @Test

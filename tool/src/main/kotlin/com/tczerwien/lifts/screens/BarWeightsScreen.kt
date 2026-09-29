@@ -83,6 +83,8 @@ class BarWeightsViewModel(
 
     data class UiState(
         val units: WeightUnit = SettingsStore.DEFAULT_UNITS,
+        /** Settings' weight step in [units]. */
+        val weightStep: Double = SettingsStore.DEFAULT_UNITS.defaultWeightStep,
         val bars: List<BarEntity> = emptyList(),
         val mode: Mode = Mode.BarList,
     )
@@ -94,9 +96,9 @@ class BarWeightsViewModel(
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val units = settingsStore.snapshot().units
+            val settings = settingsStore.snapshot()
             val bars = repository.listBars()
-            _uiState.update { it.copy(units = units, bars = bars) }
+            _uiState.update { it.copy(units = settings.units, weightStep = settings.weightStep, bars = bars) }
         }
     }
 
@@ -120,18 +122,18 @@ class BarWeightsViewModel(
         val mode = state.mode as? Mode.EditName ?: return
         val existing = state.bars.firstOrNull { it.id == mode.barId }
         val displayWeight = existing
-            ?.let { Format.roundWeight(Format.kgToDisplay(it.weightKg, state.units)) }
+            ?.let { Format.roundWeight(Format.kgToDisplay(it.weightKg, state.units), state.units) }
             ?: defaultNewBarDisplay(state.units)
         _uiState.update {
             it.copy(mode = Mode.EditWeight(barId = mode.barId, name = trimmed, displayWeight = displayWeight))
         }
     }
 
-    /** Moves the weight [delta] steps of [WeightUnit.weightStep] along the grid ([Format.stepWeight]). */
+    /** Moves the weight [delta] of Settings' weight steps along the grid ([Format.stepWeight]). */
     fun stepWeight(delta: Int) {
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
-        val next = Format.stepWeight(mode.displayWeight, delta, state.units.weightStep)
+        val next = Format.stepWeight(mode.displayWeight, delta, state.weightStep)
         _uiState.update { it.copy(mode = mode.copy(displayWeight = next, stepped = true)) }
     }
 
