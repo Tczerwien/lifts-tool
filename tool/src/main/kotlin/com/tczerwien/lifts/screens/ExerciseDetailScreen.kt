@@ -226,8 +226,8 @@ class ExerciseDetailViewModel(
      * note shows at once, so the editor opened again before the save lands starts from it, not the old one.
      */
     fun saveNote(raw: String) {
-        _uiState.value = _uiState.value.copy(editing = null, pinnedNote = raw.trim().takeIf { it.isNotEmpty() })
         synchronized(reloadLock) { noteSaves++ }
+        _uiState.value = _uiState.value.copy(editing = null, pinnedNote = raw.trim().takeIf { it.isNotEmpty() })
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val note = raw.trim().takeIf { it.isNotEmpty() }
@@ -380,7 +380,7 @@ class ExerciseDetailViewModel(
             records.maxWeightSet?.let { set ->
                 val label = when (tracking) {
                     // The help as the machine's stack shows it; none at all is a plain pull-up.
-                    Tracking.ASSISTED_BODYWEIGHT -> set.weightKg?.let(Math::abs)
+                    Tracking.ASSISTED_BODYWEIGHT -> set.weightKg?.let(Math::abs)?.takeIf { it > 0.0 }
                         ?.let { setNotation(it, set.reps, unit, NotationStyle.SINGLE, withUnit = true) }
                         ?: "None × ${set.reps ?: 0}"
                     else -> setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
