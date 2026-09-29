@@ -162,13 +162,22 @@ private val ALIAS_PHRASES: Map<List<String>, List<List<String>>> =
 private val LONGEST_ALIAS = ALIAS_PHRASES.keys.maxOf { it.size }
 
 /** One thing he typed (a word, or a shorthand phrase) and the spellings that satisfy it. */
-internal class Term(val spellings: List<List<String>>) {
-    /** Some spelling has each of its words start a word of [words], or of [extra]. */
+internal class Term(val spellings: List<List<String>>, private val whole: Boolean = false) {
+    /**
+     * Some spelling has each of its words start a word of [words], or of [extra]; or be one, for a
+     * [whole] term: a one-letter word he has finished typing ("t" of "t bar") is a word, not the start
+     * of "thrust".
+     */
     fun matches(words: List<String>, extra: List<String> = emptyList()): Boolean =
         spellings.any { spelling ->
-            spelling.all { part -> words.any { startsWithPart(it, part) } || extra.any { startsWithPart(it, part) } }
+            spelling.all { part -> words.any { fits(it, part) } || extra.any { fits(it, part) } }
         }
+
+    private fun fits(word: String, part: String) = if (whole) word == part else startsWithPart(word, part)
 }
+
+/** A typed one-letter word with more typed after it: finished, so it must be a whole word. */
+private fun finishedLetter(typed: List<String>, at: Int): Boolean = typed[at].length == 1 && at < typed.lastIndex
 
 /** [word] starts with [part], or with [part] less a plural ending ("curls" → curl, "presses" → press). */
 private fun startsWithPart(word: String, part: String): Boolean =
@@ -228,7 +237,7 @@ internal fun parseQuery(raw: String): Query {
             } else {
                 ALIAS_PHRASES.filterKeys { it.size == 1 && it[0].startsWith(word) }.values.flatten()
             }
-            terms += Term(listOf(listOf(word)) + begun)
+            terms += Term(listOf(listOf(word)) + begun, whole = finishedLetter(typed, at))
             at++
         }
     }
@@ -285,9 +294,13 @@ private fun nearMiss(entry: CatalogEntry, terms: List<Term>): Boolean =
  * misses count typed words, so "reverse cable fly" is three words even though "cable fly" is one
  * shorthand phrase, and a near miss must have two of them, not either of two terms.
  */
-private fun wordTerms(raw: String): List<Term> = searchWords(raw).map { word ->
-    val keys = listOf(word) + shorthandSingulars(word)
-    Term((listOf(listOf(word)) + keys.flatMap { ALIAS_PHRASES[listOf(it)].orEmpty() }).distinct())
+private fun wordTerms(raw: String): List<Term> {
+    val typed = searchWords(raw)
+    return typed.mapIndexed { at, word ->
+        val keys = listOf(word) + shorthandSingulars(word)
+        val spellings = listOf(listOf(word)) + keys.flatMap { ALIAS_PHRASES[listOf(it)].orEmpty() }
+        Term(spellings.distinct(), whole = finishedLetter(typed, at))
+    }
 }
 
 /**

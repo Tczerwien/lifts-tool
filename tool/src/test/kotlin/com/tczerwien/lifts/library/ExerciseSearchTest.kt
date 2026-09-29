@@ -104,6 +104,8 @@ class ExerciseSearchTest {
         assertEquals("farmers-walk", search("farmer carry").first())
         // "t-bar" is a phrase in T-Bar Row, and scattered in "... Two-Arm Long Bar Row".
         assertEquals("t-bar-row-with-handle", search("t-bar").first())
+        // A finished one-letter word is a word: Hip Thrust (thrust, barbell) doesn't answer "t-bar", even recent.
+        assertEquals("lying-t-bar-row", search("t-bar", recent = listOf("barbell-hip-thrust", "lying-t-bar-row")).first())
         // The EZ bar's equipment doesn't make every EZ-bar lift a curl.
         assertFalse("ez-bar-skullcrusher" in search("ez curl"))
         assertEquals("ez-bar-curl", search("ez curl").first())
