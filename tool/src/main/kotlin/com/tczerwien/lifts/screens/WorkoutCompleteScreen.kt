@@ -16,6 +16,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.WorkoutSummary
@@ -233,12 +235,9 @@ private fun Mono(text: String, variant: LightTextVariant, lighten: Boolean = fal
     )
 }
 
-/** "165 × 5"; a weight-only PR renders just the weight, a reps-only PR (pull-ups) "15 reps". */
-private fun prSetDisplay(weightKg: Double?, reps: Int?, units: WeightUnit): String = when {
-    weightKg != null && reps != null -> Format.setSummary(weightKg, reps, units)
-    weightKg != null -> Format.weight(weightKg, units)
-    else -> "${reps ?: 0} reps"
-}
+/** "165 × 5", or "× 15" for a pull-up record ([setNotation]). */
+private fun prSetDisplay(weightKg: Double?, reps: Int?, units: WeightUnit): String =
+    setNotation(weightKg, reps, units, NotationStyle.SINGLE).orEmpty()
 
 /** Volume in display units with a thousands separator, e.g. "12,440". */
 private fun volumeDisplay(volumeKg: Double, units: WeightUnit): String =

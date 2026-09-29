@@ -110,10 +110,6 @@ object Format {
     fun bodyweight(kg: Double, unit: WeightUnit): String =
         trimTrailingZero(roundBodyweight(kgToDisplay(kg, unit)))
 
-    /** "135 × 8" — previous-performance summary for a set row. */
-    fun setSummary(weightKg: Double, reps: Int, unit: WeightUnit): String =
-        "${weight(weightKg, unit)} × $reps"
-
     // --- Clocks and durations ---
 
     /** Seconds -> "m:ss", e.g. 95 -> "1:35". */

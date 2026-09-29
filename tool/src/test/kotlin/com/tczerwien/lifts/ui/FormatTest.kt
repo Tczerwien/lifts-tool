@@ -118,11 +118,6 @@ class FormatTest {
         assertEquals("81.9", Format.bodyweight(81.93, WeightUnit.KG))
     }
 
-    @Test
-    fun `set summary combines weight and reps`() {
-        assertEquals("135 × 8", Format.setSummary(Format.lbToKg(135.0), 8, WeightUnit.LB))
-    }
-
     // --- Clocks and durations ---
 
     @Test

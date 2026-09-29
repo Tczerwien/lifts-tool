@@ -16,6 +16,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
@@ -172,18 +174,10 @@ class RestTimerViewModel(
         val seed = seedFor(next.rows, next.index, aligned, units)
         // Only the row's own RPE: a tick logs that, never last session's.
         val rpe = next.rows[next.index].rpe
-        val summary = when {
-            seed.weightKg != null && seed.reps != null -> Format.setSummary(seed.weightKg, seed.reps, units)
-            seed.reps != null -> "× ${seed.reps}"
-            seed.weightKg != null -> Format.weight(seed.weightKg, units)
-            else -> null
-        }?.let { values -> rpe?.let { "$values @ ${trimRpe(it)}" } ?: values }
+        val summary = setNotation(seed.weightKg, seed.reps, units, NotationStyle.SINGLE, rpe = rpe)
         val exerciseName = repository.exerciseById(exerciseId)?.let { displayName(it) } ?: exerciseId
         return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
     }
-
-    private fun trimRpe(rpe: Double): String =
-        if (rpe == rpe.toLong().toDouble()) rpe.toLong().toString() else rpe.toString()
 }
 
 /**

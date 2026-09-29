@@ -14,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
@@ -38,18 +40,9 @@ internal fun buildMarkers(sets: List<SetEntity>): List<String> {
     }
 }
 
-/** "135 × 8" from a previous-performance set; weight-only and reps-only degrade gracefully. */
-internal fun previousSummary(previous: SetEntity?, units: WeightUnit): String? {
-    previous ?: return null
-    val weight = previous.weightKg
-    val reps = previous.reps
-    return when {
-        weight != null && reps != null -> Format.setSummary(weight, reps, units)
-        reps != null -> "× $reps"
-        weight != null -> Format.weight(weight, units)
-        else -> null
-    }
-}
+/** "135 × 8" from a previous-performance set ([setNotation]); "× 8" for a pull-up, null for nothing. */
+internal fun previousSummary(previous: SetEntity?, units: WeightUnit): String? =
+    previous?.let { setNotation(it.weightKg, it.reps, units, NotationStyle.SINGLE) }
 
 /** The row the set list opens at when it is built: the one above the active row, so the set just done shows too. */
 internal fun openingListIndex(activeIndex: Int): Int = (activeIndex - 1).coerceAtLeast(0)

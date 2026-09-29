@@ -31,8 +31,10 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.exerciseRecords
+import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.liftsRepository
@@ -241,8 +243,8 @@ class ExerciseDetailViewModel(
         fun weightLabel(kg: Double) = "${Format.weight(kg, unit)} ${unit.suffix}"
         val stats = buildList {
             records.maxWeightSet?.let { set ->
-                val label = weightLabel(set.weightKg ?: 0.0)
-                add(Stat("Max Weight", set.reps?.let { "$label × $it" } ?: label, Format.dateWithYear(set.completedAt ?: 0L)))
+                val label = setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
+                add(Stat("Max Weight", label, Format.dateWithYear(set.completedAt ?: 0L)))
             }
             val bestE1Rm = records.bestE1RmKg
             val bestE1RmSet = records.bestE1RmSet
@@ -253,7 +255,7 @@ class ExerciseDetailViewModel(
                 add(
                     Stat(
                         "Best Volume Set",
-                        Format.setSummary(set.weightKg ?: 0.0, set.reps ?: 0, unit),
+                        setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE).orEmpty(),
                         Format.dateWithYear(set.completedAt ?: 0L),
                     ),
                 )

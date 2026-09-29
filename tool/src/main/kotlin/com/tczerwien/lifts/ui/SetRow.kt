@@ -39,7 +39,7 @@ import com.thelightphone.sdk.ui.lightClickable
 data class SetRowState(
     /** "1".."n" for work sets, "W" for warm-up sets. */
     val marker: String,
-    /** Previous performance, e.g. "135 × 8" ([Format.setSummary]); null renders blank. */
+    /** Previous performance, e.g. "135 × 8" (setNotation); null renders blank. */
     val previous: String?,
     /** Display weight string; null renders an em dash (nothing to start from). */
     val weight: String?,
