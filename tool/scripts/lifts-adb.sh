@@ -53,6 +53,8 @@ push_restore() {
     echo "rename it first: letters, digits, '.', '_' and '-' only, not starting with a dot: $name" >&2
     exit 1
   fi
+  # Restore's own subfolders: a file of either name would be moved into the folder and never offered.
+  case "$name" in applied|rejected) echo "rename it first: '$name' is a folder in Restore" >&2; exit 1 ;; esac
   # Through /data/local/tmp rather than exec-in, which returns before the remote write has finished.
   # The copy lands under a dot name and is renamed once whole, so Home never offers half a file.
   local tmp=/data/local/tmp/lifts-restore.db
