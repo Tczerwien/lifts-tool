@@ -57,9 +57,6 @@ import kotlinx.coroutines.withContext
 private const val MINUTES_PER_WORKING_SET = 3.5
 private const val ESTIMATE_ROUND_MINUTES = 5
 
-/** Left slot caps at this fraction of the row so the reorder arrows never get squeezed out. */
-private const val ROW_LEFT_WIDTH_FRACTION = 0.85f
-
 private const val REORDER_TARGET_WIDTH_UNITS = 2f
 private const val REORDER_TARGET_HEIGHT_UNITS = 1.5f
 private const val REORDER_ICON_UNITS = 0.9f
@@ -298,7 +295,7 @@ class TemplatesScreen(
                         },
                         heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                         left = {
-                            Column(modifier = Modifier.fillMaxWidth(ROW_LEFT_WIDTH_FRACTION)) {
+                            Column {
                                 RowName(row.name)
                                 LightText(
                                     text = templateDetail(row),

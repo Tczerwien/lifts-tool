@@ -70,9 +70,6 @@ private const val REST_STEP_SEC = 15
 private const val MIN_REST_SEC = 0
 private const val MAX_REST_SEC = 600
 
-/** Left slot caps at this fraction of the row so the reorder arrows never get squeezed out. */
-private const val ROW_LEFT_WIDTH_FRACTION = 0.85f
-
 private const val REORDER_TARGET_WIDTH_UNITS = 2f
 private const val REORDER_TARGET_HEIGHT_UNITS = 1.5f
 private const val REORDER_ICON_UNITS = 0.9f
@@ -416,7 +413,7 @@ class TemplateEditorScreen(
                         onClick = { viewModel.openEdit(row.id) },
                         heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                         left = {
-                            Column(modifier = Modifier.fillMaxWidth(ROW_LEFT_WIDTH_FRACTION)) {
+                            Column {
                                 RowName(row.name)
                                 LightText(
                                     text = exerciseDetail(row),
