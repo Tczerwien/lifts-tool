@@ -82,6 +82,8 @@ object ExportFixtures {
         notes = INSTANCE_NOTES,
     )
 
+    val slots = listOf(workoutExercise1, workoutExercise2)
+
     val sets = listOf(
         SetEntity(
             id = 1, workoutExerciseId = 1, position = 0, type = "warmup",
@@ -130,12 +132,13 @@ object ExportFixtures {
         bars: List<BarEntity> = ExportFixtures.bars,
         sets: List<SetEntity> = ExportFixtures.sets,
         workouts: List<WorkoutEntity> = listOf(workout1, workout2),
+        slots: List<WorkoutExerciseEntity> = ExportFixtures.slots,
         zone: ZoneId = ZoneOffset.UTC,
     ): ExportSnapshot = buildSnapshot(
         rows = LiftsRows(
             exercises = listOf(bench, squat),
             workouts = workouts,
-            workoutExercises = listOf(workoutExercise1, workoutExercise2),
+            workoutExercises = slots,
             sets = sets,
             templates = emptyList(),
             templateExercises = emptyList(),

@@ -90,8 +90,7 @@ object MarkdownExport {
         append("\n## Workouts\n")
         for (workout in snapshot.workouts) {
             append("\n### ").append(workout.dateIso).append(" — ").append(workout.name)
-            val parts = mutableListOf<String>()
-            workout.durationMin?.let { parts.add("${it}m") }
+            val parts = mutableListOf("${workout.durationMin}m")
             workout.bodyweightKg?.let { parts.add("BW ${ExportFormat.number(it)} kg") }
             if (parts.isNotEmpty()) append(" (").append(parts.joinToString(", ")).append(')')
             append('\n')

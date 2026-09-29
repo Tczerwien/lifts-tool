@@ -80,8 +80,8 @@ data class SnapshotWorkout(
     val startTimeIso: String,
     val startEpochMillis: Long,
     val name: String,
-    /** Rounded minutes; null while the workout is still in progress. */
-    val durationMin: Int?,
+    /** Rounded minutes. */
+    val durationMin: Int,
     val bodyweightKg: Double?,
     val notes: String?,
     /** Ordered by position; only slots with at least one completed set. */
@@ -123,8 +123,9 @@ data class SnapshotPr(
  * Builds the export snapshot from every row of the database ([rows]).
  *
  * Rules:
- * - Only completed sets (completedAt != null) are exported; workouts and exercise slots
- *   with no completed sets are dropped entirely.
+ * - Only finished workouts ([WorkoutEntity.endedAt] set) are exported, and only their completed
+ *   sets (completedAt != null); workouts and exercise slots with no completed sets are dropped
+ *   entirely. The summary counts the same sets.
  * - PR flags are computed chronologically per exercise (by completedAt, ties by id)
  *   across the full history — see [isPr].
  * - The weekly-volume summary covers the [WEEKLY_SUMMARY_WEEKS] ISO weeks ending at
@@ -143,7 +144,9 @@ fun buildSnapshot(
     injuries: List<String>,
 ): ExportSnapshot {
     val exercises = rows.exercises
-    val workouts = rows.workouts
+    // Only finished workouts, as History shows them: an open one (or one left open and never closed)
+    // is still being logged, so none of its sets count anywhere, summary included.
+    val workouts = rows.workouts.filter { it.endedAt != null }
     val workoutExercises = rows.workoutExercises
     val sets = rows.sets
     val bodyweight = rows.bodyweight
@@ -198,7 +201,7 @@ fun buildSnapshot(
                 startTimeIso = format.dateTime(workout.startedAt),
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
-                durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt() },
+                durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt(),
                 bodyweightKg = null, // not stored per workout; comes from the bodyweight log later
                 notes = workout.notes,
                 exercises = slots,

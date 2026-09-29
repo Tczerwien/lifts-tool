@@ -12,7 +12,7 @@ package com.tczerwien.lifts.export
  * - One row per completed set, chronological (oldest workout first).
  * - Date is the workout start time in the phone's local time with no offset ("yyyy-MM-dd HH:mm:ss"),
  *   as Strong writes it, repeated on every row.
- * - Duration is a human string ("1h 38m", "44m"), empty for in-progress workouts.
+ * - Duration is a human string ("1h 38m", "44m"). Workouts still in progress are left out.
  * - Set types are NOT exported (Strong limitation); warm-ups appear as plain rows.
  * - Distance is always 0 (no distance cardio in v1); Seconds is durationSec or 0.
  * - Notes = exercise-instance notes, Workout Notes = workout notes, both repeated per row.
@@ -32,7 +32,7 @@ object CsvExport {
         // Snapshot is newest-first; Strong exports chronologically.
         for (workout in snapshot.workouts.asReversed()) {
             val date = format.csvDateTime(workout.startEpochMillis)
-            val duration = workout.durationMin?.let { formatDuration(it) } ?: ""
+            val duration = formatDuration(workout.durationMin)
             for (exercise in workout.exercises) {
                 for (set in exercise.sets) {
                     val fields = listOf(
