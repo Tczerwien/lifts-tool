@@ -30,6 +30,9 @@ import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.library.CatalogEntry
+import com.tczerwien.lifts.library.catalogEntries
+import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
@@ -104,6 +107,8 @@ class ExerciseDetailViewModel(
         val editSession: Int = 0,
         /** The name the name editor opened with: submitting it unchanged does nothing ([renameTarget]). */
         val nameAtOpen: String = "",
+        /** The name he submitted is another exercise's (shown here): the editor stays open, saying so. */
+        val nameTakenBy: String? = null,
         val loaded: Boolean = false,
     )
 
@@ -111,6 +116,10 @@ class ExerciseDetailViewModel(
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    /** Every exercise's names, for the rename's duplicate check; loaded when the name editor opens. */
+    @Volatile
+    private var names: List<CatalogEntry> = emptyList()
 
     /**
      * Loads here only: the SDK calls this straight after creating the view model, so init needn't.
@@ -136,16 +145,25 @@ class ExerciseDetailViewModel(
 
     fun openNoteEditor() = openEditor(Editing.NOTE)
 
-    fun openNameEditor() = openEditor(Editing.NAME)
+    fun openNameEditor() {
+        if (!_uiState.value.loaded) return
+        openEditor(Editing.NAME)
+        LiftsIo.write({}) { names = catalogEntries(repository.exerciseSummaries()) }
+    }
 
     private fun openEditor(editing: Editing) {
         val state = _uiState.value
         if (!state.loaded) return
-        _uiState.value = state.copy(editing = editing, editSession = state.editSession + 1, nameAtOpen = state.name)
+        _uiState.value = state.copy(
+            editing = editing,
+            editSession = state.editSession + 1,
+            nameAtOpen = state.name,
+            nameTakenBy = null,
+        )
     }
 
     fun closeEditor() {
-        _uiState.value = _uiState.value.copy(editing = null)
+        _uiState.value = _uiState.value.copy(editing = null, nameTakenBy = null)
     }
 
     /** Blank input clears the pinned note. workouts.json carries the cue, so the exports catch up. */
@@ -164,17 +182,27 @@ class ExerciseDetailViewModel(
     /**
      * Renames the exercise ([renameTarget]): the new name shows everywhere, exports included, over any
      * short name ([displayName]). Submitting the name as the editor showed it changes nothing; a blank
-     * name puts a catalog exercise back to its catalog name.
+     * name puts a catalog exercise back to its catalog name. A name another exercise answers to
+     * ([nameClash]) would split his history and the Strong CSV's names: the editor stays open and says
+     * whose it is. The lane checks again against the catalog as it is then, and renames nothing on a clash.
      */
     fun saveName(raw: String) {
         val shown = _uiState.value.nameAtOpen
-        _uiState.value = _uiState.value.copy(editing = null)
+        val typed = raw.replace(Regex("\\s+"), " ").trim()
+        // Blank resets and an unchanged name rename nothing here, so they can't be refused.
+        val clash = if (typed.isEmpty() || typed == shown.trim()) null else nameClash(typed, names, selfId = exerciseId)
+        if (clash != null) {
+            _uiState.update { it.copy(nameTakenBy = clash.shown) }
+            return
+        }
+        _uiState.update { it.copy(editing = null, nameTakenBy = null) }
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val name = renameTarget(exercise, raw, shown) {
                 knownCatalogName(exercise.id) ?: SeedParser.catalogName(exercise.id)
             } ?: return@write false
-            repository.updateExercise(exercise.copy(name = name))
+            val taken = nameClash(name, catalogEntries(repository.exerciseSummaries()), selfId = exerciseId)
+            taken == null && repository.updateExercise(exercise.copy(name = name))
         }) { changed ->
             if (changed) share.logChanged()
             refresh()
@@ -316,7 +344,12 @@ class ExerciseDetailScreen(
                     TextFieldState(if (naming) uiState.nameAtOpen else uiState.pinnedNote ?: "")
                 }
                 LightTextInputEditor(
-                    title = if (naming) "Name" else "Note",
+                    // A name another exercise has keeps the editor open, saying whose it is.
+                    title = when {
+                        !naming -> "Note"
+                        uiState.nameTakenBy != null -> "In use: ${uiState.nameTakenBy}"
+                        else -> "Name"
+                    },
                     // A name is one line: Return submits it. A note may run to several.
                     singleLine = naming,
                     state = textState,
