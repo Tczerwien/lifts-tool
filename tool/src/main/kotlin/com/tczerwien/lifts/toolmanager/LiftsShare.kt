@@ -16,6 +16,7 @@ import com.thelightphone.sdk.SealedLightContext
 import com.thelightphone.sdk.buildDatabase
 import com.thelightphone.toolmanager.LightFileProvider
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.launch
 
 /**
@@ -63,8 +64,9 @@ class LiftsShare private constructor(
 
     /**
      * A restore from [source] landed: an upload moves to restore/applied, and the exports catch up.
-     * Never throws, so a failed move can't make a restore that landed read as failed; at worst Home
-     * offers the file again and checking it says it is gone.
+     * Never throws, so a failed move can't make a restore that landed read as failed. A failed move is
+     * logged, and Home would offer the file again (restoring it twice replaces anything logged in
+     * between, which the pre-restore copy still holds).
      */
     fun restored(source: File) {
         try {
@@ -75,16 +77,20 @@ class LiftsShare private constructor(
         exports.request()
     }
 
-    /** SET ASIDE on a refused upload: it moves to restore/rejected, so Home stops offering it. */
+    /** SET ASIDE on a refused upload: it moves to restore/rejected, so Home stops offering it. Never throws. */
     fun setAside(source: File) {
-        if (source.parentFile == restoreDir) moveInto(File(restoreDir, REJECTED), source)
+        try {
+            if (source.parentFile == restoreDir) moveInto(File(restoreDir, REJECTED), source)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not move ${source.name} to restore/$REJECTED", e)
+        }
     }
 
     private fun moveInto(folder: File, file: File) {
         folder.mkdirs()
         var target = File(folder, file.name)
         if (target.exists()) target = File(folder, "${System.currentTimeMillis()}-${file.name}")
-        file.renameTo(target)
+        if (!file.renameTo(target)) throw IOException("cannot move ${file.name} to ${folder.name}")
     }
 
     /**
