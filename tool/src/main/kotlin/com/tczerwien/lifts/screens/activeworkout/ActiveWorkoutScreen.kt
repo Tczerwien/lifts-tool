@@ -414,6 +414,9 @@ class ActiveWorkoutScreen(
         val sets = uiState.exercises.flatMap { it.sets }
         val pending = pendingSetCount(sets)
         return when {
+            // Discarding takes his notes with it: say so.
+            pending == sets.size && (!uiState.workoutNotes.isNullOrBlank() || uiState.exercises.any { !it.slot.notes.isNullOrBlank() }) ->
+                "TAP AGAIN TO DISCARD · NOTES TOO"
             pending == sets.size -> "TAP AGAIN TO DISCARD · NOTHING LOGGED"
             pending == 1 -> "TAP AGAIN TO FINISH · 1 SET NOT LOGGED"
             pending > 1 -> "TAP AGAIN TO FINISH · $pending SETS NOT LOGGED"
