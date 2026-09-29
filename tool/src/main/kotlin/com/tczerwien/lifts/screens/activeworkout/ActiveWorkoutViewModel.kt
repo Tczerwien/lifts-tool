@@ -497,7 +497,8 @@ class ActiveWorkoutViewModel(
         if (locked) return
         val located = locate(entry.setId) ?: return
         val weightKg = when (typed) {
-            TypedWeight.Clear -> null
+            // Blank puts an unticked row back on its starting value; a logged set keeps what was lifted.
+            TypedWeight.Clear -> if (located.block.sets[located.index].completedAt != null) return else null
             is TypedWeight.Value -> located.block.tracking.storedWeight(Format.displayToKg(typed.display, state.units))
         }
         val edit = applySetChange(entry.setId) { it.copy(weightKg = weightKg) } ?: return
