@@ -81,6 +81,11 @@ object JsonExport {
                         bestSet = setNotation(it.bestSetWeightKg, it.bestSetReps, snapshot.unit, NotationStyle.EXPORT).orEmpty(),
                     )
                 },
+                e1RmTrend = JsonE1RmTrend(
+                    blockDays = snapshot.e1RmTrend.blockDays,
+                    blockStarts = snapshot.e1RmTrend.blockStarts,
+                    lifts = snapshot.e1RmTrend.lifts.map { JsonLiftTrend(it.exerciseId, it.name, it.bestE1RmKg) },
+                ),
                 weekStarts = snapshot.weekStarts,
                 weeklySetsPerMuscle = snapshot.weeklySetsPerMuscle,
                 bodyweight = snapshot.bodyweightTrend?.let {
@@ -175,11 +180,30 @@ data class JsonSet(
 @Serializable
 data class JsonSummary(
     val prs: List<JsonPr>,
+    /** Best e1RM per block for the most-trained lifts. */
+    @SerialName("e1rm_trend") val e1RmTrend: JsonE1RmTrend,
     /** The Mondays of the summary weeks, oldest first; the last is the current week, still in progress. */
     @SerialName("week_starts") val weekStarts: List<String>,
     /** One count per [weekStarts] week, oldest first: 1 per working set for primary muscles, 0.5 for secondary. */
     @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Double>>,
     val bodyweight: JsonBodyweightSummary? = null,
+)
+
+@Serializable
+data class JsonE1RmTrend(
+    @SerialName("block_days") val blockDays: Int,
+    /** The first day of each block, oldest first; the last block ends on the export day. */
+    @SerialName("block_starts") val blockStarts: List<String>,
+    /** The most-trained lifts first. */
+    val lifts: List<JsonLiftTrend>,
+)
+
+@Serializable
+data class JsonLiftTrend(
+    @SerialName("exercise_id") val exerciseId: String,
+    val name: String,
+    /** One per block, oldest first; null for a block without a set of 1–12 reps. */
+    @SerialName("best_e1rm_kg") val bestE1RmKg: List<Double?>,
 )
 
 @Serializable

@@ -35,6 +35,10 @@ class MarkdownExportTest {
         assertContains(lines, "## Summary")
         // 102.5 * (1 + 5/30) = 119.583… -> 119.5 on the 0.5 kg grid the screens use.
         assertContains(lines, "- Bench Press (Barbell): e1RM 119.5 kg (2026-07-13) — best set 102.5x5")
+        // Best e1RM per 28-day block, the last ending the export day (#022).
+        assertContains(lines, "### e1RM trend (best e1RM per 28-day block, kg, oldest → newest)")
+        assertContains(lines, "Blocks start 2026-01-28 … 2026-06-17; the last ends today. — means no set of 1–12 reps in that block.")
+        assertContains(lines, "- Bench Press (Barbell): —, —, —, —, —, 119.5")
         // Labelled: which way the series runs, which weeks, and that the last one is partial (#069).
         assertContains(lines, "### Weekly sets per muscle (last 8 weeks, oldest → newest)")
         assertContains(lines, "Weeks start Monday 2026-05-25 … 2026-07-13; the last is this week, still in progress.")

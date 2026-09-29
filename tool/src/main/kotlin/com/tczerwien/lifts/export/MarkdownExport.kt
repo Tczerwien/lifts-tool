@@ -86,6 +86,18 @@ object MarkdownExport {
                 append('\n')
             }
         }
+        val trend = snapshot.e1RmTrend
+        if (trend.lifts.isNotEmpty()) {
+            append("\n### e1RM trend (best e1RM per ").append(trend.blockDays).append("-day block, ").append(unit.suffix)
+            append(", oldest → newest)\n\n")
+            append("Blocks start ").append(trend.blockStarts.first()).append(" … ").append(trend.blockStarts.last())
+            append("; the last ends today. — means no set of 1–12 reps in that block.\n\n")
+            for (lift in trend.lifts) {
+                append("- ").append(lift.name).append(": ")
+                append(lift.bestE1RmKg.joinToString(", ") { e1Rm -> e1Rm?.let { Format.weight(it, unit) } ?: "—" })
+                append('\n')
+            }
+        }
         if (snapshot.weeklySetsPerMuscle.isNotEmpty()) {
             append("\n### Weekly sets per muscle (last ").append(snapshot.weekStarts.size).append(" weeks, oldest → newest)\n\n")
             appendWeeks(snapshot)
@@ -98,17 +110,17 @@ object MarkdownExport {
                 append('\n')
             }
         }
-        val trend = snapshot.bodyweightTrend
-        if (trend != null) {
+        val bodyweight = snapshot.bodyweightTrend
+        if (bodyweight != null) {
             append("\n### Bodyweight\n\n")
-            append("- Current: ").append(Format.bodyweight(trend.currentKg, unit))
-            append(' ').append(unit.suffix).append(" (").append(trend.currentDateIso).append(")\n")
-            trend.rateKgPerWeek?.let {
+            append("- Current: ").append(Format.bodyweight(bodyweight.currentKg, unit))
+            append(' ').append(unit.suffix).append(" (").append(bodyweight.currentDateIso).append(")\n")
+            bodyweight.rateKgPerWeek?.let {
                 append("- Rate: ").append(ExportFormat.signed2(Format.kgToDisplay(it, unit)))
                 append(' ').append(unit.suffix).append("/week over last 4 weeks\n")
             }
-            append("- Weekly average, the same ").append(trend.weeklyAvgKg.size).append(" weeks (oldest → newest): ")
-            append(trend.weeklyAvgKg.joinToString(", ") { avg -> avg?.let { Format.bodyweight(it, unit) } ?: "—" })
+            append("- Weekly average, the same ").append(bodyweight.weeklyAvgKg.size).append(" weeks (oldest → newest): ")
+            append(bodyweight.weeklyAvgKg.joinToString(", ") { avg -> avg?.let { Format.bodyweight(it, unit) } ?: "—" })
             append('\n')
         }
     }

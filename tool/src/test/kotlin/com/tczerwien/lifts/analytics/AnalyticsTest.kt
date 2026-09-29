@@ -278,6 +278,38 @@ class AnalyticsTest {
         assertEquals(listOf(0, 1), workoutsPerWeek(sundayEvening, weeks = 2, todayEpochDay = day("2026-07-14"), zone = ZoneOffset.UTC))
     }
 
+    // --- e1RmTrend ---
+
+    @Test
+    fun e1RmTrendTakesTheBestPerBlockForTheMostTrainedLifts() {
+        // Three 7-day blocks ending Tuesday 2026-07-14: 06-24..06-30, 07-01..07-07, 07-08..07-14.
+        val today = day("2026-07-14")
+        assertEquals(listOf(day("2026-06-24"), day("2026-07-01"), day("2026-07-08")), trendBlockStarts(today, 3, 7))
+        fun done(id: Long, iso: String, kg: Double?, reps: Int, type: String = "normal") = SetEntity(
+            id = id, workoutExerciseId = 1, position = 0, type = type, weightKg = kg, reps = reps, completedAt = millis(iso),
+        )
+        val bench = listOf(
+            done(1, "2026-06-23T10:00:00Z", 200.0, 1), // the day before the window
+            done(2, "2026-06-25T10:00:00Z", 100.0, 5), // 116.67
+            done(3, "2026-06-26T10:00:00Z", 105.0, 3), // 115.5
+            done(4, "2026-06-26T10:05:00Z", 150.0, 5, type = "warmup"), // warm-ups never count
+            done(5, "2026-07-14T10:00:00Z", 110.0, 5), // 128.33, the last block
+            done(6, "2026-07-14T10:05:00Z", 90.0, 15), // over 12 reps: a working set, no e1RM
+        )
+        val squat = listOf(done(7, "2026-07-02T10:00:00Z", 140.0, 5), done(8, "2026-07-03T10:00:00Z", 140.0, 5))
+        // Pull-ups have no weight: no e1RM, so no trend, however many sets.
+        val pullUps = List(9) { done(10L + it, "2026-07-09T10:00:00Z", null, 10) }
+
+        val trend = e1RmTrend(mapOf("bench" to bench, "squat" to squat, "pullups" to pullUps), today, ZoneOffset.UTC, blocks = 3, blockDays = 7)
+
+        assertEquals(listOf("bench", "squat"), trend.map { it.exerciseId }, "most working sets first; no weightless lift")
+        val benchBest = trend.first().bestE1RmKg
+        assertEquals(100.0 * (1 + 5 / 30.0), benchBest[0]!!, 1e-9)
+        assertNull(benchBest[1])
+        assertEquals(110.0 * (1 + 5 / 30.0), benchBest[2]!!, 1e-9)
+        assertEquals(listOf("bench"), e1RmTrend(mapOf("bench" to bench, "squat" to squat), today, ZoneOffset.UTC, 3, 7, top = 1).map { it.exerciseId })
+    }
+
     // --- restGapsSec ---
 
     @Test

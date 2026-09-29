@@ -3,7 +3,9 @@ package com.tczerwien.lifts.export
 import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.computePrs
+import com.tczerwien.lifts.analytics.e1RmTrend
 import com.tczerwien.lifts.analytics.restGapsSec
+import com.tczerwien.lifts.analytics.trendBlockStarts
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
 import com.tczerwien.lifts.analytics.workoutBodyweight
 import com.tczerwien.lifts.data.LiftsRows
@@ -30,6 +32,11 @@ const val EXPORT_SCHEMA_VERSION = "1.2"
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
 
+/** The e1RM trend: [TREND_BLOCKS] blocks of [TREND_BLOCK_DAYS] days, for the [TREND_LIFTS] most-trained lifts. */
+const val TREND_BLOCKS = 6
+const val TREND_BLOCK_DAYS = 28
+const val TREND_LIFTS = 8
+
 data class ExportSnapshot(
     val schemaVersion: String,
     /** With its offset, e.g. 2026-07-14T07:00:00-05:00. */
@@ -52,6 +59,8 @@ data class ExportSnapshot(
     val workouts: List<SnapshotWorkout>,
     /** Sorted by exercise name. */
     val prs: List<SnapshotPr>,
+    /** Best e1RM per block for the most-trained lifts; no lifts when nothing qualifies. */
+    val e1RmTrend: SnapshotE1RmTrend,
     /** The Mondays (yyyy-MM-dd) of the [WEEKLY_SUMMARY_WEEKS] summary weeks, oldest first; the last is this week. */
     val weekStarts: List<String>,
     /** Muscle -> per-week set counts, one per [weekStarts] entry, newest week last. */
@@ -125,6 +134,21 @@ data class SnapshotSet(
     /** Seconds since the workout's previous ticked set ([restGapsSec]); null for the first, or after a break. */
     val restSec: Int?,
     val isPr: Boolean,
+)
+
+data class SnapshotE1RmTrend(
+    val blockDays: Int,
+    /** The first day (yyyy-MM-dd) of each block, oldest first; the last block ends on the export day. */
+    val blockStarts: List<String>,
+    /** Most working sets first. */
+    val lifts: List<SnapshotLiftTrend>,
+)
+
+data class SnapshotLiftTrend(
+    val exerciseId: String,
+    val name: String,
+    /** One per block, oldest first; null for a block without a qualifying set. */
+    val bestE1RmKg: List<Double?>,
 )
 
 data class SnapshotPr(
@@ -303,6 +327,13 @@ fun buildSnapshot(
         exercises = snapshotExercises,
         workouts = snapshotWorkouts,
         prs = prs,
+        e1RmTrend = SnapshotE1RmTrend(
+            blockDays = TREND_BLOCK_DAYS,
+            blockStarts = trendBlockStarts(todayEpochDay, TREND_BLOCKS, TREND_BLOCK_DAYS).map { LocalDate.ofEpochDay(it).toString() },
+            lifts = e1RmTrend(setsByExercise, todayEpochDay, zone, TREND_BLOCKS, TREND_BLOCK_DAYS, TREND_LIFTS).map {
+                SnapshotLiftTrend(it.exerciseId, names[it.exerciseId] ?: it.exerciseId, it.bestE1RmKg)
+            },
+        ),
         weekStarts = weekStarts,
         weeklySetsPerMuscle = weekly,
     )

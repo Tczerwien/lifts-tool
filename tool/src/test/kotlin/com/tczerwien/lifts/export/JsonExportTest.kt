@@ -105,6 +105,10 @@ class JsonExportTest {
         assertEquals("2026-07-13", pr.bestE1RmDate)
         assertEquals("102.5x5", pr.bestSet)
 
+        val trend = decoded.summary.e1RmTrend
+        assertEquals(28, trend.blockDays)
+        assertEquals(listOf("2026-01-28", "2026-02-25", "2026-03-25", "2026-04-22", "2026-05-20", "2026-06-17"), trend.blockStarts)
+        assertEquals(listOf(null, null, null, null, null, 102.5 * (1 + 5 / 30.0)), trend.lifts.single().bestE1RmKg)
         assertEquals("2026-05-25", decoded.summary.weekStarts.first())
         assertEquals("2026-07-13", decoded.summary.weekStarts.last())
         assertEquals(8, decoded.summary.weekStarts.size)

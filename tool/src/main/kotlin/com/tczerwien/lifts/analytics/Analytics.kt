@@ -125,6 +125,51 @@ fun computePrs(
     return result
 }
 
+/** One lift's strength trend: its best e1RM in each block of [e1RmTrend], oldest first, null for a block without one. */
+data class LiftTrend(val exerciseId: String, val bestE1RmKg: List<Double?>)
+
+/** The first day (epoch day) of each of the [blocks] [blockDays]-day blocks ending [todayEpochDay], oldest first. */
+fun trendBlockStarts(todayEpochDay: Long, blocks: Int, blockDays: Int): List<Long> =
+    List(blocks) { i -> todayEpochDay - (blocks - i).toLong() * blockDays + 1 }
+
+/**
+ * Whether each lift is still moving: the best Epley e1RM per [blockDays]-day block over the last
+ * [blocks] blocks, the last ending [todayEpochDay] (local days in [zone]), for the [top] lifts with the
+ * most working sets in that window. Only record-eligible weighted sets of 1–12 reps count
+ * ([recordEligible], [epleyE1RmKg]); a lift with none in the window is left out. Ties in set count go
+ * by exercise id. Pass the completed sets of finished workouts, by exercise id.
+ */
+fun e1RmTrend(
+    setsByExercise: Map<String, List<SetEntity>>,
+    todayEpochDay: Long,
+    zone: ZoneId,
+    blocks: Int = 6,
+    blockDays: Int = 28,
+    top: Int = 8,
+): List<LiftTrend> {
+    val firstDay = trendBlockStarts(todayEpochDay, blocks, blockDays).first()
+    data class Counted(val exerciseId: String, val sets: Int, val best: List<Double?>)
+    val counted = setsByExercise.mapNotNull { (exerciseId, sets) ->
+        val best = arrayOfNulls<Double>(blocks)
+        var working = 0
+        for (set in sets) {
+            if (!recordEligible(set)) continue
+            val day = Instant.ofEpochMilli(set.completedAt ?: continue).atZone(zone).toLocalDate().toEpochDay()
+            if (day < firstDay || day > todayEpochDay) continue
+            working++
+            val weight = set.weightKg?.takeIf { it > 0.0 } ?: continue
+            val e1Rm = epleyE1RmKg(weight, set.reps ?: continue) ?: continue
+            val block = ((day - firstDay) / blockDays).toInt()
+            best[block] = maxOf(best[block] ?: e1Rm, e1Rm)
+        }
+        if (best.all { it == null }) null else Counted(exerciseId, working, best.toList())
+    }
+    return counted
+        .sortedWith(compareByDescending<Counted> { it.sets }.thenBy { it.exerciseId })
+        .take(top)
+        .map { LiftTrend(it.exerciseId, it.best) }
+}
+
 /**
  * Completed non-warmup set counts per muscle over the last [weeks] ISO weeks
  * (Monday-based, in [zone]), newest week last. The current week is the last element.
