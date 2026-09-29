@@ -92,22 +92,25 @@ class BackupPolicyTest {
         // The clock ran a month ahead for three pre-restore copies, then was fixed.
         val future = (1..3).map { d -> stored("pre-restore-2026-10-%02d-0800.db".format(d), sep1 + (30 + d) * day) }
         val fresh = stored("pre-restore-2026-09-01-0800.db", sep1)
-        assertEquals(listOf(future.first().name), BackupPolicy.toDelete(future + fresh, now = sep1, keep = listOf(fresh.name)))
+        assertEquals(listOf(future.first().name), BackupPolicy.toDelete(future + fresh, now = sep1, justWritten = fresh.name))
         // At the next backup a future-dated copy goes, not the fresh one (before, the fresh one looked oldest).
         val next = stored("pre-restore-2026-09-02-0800.db", sep1 + day)
         assertEquals(
             listOf(future[1].name),
-            BackupPolicy.toDelete(future.drop(1) + fresh + next, now = sep1 + day, keep = listOf(next.name)),
+            BackupPolicy.toDelete(future.drop(1) + fresh + next, now = sep1 + day, justWritten = next.name),
         )
     }
 
     @Test
-    fun `a restore's source is kept while its pre-restore copy is written`() {
-        // Three pre-restore copies; the lifter restores the oldest, the only copy of what it holds.
+    fun `restoring a pre-restore copy deletes no other copy, and a later backup trims the source`() {
+        // Three pre-restore copies; the lifter restores the oldest. Each may be the only copy of what it holds.
         val copies = (1..3).map { d -> stored("pre-restore-2026-09-%02d-0800.db".format(d), sep1 + d * day) }
         val safety = stored("pre-restore-2026-09-05-0800.db", sep1 + 5 * day)
-        val deleted = BackupPolicy.toDelete(copies + safety, now = sep1 + 5 * day, keep = listOf(safety.name, copies[0].name))
-        assertEquals(listOf(copies[1].name), deleted, "the source and the new copy stay; three in all")
+        val during = BackupPolicy.toDelete(copies + safety, now = sep1 + 5 * day, justWritten = safety.name, keep = listOf(copies[0].name))
+        assertEquals(emptyList(), during, "four copies for now: the source and all the others stay")
+        // The next backup that doesn't keep it (the next Finish, say) trims the source.
+        val dated = stored("lifts-2026-09-05-0801.db", sep1 + 5 * day + 60_000)
+        assertEquals(listOf(copies[0].name), BackupPolicy.toDelete(copies + safety + dated, now = dated.writtenAt, justWritten = dated.name))
     }
 
     @Test

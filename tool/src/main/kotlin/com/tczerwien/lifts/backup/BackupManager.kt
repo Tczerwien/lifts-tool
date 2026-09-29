@@ -107,6 +107,7 @@ class BackupManager(
         val started = System.nanoTime()
         if (!dir.isDirectory && !dir.mkdirs()) throw IOException("cannot create ${dir.name}")
         val temp = File(dir, TEMP_NAME)
+        var changed = false
         try {
             deleteWithSidecars(temp)
             repository.copyTo(temp.absolutePath)
@@ -115,13 +116,15 @@ class BackupManager(
             sync(temp)
             val target = File(dir, BackupPolicy.uniqueName(kind, now, dir.list().orEmpty().toList()))
             if (!temp.renameTo(target)) throw IOException("cannot name ${target.name}")
+            changed = true
             if (kind == BackupPolicy.Kind.DATED) replaceLatest(target)
-            prune(now, keep + target.name)
-            _changes.update { it + 1 }
+            prune(now, justWritten = target.name, keep = keep)
             Log.i(TAG, "Backup ${target.name}: ${target.length()} B in ${(System.nanoTime() - started) / 1_000_000} ms")
             return target
         } finally {
             deleteWithSidecars(temp)
+            // A backup that landed shows in the list even if lifts-latest.db or pruning then failed.
+            if (changed) _changes.update { it + 1 }
         }
     }
 
@@ -148,8 +151,8 @@ class BackupManager(
         }
     }
 
-    private fun prune(now: Long, keep: Set<String>) {
-        BackupPolicy.toDelete(stored(), now, keep).forEach { File(dir, it).delete() }
+    private fun prune(now: Long, justWritten: String, keep: Set<String>) {
+        BackupPolicy.toDelete(stored(), now, justWritten, keep).forEach { File(dir, it).delete() }
     }
 
     /** Whether [file] is one of the backups in this folder (a restore reading its own backup). */

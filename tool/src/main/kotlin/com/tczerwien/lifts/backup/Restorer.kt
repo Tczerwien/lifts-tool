@@ -129,7 +129,8 @@ class Restorer(
             }
         }
         val backupProblem = try {
-            backups.backUp(BackupPolicy.Kind.DATED)
+            // Still keeping the source: if the settings didn't come back, it is the copy to retry from.
+            backups.backUp(BackupPolicy.Kind.DATED, keep = source)
             null
         } catch (e: Exception) {
             e.message ?: e.toString()
