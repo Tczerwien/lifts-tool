@@ -104,6 +104,16 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun theOldStoredLbDefaultIsUntouched() {
+        val store = SettingsStore(FakeDataStore(emptyPreferences()))
+        runBlocking {
+            store.setPlateInventoryKg(SettingsStore.DEFAULT_PLATE_INVENTORY_KG)
+            store.setUnits(WeightUnit.KG)
+        }
+        assertEquals(SettingsStore.DEFAULT_KG_PLATES_KG, store.snapshot().plateInventoryKg)
+    }
+
+    @Test
     fun replaceAllWithUntouchedPlatesForgetsStoredOnes() {
         val store = SettingsStore(FakeDataStore(emptyPreferences()))
         runBlocking {

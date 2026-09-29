@@ -67,7 +67,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             } ?: DEFAULT_UNITS,
             defaultRestSec = prefs[DEFAULT_REST_SEC] ?: DEFAULT_REST_SEC_VALUE,
             warmupRestSec = prefs[WARMUP_REST_SEC] ?: DEFAULT_WARMUP_REST_SEC_VALUE,
-            customPlatesKg = prefs[PLATE_INVENTORY_KG]?.let(::parsePlates),
+            customPlatesKg = prefs[PLATE_INVENTORY_KG]?.let(::parsePlates)?.let(::custom),
             restBeep = prefs[REST_BEEP] ?: DEFAULT_REST_BEEP,
             weightStepLb = validStep(prefs[WEIGHT_STEP_LB], WeightUnit.LB),
             weightStepKg = validStep(prefs[WEIGHT_STEP_KG], WeightUnit.KG),
@@ -172,6 +172,13 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
 
         /** The standard kg plate set: 25, 20, 15, 10, 5, 2.5 and 1.25 kg. */
         val DEFAULT_KG_PLATES_KG: List<Double> = listOf(25.0, 20.0, 15.0, 10.0, 5.0, 2.5, 1.25)
+
+        /**
+         * [plates] as his own, or null when they are just the lb default: before B9 every restore wrote
+         * that list, so it being stored says nothing about his gym.
+         */
+        fun custom(plates: List<Double>): List<Double>? =
+            plates.takeUnless { it.size == DEFAULT_PLATE_INVENTORY_KG.size && it.zip(DEFAULT_PLATE_INVENTORY_KG).all { (a, b) -> kotlin.math.abs(a - b) < 1e-6 } }
 
         /** The plates a lifter who never typed his in has in [unit]. */
         fun defaultPlatesKg(unit: WeightUnit): List<Double> = when (unit) {

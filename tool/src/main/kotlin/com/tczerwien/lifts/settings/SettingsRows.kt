@@ -35,13 +35,13 @@ object SettingsRows {
                 ?: current.units,
             defaultRestSec = rows[SettingsStore.KEY_DEFAULT_REST_SEC]?.restSec() ?: current.defaultRestSec,
             warmupRestSec = rows[SettingsStore.KEY_WARMUP_REST_SEC]?.restSec() ?: current.warmupRestSec,
-            customPlatesKg = rows[SettingsStore.KEY_PLATE_INVENTORY_KG].let { row ->
-                if (row == DEFAULT_PLATES) {
-                    null
-                } else {
-                    row?.let(SettingsStore::parsePlates)
-                        ?.takeIf { plates -> plates.all { it.isFinite() && it > 0 } }
-                        ?: current.customPlatesKg
+            customPlatesKg = when (val row = rows[SettingsStore.KEY_PLATE_INVENTORY_KG]) {
+                null -> current.customPlatesKg
+                DEFAULT_PLATES -> null
+                else -> {
+                    val plates = SettingsStore.parsePlates(row)?.takeIf { list -> list.all { it.isFinite() && it > 0 } }
+                    // Unreadable keeps his; the old lb default (every pre-B9 backup has it) is untouched.
+                    if (plates == null) current.customPlatesKg else SettingsStore.custom(plates)
                 }
             },
             restBeep = rows[SettingsStore.KEY_REST_BEEP]?.toBooleanStrictOrNull() ?: current.restBeep,

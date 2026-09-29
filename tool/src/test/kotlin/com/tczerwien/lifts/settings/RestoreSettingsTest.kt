@@ -67,6 +67,13 @@ class RestoreSettingsTest {
     }
 
     @Test
+    fun `a pre-B9 backup's lb default plates are untouched plates`() {
+        val rows = SettingsRows.encode(his).toMutableMap()
+        rows[SettingsStore.KEY_PLATE_INVENTORY_KG] = SettingsStore.encodePlates(SettingsStore.DEFAULT_PLATE_INVENTORY_KG)
+        assertEquals(null, SettingsRows.decode(rows, current = his).customPlatesKg)
+    }
+
+    @Test
     fun `a backup without settings rows keeps the phone's settings`() {
         assertEquals(his, SettingsRows.decode(emptyMap(), current = his))
     }
