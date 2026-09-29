@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.screens
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -331,6 +332,12 @@ class TemplateEditorScreen(
 
     private val settingsStore = SettingsStore(lightContext.dataStore)
 
+    /**
+     * The list's place, held by the screen: the rename editor, an exercise's overlay and the picker all
+     * replace the list, and a remembered state would come back at the top, with #9 off screen again.
+     */
+    private val scrollState = ScrollState(0)
+
     override val viewModelClass: Class<TemplateEditorViewModel>
         get() = TemplateEditorViewModel::class.java
 
@@ -405,6 +412,7 @@ class TemplateEditorScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
+                scrollState = scrollState,
             ) {
                 uiState.rows.forEachIndexed { index, row ->
                     if (index > 0) RowDivider()

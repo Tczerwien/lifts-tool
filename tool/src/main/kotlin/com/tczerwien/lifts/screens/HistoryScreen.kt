@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -95,6 +96,12 @@ class HistoryScreen(
 
     private val repository = lightContext.liftsRepository()
 
+    /**
+     * Held by the screen, which stays on the back stack under Workout Detail: back from a workout in
+     * March, the list is still at March. A remembered state would be dropped with the composition.
+     */
+    private val listState = LazyListState()
+
     override val viewModelClass: Class<HistoryViewModel>
         get() = HistoryViewModel::class.java
 
@@ -130,6 +137,7 @@ class HistoryScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxWidth(),
+                        listState = listState,
                         uniformItemHeightGridUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                     ) {
                         items(uiState.rows.size) { index ->
