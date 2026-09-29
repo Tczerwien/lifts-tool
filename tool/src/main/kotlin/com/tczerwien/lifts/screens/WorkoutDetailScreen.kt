@@ -173,12 +173,23 @@ class WorkoutDetailViewModel(
             notes != workout.notes && repository.updateWorkout(workout.copy(notes = notes))
         }) { changed ->
             if (changed) share.logChanged()
+            synchronized(reloadLock) { notesFloor = reloadsStarted }
             _uiState.update { it.copy(editingNotes = false, notes = if (changed) notes else it.notes) }
             refresh()
         }
     }
 
+    /**
+     * Reloads run beside the write lane: one that read the notes before a save landed must not put
+     * the old ones back after it. Reloads started before the latest save landed keep the notes on
+     * screen. Guarded by [reloadLock].
+     */
+    private val reloadLock = Any()
+    private var reloadsStarted = 0L
+    private var notesFloor = 0L
+
     private fun refresh() {
+        val reload = synchronized(reloadLock) { ++reloadsStarted }
         val workout = repository.workoutById(workoutId)
         if (workout == null) {
             // Deleted from another Workout Detail stacked above this one (via Exercise Detail's
@@ -224,7 +235,7 @@ class WorkoutDetailViewModel(
                 name = workout.name,
                 subtitle = Format.dateWithYear(workout.startedAt) +
                     (durationMin?.let { minutes -> " · $minutes min" } ?: ""),
-                notes = workout.notes,
+                notes = if (synchronized(reloadLock) { reload <= notesFloor }) state.notes else workout.notes,
                 blocks = blocks,
                 bodyweightText = bodyweight?.let {
                     "${Format.bodyweight(it.weightKg, unit)} ${unit.suffix}" +

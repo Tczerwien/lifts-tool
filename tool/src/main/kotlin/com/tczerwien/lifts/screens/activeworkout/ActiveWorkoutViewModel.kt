@@ -758,24 +758,24 @@ class ActiveWorkoutViewModel(
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         val tidy = name.replace(Regex("\\s+"), " ").trim()
-        if (tidy.isNotEmpty()) _uiState.update { it.copy(workoutName = tidy) }
-        LiftsIo.write({ session.renameWorkout(workoutId, name) }) { refresh() }
+        val meta = if (tidy.isNotEmpty()) editMeta { it.copy(workoutName = tidy) } else null
+        LiftsIo.write({ session.renameWorkout(workoutId, name) }) { meta?.let(::settleMeta); refresh() }
     }
 
     /** Menu: the workout's note (blank clears it); shown at once, like [renameWorkout]. */
     fun setWorkoutNotes(text: String) {
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
-        _uiState.update { it.copy(workoutNotes = text.trim().ifEmpty { null }) }
-        LiftsIo.write({ session.setWorkoutNotes(workoutId, text) }) { refresh() }
+        val meta = editMeta { it.copy(workoutNotes = text.trim().ifEmpty { null }) }
+        LiftsIo.write({ session.setWorkoutNotes(workoutId, text) }) { settleMeta(meta); refresh() }
     }
 
     /** Menu: the note on exercise [slotId] for this workout (blank clears it); shown at once. */
     fun setSlotNotes(slotId: Long, text: String) {
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
-        updateSlot(slotId) { it.copy(notes = text.trim().ifEmpty { null }) }
-        LiftsIo.write({ session.setSlotNotes(workoutId, slotId, text) }) { refresh() }
+        val meta = updateSlot(slotId) { it.copy(notes = text.trim().ifEmpty { null }) }
+        LiftsIo.write({ session.setSlotNotes(workoutId, slotId, text) }) { settleMeta(meta); refresh() }
     }
 
     /** Menu: exercise [slotId]'s work rest from its next tick; Settings' default is stored as none. Shown at once. */
@@ -783,17 +783,42 @@ class ActiveWorkoutViewModel(
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         val default = _uiState.value.defaultRestSec
-        updateSlot(slotId) { it.copy(restSecWork = sec.takeIf { rest -> rest != default }) }
-        LiftsIo.write({ session.setSlotRest(workoutId, slotId, sec) }) { refresh() }
+        val meta = updateSlot(slotId) { it.copy(restSecWork = sec.takeIf { rest -> rest != default }) }
+        LiftsIo.write({ session.setSlotRest(workoutId, slotId, sec) }) { settleMeta(meta); refresh() }
     }
 
-    /** [transform] applied to slot [slotId] on screen, ahead of the save and the reload after it. */
-    private fun updateSlot(slotId: Long, transform: (WorkoutExerciseEntity) -> WorkoutExerciseEntity) {
-        synchronized(refreshLock) {
-            _uiState.update { state ->
-                state.copy(exercises = state.exercises.map { if (it.slot.id == slotId) it.copy(slot = transform(it.slot)) else it })
-            }
+    /** [transform] applied to slot [slotId] on screen, ahead of the save and the reload after it ([editMeta]). */
+    private fun updateSlot(slotId: Long, transform: (WorkoutExerciseEntity) -> WorkoutExerciseEntity): PendingMeta =
+        editMeta { state ->
+            state.copy(exercises = state.exercises.map { if (it.slot.id == slotId) it.copy(slot = transform(it.slot)) else it })
         }
+
+    /**
+     * A menu edit to the workout or a slot, shown at once and put back over every reload that may
+     * have read the database before its save landed (as [PendingEdit] does for sets): coming back from
+     * the menu starts a reload beside the save. Guarded by [refreshLock].
+     */
+    private class PendingMeta(val apply: (UiState) -> UiState) {
+        var savedAt: Long? = null
+    }
+
+    private val pendingMeta = mutableListOf<PendingMeta>()
+
+    private fun editMeta(apply: (UiState) -> UiState): PendingMeta = synchronized(refreshLock) {
+        PendingMeta(apply).also {
+            pendingMeta += it
+            _uiState.update(apply)
+        }
+    }
+
+    private fun settleMeta(meta: PendingMeta) {
+        synchronized(refreshLock) { meta.savedAt = refreshesStarted }
+    }
+
+    /** [state] from reload [ticket] with the menu edits it may have missed put back. Call under [refreshLock]. */
+    private fun overlayMeta(ticket: Long, state: UiState): UiState {
+        pendingMeta.removeAll { meta -> meta.savedAt?.let { ticket > it } == true }
+        return pendingMeta.fold(state) { acc, meta -> meta.apply(acc) }
     }
 
     /** Menu: removes the set it offered, only while it is unticked (the session checks again). */
@@ -1018,20 +1043,24 @@ class ActiveWorkoutViewModel(
                 val activeSetId = state.activeSetId
                     ?.takeIf { id -> currentBlock?.sets?.any { it.id == id } == true }
                     ?: currentBlock?.sets?.firstOrNull { it.completedAt == null }?.id
-                state.copy(
-                    loaded = true,
-                    workoutId = workoutId,
-                    workoutName = workout.name,
-                    workoutNotes = workout.notes,
-                    startedAt = workout.startedAt,
-                    exercises = blocks,
-                    currentIndex = currentIndex,
-                    activeSetId = activeSetId,
-                    prSetIds = prIds,
-                    units = settings.units,
-                    weightStep = settings.weightStep,
-                    defaultRestSec = settings.defaultRestSec,
-                    warmupRestSec = settings.warmupRestSec,
+                // Menu edits whose save this reload may have read before are put back on top.
+                overlayMeta(
+                    ticket,
+                    state.copy(
+                        loaded = true,
+                        workoutId = workoutId,
+                        workoutName = workout.name,
+                        workoutNotes = workout.notes,
+                        startedAt = workout.startedAt,
+                        exercises = blocks,
+                        currentIndex = currentIndex,
+                        activeSetId = activeSetId,
+                        prSetIds = prIds,
+                        units = settings.units,
+                        weightStep = settings.weightStep,
+                        defaultRestSec = settings.defaultRestSec,
+                        warmupRestSec = settings.warmupRestSec,
+                    ),
                 )
             }
             rememberCurrentSlot()

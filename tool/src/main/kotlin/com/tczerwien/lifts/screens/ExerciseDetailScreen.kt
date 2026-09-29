@@ -227,15 +227,32 @@ class ExerciseDetailViewModel(
      */
     fun saveNote(raw: String) {
         _uiState.value = _uiState.value.copy(editing = null, pinnedNote = raw.trim().takeIf { it.isNotEmpty() })
+        synchronized(reloadLock) { noteSaves++ }
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val note = raw.trim().takeIf { it.isNotEmpty() }
             note != exercise.pinnedNote && repository.updateExercise(exercise.copy(pinnedNote = note))
         }) { changed ->
+            synchronized(reloadLock) {
+                noteSaves--
+                noteFloor = reloadsStarted
+            }
             if (changed) share.logChanged()
             refresh()
         }
     }
+
+    /**
+     * Reloads run beside the write lane, so one that read the database before a cue save landed can
+     * land after it. While a save is pending, and for every reload started before it landed, the note
+     * on screen (the one just saved) stands. Guarded by [reloadLock].
+     */
+    private val reloadLock = Any()
+    private var reloadsStarted = 0L
+    private var noteSaves = 0
+    private var noteFloor = 0L
+
+    private fun keepsNote(reload: Long): Boolean = synchronized(reloadLock) { noteSaves > 0 || reload <= noteFloor }
 
     /**
      * Renames the exercise ([renameTarget]): the new name shows everywhere, exports included, over any
@@ -302,6 +319,7 @@ class ExerciseDetailViewModel(
     }
 
     private fun refresh() {
+        val reload = synchronized(reloadLock) { ++reloadsStarted }
         val exercise = repository.exerciseById(exerciseId)
         val unit = settings.snapshot().units
         val tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS
@@ -342,7 +360,7 @@ class ExerciseDetailViewModel(
             state.copy(
                 name = exercise?.let(::displayName) ?: "Exercise",
                 tracking = tracking,
-                pinnedNote = exercise?.pinnedNote,
+                pinnedNote = if (keepsNote(reload)) state.pinnedNote else exercise?.pinnedNote,
                 instructions = exercise?.instructions ?: emptyList(),
                 history = history,
                 records = records,
