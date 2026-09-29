@@ -7,8 +7,8 @@ import com.tczerwien.lifts.ui.WeightUnit
 /**
  * The one set-notation formatter. Every screen and every export that writes a set's numbers goes
  * through here, so a set reads the same wherever it shows. Weights are in the display unit, rounded
- * as the steppers round ([Format.weight]); a weight of 0 or less is no weight, so a pull-up nudged to
- * 0 reads "×10", not "0×10".
+ * as the steppers round ([Format.weight]); a weight that shows as 0 is no weight, so a pull-up nudged to
+ * 0 (or a stray 0.1 kg from elsewhere) reads "×10", not "0×10".
  */
 enum class NotationStyle {
     /** A set in a list on screen: "w95×10", "140×8F @9", "×12", "20×45s". */
@@ -61,7 +61,7 @@ fun setNotation(
     restSec: Int? = null,
     withUnit: Boolean = false,
 ): String? {
-    val weight = weightKg?.takeIf { it > 0.0 }?.let { kg ->
+    val weight = weightKg?.takeIf { Format.roundWeight(Format.kgToDisplay(it, unit)) > 0.0 }?.let { kg ->
         Format.weight(kg, unit) + if (withUnit && style == NotationStyle.SINGLE) " ${unit.suffix}" else ""
     }
     val times = when (style) {

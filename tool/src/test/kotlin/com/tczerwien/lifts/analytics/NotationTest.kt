@@ -66,6 +66,10 @@ class NotationTest {
         val nudged = SetEntity(workoutExerciseId = 1, position = 0, type = "normal", weightKg = 0.0, reps = 10)
         assertEquals("×10", setNotation(nudged, lb, NotationStyle.LIST))
         assertEquals("x10", setNotation(nudged, lb, NotationStyle.EXPORT))
+        // Judged on what would show: 0.1 kg is 0 on the 0.5 lb grid (a restored or imported value).
+        val sliver = nudged.copy(weightKg = 0.1)
+        assertEquals("×10", setNotation(sliver, lb, NotationStyle.LIST))
+        assertEquals("0.5×10", setNotation(sliver.copy(weightKg = 0.25), lb, NotationStyle.LIST))
     }
 
     @Test
