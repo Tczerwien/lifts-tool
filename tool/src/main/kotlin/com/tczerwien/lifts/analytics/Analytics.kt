@@ -135,9 +135,10 @@ fun trendBlockStarts(todayEpochDay: Long, blocks: Int, blockDays: Int): List<Lon
 /**
  * Whether each lift is still moving: the best Epley e1RM per [blockDays]-day block over the last
  * [blocks] blocks, the last ending [todayEpochDay] (local days in [zone]), for the [top] lifts with the
- * most working sets in that window. Only record-eligible weighted sets of 1–12 reps count
- * ([recordEligible], [epleyE1RmKg]); a lift with none in the window is left out. Ties in set count go
- * by exercise id. Pass the completed sets of finished workouts, by exercise id.
+ * most sets that give an e1RM in that window: record-eligible weighted sets of 1–12 reps
+ * ([recordEligible], [epleyE1RmKg]). Bodyweight pull-ups or high-rep sets say nothing about the trend,
+ * so they don't push a barbell lift out; a lift with no such set is left out. Ties in set count go by
+ * exercise id. Pass the completed sets of finished workouts, by exercise id.
  */
 fun e1RmTrend(
     setsByExercise: Map<String, List<SetEntity>>,
@@ -151,18 +152,18 @@ fun e1RmTrend(
     data class Counted(val exerciseId: String, val sets: Int, val best: List<Double?>)
     val counted = setsByExercise.mapNotNull { (exerciseId, sets) ->
         val best = arrayOfNulls<Double>(blocks)
-        var working = 0
+        var qualifying = 0
         for (set in sets) {
             if (!recordEligible(set)) continue
             val day = Instant.ofEpochMilli(set.completedAt ?: continue).atZone(zone).toLocalDate().toEpochDay()
             if (day < firstDay || day > todayEpochDay) continue
-            working++
             val weight = set.weightKg?.takeIf { it > 0.0 } ?: continue
             val e1Rm = epleyE1RmKg(weight, set.reps ?: continue) ?: continue
+            qualifying++
             val block = ((day - firstDay) / blockDays).toInt()
             best[block] = maxOf(best[block] ?: e1Rm, e1Rm)
         }
-        if (best.all { it == null }) null else Counted(exerciseId, working, best.toList())
+        if (qualifying == 0) null else Counted(exerciseId, qualifying, best.toList())
     }
     return counted
         .sortedWith(compareByDescending<Counted> { it.sets }.thenBy { it.exerciseId })

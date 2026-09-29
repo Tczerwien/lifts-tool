@@ -299,10 +299,15 @@ class AnalyticsTest {
         val squat = listOf(done(7, "2026-07-02T10:00:00Z", 140.0, 5), done(8, "2026-07-03T10:00:00Z", 140.0, 5))
         // Pull-ups have no weight: no e1RM, so no trend, however many sets.
         val pullUps = List(9) { done(10L + it, "2026-07-09T10:00:00Z", null, 10) }
+        // Nine bodyweight sets and one weighted: only the weighted one ranks it, so it stays below squat.
+        val chinUps = List(9) { done(20L + it, "2026-07-09T10:00:00Z", null, 10) } + done(30, "2026-07-10T10:00:00Z", 20.0, 5)
 
-        val trend = e1RmTrend(mapOf("bench" to bench, "squat" to squat, "pullups" to pullUps), today, ZoneOffset.UTC, blocks = 3, blockDays = 7)
+        val trend = e1RmTrend(
+            mapOf("bench" to bench, "squat" to squat, "pullups" to pullUps, "chinups" to chinUps),
+            today, ZoneOffset.UTC, blocks = 3, blockDays = 7,
+        )
 
-        assertEquals(listOf("bench", "squat"), trend.map { it.exerciseId }, "most working sets first; no weightless lift")
+        assertEquals(listOf("bench", "squat", "chinups"), trend.map { it.exerciseId }, "most e1RM sets first; no weightless lift")
         val benchBest = trend.first().bestE1RmKg
         assertEquals(100.0 * (1 + 5 / 30.0), benchBest[0]!!, 1e-9)
         assertNull(benchBest[1])
