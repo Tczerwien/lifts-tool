@@ -223,7 +223,8 @@ class HomeViewModel(
             RecentRow(
                 workoutId = workout.id,
                 name = workout.name,
-                dateMillis = workout.endedAt ?: workout.startedAt,
+                // Dated by its start, as History dates it.
+                dateMillis = workout.startedAt,
                 setCount = completedSets,
             )
         }

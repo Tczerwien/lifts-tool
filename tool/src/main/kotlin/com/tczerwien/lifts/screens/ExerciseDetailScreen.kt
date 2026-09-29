@@ -193,7 +193,9 @@ class ExerciseDetailViewModel(
             PerWorkout(
                 workoutId = workout.id,
                 inProgress = workout.endedAt == null,
-                dateMillis = workout.endedAt ?: workout.startedAt,
+                // Dated by its start, as History and the export files date it: an evening workout
+                // that runs past midnight keeps its day.
+                dateMillis = workout.startedAt,
                 sets = sets.sortedWith(compareBy({ it.slotPosition }, { it.set.position })).map { it.set },
             )
         }
