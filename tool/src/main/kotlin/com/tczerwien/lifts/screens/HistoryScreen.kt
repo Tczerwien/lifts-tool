@@ -39,8 +39,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Uniform list-row height (LightLazyScrollView scrollbar contract). */
-
 class HistoryViewModel(
     private val repository: LiftsRepository,
 ) : LightViewModel<Unit>() {
