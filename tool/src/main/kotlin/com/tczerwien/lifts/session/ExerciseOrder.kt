@@ -23,13 +23,13 @@ fun tapTooSoonAfterMove(movedOnAt: Long?, now: Long): Boolean =
     movedOnAt != null && now - movedOnAt in 0 until AUTO_ADVANCE_TAP_GRACE_MS
 
 /**
- * A tap on a ticked set's checkbox this soon after it was ticked is the second half of a double tap,
- * not an untick: undoing a tick takes a deliberate second tap.
+ * A tap on a checkbox this soon after the tap that ticked or unticked it is the second half of a double
+ * tap (or a bounce), not a change of mind: undoing a tick, or re-ticking, takes a deliberate tap.
  */
-const val UNTICK_DOUBLE_TAP_MS = 600L
+const val DOUBLE_TAP_MS = 600L
 
-/** Whether unticking a set ticked at [completedAt] with a tap at [now] is a double tap to ignore ([UNTICK_DOUBLE_TAP_MS]). */
-fun untickIsDoubleTap(completedAt: Long, now: Long): Boolean = now - completedAt in 0 until UNTICK_DOUBLE_TAP_MS
+/** Whether a checkbox tap at [now], after the one at [firstTapAt] on the same set, is a double tap to ignore ([DOUBLE_TAP_MS]). */
+fun isDoubleTap(firstTapAt: Long, now: Long): Boolean = now - firstTapAt in 0 until DOUBLE_TAP_MS
 
 /** [slots] in order starting just after [currentSlotId] and wrapping round, without it; all of them when it isn't one. */
 private fun slotsAfter(slots: List<WorkoutExerciseEntity>, currentSlotId: Long?): List<WorkoutExerciseEntity> {

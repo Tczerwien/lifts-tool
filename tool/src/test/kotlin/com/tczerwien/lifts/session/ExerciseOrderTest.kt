@@ -96,11 +96,11 @@ class ExerciseOrderTest {
     )
 
     @Test
-    fun `an untick right after the tick is a double tap`() {
-        assertTrue(untickIsDoubleTap(completedAt = 10_000, now = 10_000))
-        assertTrue(untickIsDoubleTap(completedAt = 10_000, now = 10_599))
-        assertFalse(untickIsDoubleTap(completedAt = 10_000, now = 10_600))
-        // A tick stamped later than the tap (clock moved back) is not a double tap.
-        assertFalse(untickIsDoubleTap(completedAt = 10_000, now = 9_000))
+    fun `a checkbox tap right after the last one is a double tap`() {
+        assertTrue(isDoubleTap(firstTapAt = 10_000, now = 10_000))
+        assertTrue(isDoubleTap(firstTapAt = 10_000, now = 10_599))
+        assertFalse(isDoubleTap(firstTapAt = 10_000, now = 10_600))
+        // A first tap stamped later than this one (clock moved back) is not a double tap.
+        assertFalse(isDoubleTap(firstTapAt = 10_000, now = 9_000))
     }
 }

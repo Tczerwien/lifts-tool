@@ -22,7 +22,7 @@ import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
-import com.tczerwien.lifts.session.untickIsDoubleTap
+import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
@@ -327,15 +327,20 @@ class ActiveWorkoutViewModel(
      * Checkbox toggle. Completing logs exactly what the row shows: its starting value ([seedRows])
      * wherever it has none of its own. A row with nothing to log shows a hint instead. Completing
      * advances the active row and starts rest per the completion result. Uncompleting keeps the
-     * logged values; a tap right after the tick ([untickIsDoubleTap]) is a double tap and is ignored.
+     * logged values. A tap right after the one that ticked or unticked the same set ([isDoubleTap]) is
+     * a double tap or a bounce: it is ignored before anything else, so it cancels no pending move either.
      */
     fun toggleComplete(setId: Long) {
+        val tapAt = System.currentTimeMillis()
+        val unticked = lastToggle
+        val current = locate(setId)?.let { it.block.sets[it.index] } ?: return
+        val firstTapAt = current.completedAt ?: unticked?.takeIf { it.first == setId }?.second
+        if (firstTapAt != null && isDoubleTap(firstTapAt, tapAt)) return
         if (!beginRowAction()) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
-        val completedAt = set.completedAt
-        if (completedAt != null) {
-            if (untickIsDoubleTap(completedAt, System.currentTimeMillis())) return
+        if (set.completedAt != null) {
+            lastToggle = setId to tapAt
             val edit = applySetChange(setId) { it.copy(completedAt = null) } ?: return
             LiftsIo.write({ session.uncompleteSet(set) }) { settle(edit) }
             return
@@ -442,9 +447,14 @@ class ActiveWorkoutViewModel(
     /** Result of the exercise list: that exercise, on its first unticked set. */
     fun jumpTo(slotId: Long) {
         if (!beginAction()) return
-        rowsMovedUnderFinger()
+        val state = _uiState.value
+        if (state.exercises.getOrNull(state.currentIndex)?.slot?.id != slotId) rowsMovedUnderFinger()
         showExercise(slotId)
     }
+
+    /** The set last unticked, and when: a tick on it right after is a bounce ([isDoubleTap]). */
+    @Volatile
+    private var lastToggle: Pair<Long, Long>? = null
 
     /**
      * The rows changed as another screen (exercise list, picker, "…" menu) closed: a bounce or a tap
@@ -503,7 +513,11 @@ class ActiveWorkoutViewModel(
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         rowsMovedUnderFinger()
-        LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { refresh(focusLastExercise = true) }
+        LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) {
+            // The rows change when this reload lands, which a busy lane can put past the guard's second.
+            rowsMovedUnderFinger()
+            refresh(focusLastExercise = true)
+        }
     }
 
     // --- Finish, discard and the "…" menu ---
