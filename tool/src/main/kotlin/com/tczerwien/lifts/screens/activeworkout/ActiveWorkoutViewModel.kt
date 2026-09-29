@@ -585,10 +585,11 @@ class ActiveWorkoutViewModel(
     /** Menu: removes the set it offered, only while it is unticked (the session checks again). */
     fun removeSet(setId: Long) {
         if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         rowsMovedUnderFinger()
-        LiftsIo.write({ session.removeSet(setId) }) { refresh() }
+        LiftsIo.write({ session.removeSet(workoutId, setId) }) { refresh() }
     }
 
     /** Menu: removes the exercise it offered, only while none of its sets is ticked. */

@@ -216,7 +216,7 @@ class ActiveSessionTest {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = session.addExercise(workoutId, "bench")!!
         val (first, _, third) = store.setsForWorkout(workoutId)
-        session.removeSet(first.id)
+        session.removeSet(workoutId, first.id)
         // The screen still holds the third row at its old position 2 when a stepper tap saves it.
         session.updateSet(workoutId, third.copy(weightKg = 50.0))
         val rows = store.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }
@@ -331,12 +331,10 @@ class ActiveSessionTest {
         assertEquals(logged, store.setsForWorkout(workoutId))
         assertEquals(restBefore, session.restStateSnapshot())
 
-        // While it is open, a slot removed by a queued action takes no value either.
-        val open = session.startEmpty(now = 40_000_000)
-        val gone = session.addExercise(open, "squat")!!
-        val row = store.setsForWorkout(open).first { it.workoutExerciseId == gone }
-        session.removeExercise(open, gone)
-        assertFalse(session.updateSet(open, row.copy(weightKg = 60.0)))
+        // Nor do the menu's removals: RESUME brings the finished workout back with its unticked rows.
+        assertFalse(session.removeSet(workoutId, second.id))
+        assertFalse(session.removeExercise(workoutId, slotId))
+        assertEquals(logged, store.setsForWorkout(workoutId))
     }
 
     // --- Home's cleanup ---

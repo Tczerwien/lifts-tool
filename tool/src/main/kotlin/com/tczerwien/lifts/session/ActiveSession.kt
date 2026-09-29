@@ -142,17 +142,25 @@ class ActiveSession(
      * finished workout. (A set whose slot was removed is gone with it, so that writes nothing either.)
      */
     fun updateSet(workoutId: Long, set: SetEntity): Boolean = repository.inTransaction {
-        repository.workoutById(workoutId)?.let { it.endedAt == null } == true && repository.updateSetValues(set)
+        isOpen(workoutId) && repository.updateSetValues(set)
     }
 
-    /** Removes a set that hasn't been logged; a logged set is left alone. */
-    fun removeSet(setId: Long): Boolean = repository.inTransaction {
+    /** [workoutId] exists and hasn't ended: its rows may still change. Call inside a transaction. */
+    private fun isOpen(workoutId: Long): Boolean = repository.workoutById(workoutId)?.let { it.endedAt == null } == true
+
+    /**
+     * Removes a set that hasn't been logged; a logged set is left alone, and so is a workout that has
+     * ended (a removal queued behind a stale close must not take rows RESUME would bring back).
+     */
+    fun removeSet(workoutId: Long, setId: Long): Boolean = repository.inTransaction {
+        if (!isOpen(workoutId)) return@inTransaction false
         val set = repository.setById(setId) ?: return@inTransaction false
         set.completedAt == null && repository.deleteSet(setId)
     }
 
-    /** Removes an exercise slot with its sets, only while none of them is logged. */
+    /** Removes an exercise slot with its sets, only while none of them is logged and the workout is open. */
     fun removeExercise(workoutId: Long, workoutExerciseId: Long): Boolean = repository.inTransaction {
+        if (!isOpen(workoutId)) return@inTransaction false
         val logged = repository.setsForWorkout(workoutId)
             .any { it.workoutExerciseId == workoutExerciseId && it.completedAt != null }
         !logged && repository.deleteSlot(workoutExerciseId)
