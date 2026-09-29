@@ -214,6 +214,9 @@ class RecordsTest {
         assertTrue(isPr(pending(-18.0, 9), history, assisted), "the same help for one more rep")
         assertFalse(isPr(pending(-18.05, 8), history, assisted), "within the rounding tolerance is the same help")
         assertTrue(isPr(pending(null, 3), history, assisted), "the first unassisted set beats any help")
+        // Logged as a plain +22.5 before the exercise was set to Assisted: 22.5 of help, not added load.
+        assertFalse(isPr(pending(22.5, 8), history, assisted))
+        assertTrue(isPr(pending(-15.0, 8), listOf(logged(18.0, 8, at = 1)), assisted))
         val records = exerciseRecords(history + logged(-13.5, 6, at = 2) + logged(-22.5, 12, at = 3), tracking = assisted)!!
         assertEquals(-13.5, records.maxWeightSet?.weightKg)
         assertNull(records.maxRepsSet)
@@ -271,11 +274,13 @@ class RecordsTest {
         }
         val track = if (split) eligible.filter(weighted) else eligible
         if (track.isEmpty()) return true
+        // Any weight on an assisted exercise is help: its load is minus its size.
+        val loadOf = { s: SetEntity -> if (split) s.weightKg ?: 0.0 else -kotlin.math.abs(s.weightKg ?: 0.0) }
         // Replay the best load and the reps at it, as a lifter would read the log.
-        var best = track.first().weightKg ?: 0.0
+        var best = loadOf(track.first())
         var repsAtBest = track.first().reps!!
         for (s in track.drop(1)) {
-            val load = s.weightKg ?: 0.0
+            val load = loadOf(s)
             if (load > best + 0.12) {
                 best = load
                 repsAtBest = s.reps!!
@@ -283,7 +288,7 @@ class RecordsTest {
                 repsAtBest = maxOf(repsAtBest, s.reps!!)
             }
         }
-        val load = set.weightKg ?: 0.0
+        val load = loadOf(set)
         return load > best + 0.12 || (load >= best - 0.12 && reps > repsAtBest)
     }
 }

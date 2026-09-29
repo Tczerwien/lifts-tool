@@ -366,7 +366,7 @@ class ActiveWorkoutViewModel(
         if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
         val tracking = located.block.tracking
-        val weight = previous.weightKg?.takeIf { tracking.takesWeight }
+        val weight = previous.weightKg?.takeIf { tracking.takesWeight }?.let(tracking::asLogged)
         val reps = previous.reps?.takeIf { tracking.takesReps }
         val seconds = previous.durationSec?.takeIf { tracking.takesDuration }
         if (weight == null && reps == null && seconds == null) return

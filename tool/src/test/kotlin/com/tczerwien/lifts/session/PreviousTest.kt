@@ -214,6 +214,10 @@ class PreviousTest {
         val assisted = listOf(prev(1, n, weightKg = -20.0, reps = 8), prev(2, n, weightKg = -20.0, reps = 8))
         val rows = listOf(set(11, position = 0, weightKg = -15.0, reps = 8, completedAt = 1L), set(12, position = 1))
         assertEquals(RowValues(-15.0, 8), seedFor(rows, 1, alignPrevious(rows, assisted), WeightUnit.KG, Tracking.ASSISTED_BODYWEIGHT))
+        // Help logged as a plain weight before the exercise was set to Assisted starts as help, not added load.
+        val before = listOf(prev(1, n, weightKg = 18.0, reps = 8))
+        val row = listOf(set(11, position = 0))
+        assertEquals(RowValues(-18.0, 8), seedFor(row, 0, alignPrevious(row, before), WeightUnit.KG, Tracking.ASSISTED_BODYWEIGHT))
     }
 
     // --- New slots ---

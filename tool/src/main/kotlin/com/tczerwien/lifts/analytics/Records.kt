@@ -19,7 +19,8 @@ import com.tczerwien.lifts.data.Tracking
  *   of the belt alone would rank 20×8 below 25×5, which with the body is the wrong way round). Sets
  *   at bodyweight compete on reps, separately.
  * - Assisted bodyweight: less assistance, then more reps at that assistance. No assistance is the
- *   least; the stored weight is negative help, so this is the higher weight ([Tracking]).
+ *   least. Any weight on it is help, whatever its sign: a set logged as a plain +40 before the
+ *   exercise was set to Assisted counts as 40 of help ([assistLoad]), as Lifts now stores it (-40).
  * - A set is compared only with sets completed before it, never with later workouts.
  * - Weights within [WEIGHT_TOLERANCE_KG] count as equal, so lb↔kg rounding never fakes a PR.
  */
@@ -41,6 +42,9 @@ private fun measured(set: SetEntity, tracking: Tracking): Int? =
     (if (tracking == Tracking.DURATION) set.durationSec else set.reps)?.takeIf { it >= 1 }
 
 private fun SetEntity.isWeighted(): Boolean = (weightKg ?: 0.0) > 0.0
+
+/** An assisted set's load: its help as a negative number, whatever sign it was stored with; none is 0. */
+private fun SetEntity.assistLoad(): Double = -kotlin.math.abs(weightKg ?: 0.0)
 
 /**
  * A heaviest-load record with reps as the tie-break: a set beats it with more load, or with the same
@@ -97,7 +101,7 @@ class RecordTracker(private val tracking: Tracking = Tracking.WEIGHT_REPS) {
         val amount = measured(set, tracking) ?: return false
         return when (tracking) {
             Tracking.REPS_ONLY, Tracking.DURATION -> amount > (bestAmount ?: return true)
-            Tracking.ASSISTED_BODYWEIGHT -> load.beats(set.weightKg ?: 0.0, amount)
+            Tracking.ASSISTED_BODYWEIGHT -> load.beats(set.assistLoad(), amount)
             Tracking.WEIGHTED_BODYWEIGHT ->
                 if (set.isWeighted()) load.beats(set.weightKg!!, amount) else amount > (maxRepsWeightless ?: return true)
             Tracking.WEIGHT_REPS -> weightRepsPr(set, amount)
@@ -123,7 +127,7 @@ class RecordTracker(private val tracking: Tracking = Tracking.WEIGHT_REPS) {
         val amount = measured(set, tracking) ?: return
         when (tracking) {
             Tracking.REPS_ONLY, Tracking.DURATION -> bestAmount = maxOf(bestAmount ?: 0, amount)
-            Tracking.ASSISTED_BODYWEIGHT -> load.record(set.weightKg ?: 0.0, amount)
+            Tracking.ASSISTED_BODYWEIGHT -> load.record(set.assistLoad(), amount)
             Tracking.WEIGHTED_BODYWEIGHT ->
                 if (set.isWeighted()) load.record(set.weightKg!!, amount) else recordWeightless(amount)
             Tracking.WEIGHT_REPS -> {
@@ -238,16 +242,19 @@ fun exerciseRecords(
             maxRepsSet = firstMost(eligible.filterNot { it.isWeighted() }) { it.reps ?: 0 },
             repMaxes = emptyList(),
         )
-        Tracking.ASSISTED_BODYWEIGHT -> ExerciseRecords(bestLoadSet(eligible), null, null, null, null, emptyList())
+        Tracking.ASSISTED_BODYWEIGHT -> ExerciseRecords(bestLoadSet(eligible) { it.assistLoad() }, null, null, null, null, emptyList())
     }
 }
 
-/** The set that holds the [LoadRecord] over [ordered] (completion order): the one that last beat it. */
-private fun bestLoadSet(ordered: List<SetEntity>): SetEntity? {
+/**
+ * The set that holds the [LoadRecord] over [ordered] (completion order): the one that last beat it,
+ * so at the top load the one with the most reps. [loadOf] is a set's load (the weight; help, negative).
+ */
+private fun bestLoadSet(ordered: List<SetEntity>, loadOf: (SetEntity) -> Double = { it.weightKg ?: 0.0 }): SetEntity? {
     val record = LoadRecord()
     var holder: SetEntity? = null
     for (set in ordered) {
-        val load = set.weightKg ?: 0.0
+        val load = loadOf(set)
         val reps = set.reps ?: continue
         if (record.beats(load, reps)) holder = set
         record.record(load, reps)

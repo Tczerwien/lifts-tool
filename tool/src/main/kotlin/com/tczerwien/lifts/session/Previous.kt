@@ -69,7 +69,8 @@ data class RowValues(val weightKg: Double?, val reps: Int?, val durationSec: Int
 /**
  * What each of [rows] (one slot, in position order) logs if ticked as it stands, worked out per
  * field, weight, reps and seconds separately, then only the fields the exercise's [tracking]
- * records (a reps-only row never logs a weight left from before its type changed):
+ * records (a reps-only row never logs a weight left from before its type changed, and an assisted
+ * row logs help as negative even when last time's was stored before the type was set):
  * 1. the row's own value;
  * 2. the value of today's previous row of the same kind (warm-up or work), if you changed it from
  *    last time and last time the two rows matched (straight sets): 5 lb on set 1 carries to set 2,
@@ -117,7 +118,7 @@ fun seedRows(
     }
     return result.map { values ->
         RowValues(
-            weightKg = values.weightKg?.takeIf { tracking.takesWeight },
+            weightKg = values.weightKg?.takeIf { tracking.takesWeight }?.let(tracking::asLogged),
             reps = values.reps?.takeIf { tracking.takesReps },
             durationSec = values.durationSec?.takeIf { tracking.takesDuration },
         )

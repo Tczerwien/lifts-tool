@@ -10,6 +10,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 
 /**
  * Pure-Kotlin analytics over the Lifts entities. No Android, no SDK, no reflection.
@@ -40,7 +41,8 @@ fun epleyE1RmKg(weightKg: Double, reps: Int): Double? {
  *
  * @property maxWeightKg heaviest weight ever moved (any rep count); for an assisted exercise the
  *   least help, negative (0 unassisted)
- * @property maxWeightDate epoch millis of the set that first achieved [maxWeightKg]
+ * @property maxWeightDate epoch millis of the set that holds [maxWeightKg]: the first to reach it, or for
+ *   the bodyweight kinds the one with the most reps at that load
  * @property bestE1RmKg best Epley estimate, null when no completed set had 1..12 reps
  * @property bestE1RmDate epoch millis of the set that first achieved [bestE1RmKg]
  * @property bestSet the best-e1RM set, falling back to the max-weight set when no e1RM exists;
@@ -94,7 +96,8 @@ fun computePrs(
         result.add(
             ExercisePr(
                 exerciseId = exerciseId,
-                maxWeightKg = maxWeightSet.weightKg ?: 0.0,
+                // Help is negative however it was stored (Records' rule for assisted exercises).
+                maxWeightKg = (maxWeightSet.weightKg ?: 0.0).let { if (kind == Tracking.ASSISTED_BODYWEIGHT) -abs(it) else it },
                 maxWeightDate = maxWeightSet.completedAt ?: 0L,
                 bestE1RmKg = records.bestE1RmKg,
                 bestE1RmDate = records.bestE1RmSet?.completedAt,

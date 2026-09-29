@@ -360,8 +360,8 @@ class ExerciseDetailViewModel(
             records.maxWeightSet?.let { set ->
                 val label = when (tracking) {
                     // The help as the machine's stack shows it; none at all is a plain pull-up.
-                    Tracking.ASSISTED_BODYWEIGHT -> set.weightKg?.takeIf { it < 0.0 }
-                        ?.let { setNotation(-it, set.reps, unit, NotationStyle.SINGLE, withUnit = true) }
+                    Tracking.ASSISTED_BODYWEIGHT -> set.weightKg?.let(Math::abs)
+                        ?.let { setNotation(it, set.reps, unit, NotationStyle.SINGLE, withUnit = true) }
                         ?: "None × ${set.reps ?: 0}"
                     else -> setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
                 }

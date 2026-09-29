@@ -52,6 +52,12 @@ enum class Tracking(val stored: String, val label: String) {
     fun storedWeight(shownKg: Double?): Double? =
         shownKg?.let { if (this == ASSISTED_BODYWEIGHT && it != 0.0) -abs(it) else it }
 
+    /**
+     * [storedKg] as a set of this type logs it: on an assisted exercise help is always negative, so a
+     * weight from before the type was set (logged as a plain +40) starts the next set as -40, not +40.
+     */
+    fun asLogged(storedKg: Double?): Double? = storedWeight(shownWeight(storedKg))
+
     companion object {
         /** The tracking an exercise stores; anything unknown is weight × reps, as the column defaults. */
         fun of(stored: String?): Tracking = entries.firstOrNull { it.stored == stored } ?: WEIGHT_REPS
