@@ -46,6 +46,9 @@ class LiftsRepository private constructor(
     /** Every exercise without its instructions, by name: the picker's catalog. */
     fun exerciseSummaries(): List<ExerciseSummary> = db.exerciseDao.listSummaries()
 
+    /** Up to [limit] exercises he has logged, most recently used first ([WorkoutDao.recentExercises]). */
+    fun recentExerciseIds(limit: Int): List<String> = db.workoutDao.recentExercises(limit).map { it.exerciseId }
+
     /** [pattern] is a raw LIKE pattern, e.g. "%bench%". */
     fun searchExercisesByName(pattern: String): List<ExerciseEntity> =
         db.exerciseDao.searchByName(pattern)

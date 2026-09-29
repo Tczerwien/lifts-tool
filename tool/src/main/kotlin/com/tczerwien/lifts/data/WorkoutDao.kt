@@ -32,6 +32,20 @@ interface WorkoutDao {
     )
     fun finishedWithSetCounts(limit: Int): List<WorkoutWithSetCount>
 
+    /**
+     * The exercises he has logged, most recently used first: each by the latest finished workout in
+     * which it has a ticked set, then by its place in that workout (SQLite takes a bare column from
+     * the row MAX picked). Unfinished workouts and unticked sets count nowhere.
+     */
+    @Query(
+        "SELECT we.exerciseId AS exerciseId, MAX(w.startedAt) AS lastStartedAt, we.position AS position " +
+            "FROM workout_exercises we JOIN workouts w ON w.id = we.workoutId " +
+            "WHERE w.endedAt IS NOT NULL " +
+            "AND EXISTS (SELECT 1 FROM sets s WHERE s.workoutExerciseId = we.id AND s.completedAt IS NOT NULL) " +
+            "GROUP BY we.exerciseId ORDER BY lastStartedAt DESC, position LIMIT :limit"
+    )
+    fun recentExercises(limit: Int): List<RecentExercise>
+
     @Query("SELECT * FROM workout_exercises")
     fun listAllWorkoutExercises(): List<WorkoutExerciseEntity>
 
@@ -180,3 +194,6 @@ data class WorkoutWithSetCount(
     @Embedded val workout: WorkoutEntity,
     val completedSets: Int,
 )
+
+/** An exercise's last use, for [WorkoutDao.recentExercises]. */
+data class RecentExercise(val exerciseId: String, val lastStartedAt: Long, val position: Int)
