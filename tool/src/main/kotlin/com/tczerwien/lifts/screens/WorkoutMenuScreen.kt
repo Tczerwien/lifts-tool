@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.ui.ArmedAction
+import com.tczerwien.lifts.ui.KeepWhole
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -121,6 +122,8 @@ class WorkoutMenuScreen(
 private fun MenuRow(title: String, detail: String?, enabled: Boolean, onClick: () -> Unit) {
     LiftsListRow(
         onClick = if (enabled) onClick else null,
+        // The title says what the row does; the detail beside it is the part cut when both don't fit.
+        keepWhole = KeepWhole.LEFT,
         left = {
             LightText(
                 text = title,

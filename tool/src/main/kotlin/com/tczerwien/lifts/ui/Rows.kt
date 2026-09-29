@@ -37,18 +37,23 @@ private const val DIVIDER_ALPHA = 0.3f
 /** The gap kept between a row's left and right slots. */
 private const val ROW_SLOT_GAP_UNITS = 0.5f
 
+/** Which slot of a [LiftsListRow] keeps its full width when both don't fit; the other is cut. */
+enum class KeepWhole { LEFT, RIGHT }
+
 /**
  * Uniform 3gu list row with left/right slots and 1gu horizontal padding
  * (tokens.css .listrow). Safe inside LightLazyScrollView(uniformItemHeightGridUnits = 3f).
  * Two-line rows pass [heightUnits] = [TWO_LINE_ROW_HEIGHT_UNITS].
- * The right slot is measured first and keeps its full width; the left takes what is left, less a
- * 0.5gu gap, so a long name is cut ([RowName]) instead of pushing "5 exercises" off the row.
+ * By default the right slot is measured first and keeps its full width; the left takes what is left,
+ * less a 0.5gu gap, so a long name is cut ([RowName]) instead of pushing "5 exercises" off the row. A
+ * row whose right side is the one to give (a long hint beside a short title) passes [keepWhole] LEFT.
  */
 @Composable
 fun LiftsListRow(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     heightUnits: Float = LIST_ROW_HEIGHT_UNITS,
+    keepWhole: KeepWhole = KeepWhole.RIGHT,
     right: (@Composable () -> Unit)? = null,
     left: @Composable () -> Unit,
 ) {
@@ -61,10 +66,16 @@ fun LiftsListRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Box(modifier = Modifier.weight(1f, fill = false), contentAlignment = Alignment.CenterStart) { left() }
+        // The weighted slot is measured last and gets what the other leaves.
+        val cut = Modifier.weight(1f, fill = false)
+        Box(modifier = if (keepWhole == KeepWhole.RIGHT) cut else Modifier, contentAlignment = Alignment.CenterStart) {
+            left()
+        }
         if (right != null) {
             Spacer(modifier = Modifier.width(ROW_SLOT_GAP_UNITS.gridUnitsAsDp()))
-            Box(contentAlignment = Alignment.CenterEnd) { right() }
+            Box(modifier = if (keepWhole == KeepWhole.LEFT) cut else Modifier, contentAlignment = Alignment.CenterEnd) {
+                right()
+            }
         }
     }
 }
