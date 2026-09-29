@@ -276,6 +276,35 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `the summary's records follow how each exercise is measured`() {
+        store.addFinishedWorkout(1_000_000, "pullup" to listOf(Triple(n, -20.0, 8)))
+        store.exercises["pullup"] = com.tczerwien.lifts.data.ExerciseEntity(
+            id = "pullup", name = "Assisted Pull-Up", equipment = "machine", primaryMuscles = emptyList(),
+            secondaryMuscles = emptyList(), category = "strength", level = null, instructions = emptyList(),
+            trackingType = com.tczerwien.lifts.data.Tracking.ASSISTED_BODYWEIGHT.stored,
+        )
+        store.exercises["plank"] = store.exercises.getValue("pullup").copy(
+            id = "plank", name = "Plank", trackingType = com.tczerwien.lifts.data.Tracking.DURATION.stored,
+        )
+        val workoutId = session.startEmpty(now = 2_000_000)
+        session.addExercise(workoutId, "pullup")!!
+        val row = store.setsForWorkout(workoutId).first()
+        // Less help than last time: a record, though the stored weight is "less" than 0.
+        session.completeSet(workoutId, row, -15.0, 6, n, now = 2_060_000)
+        val plankSlot = session.addExercise(workoutId, "plank")!!
+        val hold = store.setsForWorkout(workoutId).first { it.workoutExerciseId == plankSlot }
+        store.updateSetValues(hold.copy(durationSec = 60, completedAt = 2_100_000))
+        session.finishOrDiscard(workoutId, now = 2_120_000)
+
+        val summary = session.summarize(workoutId)!!
+        assertEquals(
+            listOf(PrRecord("pullup", "Assisted Pull-Up", -15.0, 6), PrRecord("plank", "Plank", null, null, 60)),
+            summary.prs,
+        )
+        assertEquals(0.0, summary.totalVolumeKg, 1e-9, "assistance is no volume")
+    }
+
+    @Test
     fun `the summary carries that day's weigh-in, looked up rather than stored`() {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = session.addExercise(workoutId, "bench")!!

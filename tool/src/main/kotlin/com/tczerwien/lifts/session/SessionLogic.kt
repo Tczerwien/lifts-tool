@@ -3,6 +3,7 @@ package com.tczerwien.lifts.session
 import com.tczerwien.lifts.analytics.WorkoutBodyweight
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import kotlin.math.roundToInt
@@ -92,12 +93,13 @@ fun completedSetCount(sets: List<SetEntity>): Int = sets.count { it.completedAt 
 /**
  * Total volume in canonical kg over completed non-warmup sets (weight × reps; a set
  * missing either contributes nothing). Matches the analytics/export convention that
- * warm-ups never count toward volume.
+ * warm-ups never count toward volume. Only weight lifted counts: assistance, stored negative,
+ * adds nothing (and takes nothing away).
  */
 fun totalVolumeKg(sets: List<SetEntity>): Double =
     sets.filter { it.completedAt != null && it.type != SET_TYPE_WARMUP }
         .sumOf { set ->
-            val weight = set.weightKg ?: return@sumOf 0.0
+            val weight = set.weightKg?.takeIf { it > 0.0 } ?: return@sumOf 0.0
             val reps = set.reps ?: return@sumOf 0.0
             weight * reps
         }
@@ -107,12 +109,14 @@ fun totalVolumeKg(sets: List<SetEntity>): Double =
  * completed sets from this workout and from [priorHistory] (sets of the same exercises from other
  * workouts, keyed by exerciseId) are replayed together in completion order, so a set is only
  * compared with sets completed before it. Later or abandoned workouts in [priorHistory] can't
- * steal a star. Rules are those of the shared records engine.
+ * steal a star. Rules are those of the shared records engine, by each exercise's [tracking]
+ * (weight × reps where it has none).
  */
 fun prSetIds(
     slots: List<WorkoutExerciseEntity>,
     workoutSets: List<SetEntity>,
     priorHistory: Map<String, List<SetEntity>>,
+    tracking: Map<String, Tracking> = emptyMap(),
 ): Set<Long> {
     val slotById = slots.associateBy { it.id }
     val workoutSetIds = workoutSets.mapTo(HashSet()) { it.id }
@@ -124,27 +128,34 @@ fun prSetIds(
     for ((exerciseId, sets) in byExercise) {
         sets += priorHistory[exerciseId].orEmpty().filter { it.id !in workoutSetIds }
     }
-    return chronologicalPrSetIds(byExercise).filterTo(HashSet()) { it in workoutSetIds }
+    return chronologicalPrSetIds(byExercise, tracking).filterTo(HashSet()) { it in workoutSetIds }
 }
 
-/** One "New Records" line: the current record-holding set of one exercise. [weightKg] is null for a reps-only record. */
+/**
+ * One "New Records" line: the current record-holding set of one exercise, with the numbers its
+ * tracking records. [weightKg] is null for a reps-only record and negative for assistance;
+ * [durationSec] is a hold's.
+ */
 data class PrRecord(
     val exerciseId: String,
     val exerciseName: String,
     val weightKg: Double?,
     val reps: Int?,
+    val durationSec: Int? = null,
 )
 
 /**
  * One [PrRecord] per exercise that flagged at least one PR set ([prIds] from [prSetIds]):
  * the latest-completed PR set is the current record holder. Ordered by the exercise's
- * first slot position in the workout; [exerciseNames] fall back to the exercise id.
+ * first slot position in the workout; [exerciseNames] fall back to the exercise id. Each record
+ * shows only what its exercise's [tracking] measures.
  */
 fun prRecords(
     slots: List<WorkoutExerciseEntity>,
     workoutSets: List<SetEntity>,
     prIds: Set<Long>,
     exerciseNames: Map<String, String>,
+    tracking: Map<String, Tracking> = emptyMap(),
 ): List<PrRecord> {
     val slotById = slots.associateBy { it.id }
     val bestByExercise = LinkedHashMap<String, SetEntity>()
@@ -164,13 +175,17 @@ fun prRecords(
     return bestByExercise.entries
         .sortedBy { positionByExercise[it.key] ?: Int.MAX_VALUE }
         .mapNotNull { (exerciseId, set) ->
-            val weight = set.weightKg?.takeIf { it > 0.0 }
-            if (weight == null && set.reps == null) return@mapNotNull null
+            val kind = tracking[exerciseId] ?: Tracking.WEIGHT_REPS
+            val weight = set.weightKg?.takeIf { kind.takesWeight && it != 0.0 }
+            val reps = set.reps?.takeIf { kind.takesReps }
+            val durationSec = set.durationSec?.takeIf { kind.takesDuration }
+            if (weight == null && reps == null && durationSec == null) return@mapNotNull null
             PrRecord(
                 exerciseId = exerciseId,
                 exerciseName = exerciseNames[exerciseId] ?: exerciseId,
                 weightKg = weight,
-                reps = set.reps,
+                reps = reps,
+                durationSec = durationSec,
             )
         }
 }

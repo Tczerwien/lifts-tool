@@ -2,6 +2,7 @@ package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import kotlin.test.Test
@@ -82,6 +83,15 @@ class SessionLogicTest {
         )
         // 100x5 + 100x4; the warm-up and the pending set contribute nothing.
         assertEquals(900.0, totalVolumeKg(sets), 1e-9)
+    }
+
+    @Test
+    fun `assistance adds no volume`() {
+        val sets = listOf(
+            set(id = 1, weightKg = -20.0, reps = 10, completedAt = 1L),
+            set(id = 2, weightKg = 10.0, reps = 8, completedAt = 2L),
+        )
+        assertEquals(80.0, totalVolumeKg(sets), 1e-9)
     }
 
     // --- set types and RIR ---
@@ -247,6 +257,27 @@ class SessionLogicTest {
         )
         val records = prRecords(slots, sets, setOf(10L, 11L), mapOf("bench" to "Bench Press"))
         assertEquals(listOf("Bench Press", "dip"), records.map { it.exerciseName })
+    }
+
+    @Test
+    fun `stars and records follow each exercise's tracking`() {
+        val slots = listOf(slot(id = 1, exerciseId = "pullup"), slot(id = 2, exerciseId = "plank", position = 1))
+        val prior = mapOf(
+            "pullup" to listOf(set(id = 1, slotId = 9, weightKg = -30.0, reps = 8, completedAt = 1L)),
+            "plank" to listOf(SetEntity(id = 2, workoutExerciseId = 9, position = 0, type = SET_TYPE_NORMAL, durationSec = 60, completedAt = 1L)),
+        )
+        val sets = listOf(
+            set(id = 10, slotId = 1, weightKg = -25.0, reps = 6, completedAt = 100L),
+            SetEntity(id = 11, workoutExerciseId = 2, position = 0, type = SET_TYPE_NORMAL, durationSec = 75, completedAt = 200L),
+        )
+        val tracking = mapOf("pullup" to Tracking.ASSISTED_BODYWEIGHT, "plank" to Tracking.DURATION)
+        // As weight x reps, neither is a PR: -25 is no weight, and a hold has no reps.
+        assertTrue(prSetIds(slots, sets, prior).isEmpty())
+        val ids = prSetIds(slots, sets, prior, tracking)
+        assertEquals(setOf(10L, 11L), ids)
+        val records = prRecords(slots, sets, ids, emptyMap(), tracking)
+        assertEquals(PrRecord("pullup", "pullup", -25.0, 6), records[0])
+        assertEquals(PrRecord("plank", "plank", null, null, 75), records[1])
     }
 
     // --- nextPendingSet ---

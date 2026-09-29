@@ -11,6 +11,7 @@ import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.displayName
 import java.time.ZoneId
@@ -342,7 +343,7 @@ class ActiveSession(
 
     /**
      * Summary of [workoutId]: duration, completed-set count (any type), volume
-     * (non-warmup), PR records replayed against prior history, and the weigh-in that goes with
+     * (non-warmup), PR records replayed against prior history by each exercise's tracking, and the weigh-in that goes with
      * it ([workoutBodyweight], by the local day in [zone]). Works for already-finished workouts
      * (Workout Complete recomputes from its constructor id).
      */
@@ -352,8 +353,10 @@ class ActiveSession(
         val sets = repository.setsForWorkout(workoutId)
         val exerciseIds = slots.map { it.exerciseId }.distinct()
         val priorHistory = priorHistory(exerciseIds, workoutId)
-        val prIds = prSetIds(slots, sets, priorHistory)
-        val names = exerciseIds.associateWith { id -> repository.exerciseById(id)?.let(::displayName) ?: id }
+        val exercises = exerciseIds.mapNotNull { repository.exerciseById(it) }.associateBy { it.id }
+        val tracking = exercises.mapValues { (_, exercise) -> exercise.tracking }
+        val prIds = prSetIds(slots, sets, priorHistory, tracking)
+        val names = exerciseIds.associateWith { id -> exercises[id]?.let(::displayName) ?: id }
         val end = workout.endedAt ?: workout.startedAt
         val day = workoutEpochDay(workout.startedAt, zone)
         val weighIns = repository.bodyweightBetween(day - WORKOUT_BODYWEIGHT_LOOKBACK_DAYS, day)
@@ -363,7 +366,7 @@ class ActiveSession(
             durationSec = ((end - workout.startedAt) / 1000L).toInt().coerceAtLeast(0),
             completedSetCount = completedSetCount(sets),
             totalVolumeKg = totalVolumeKg(sets),
-            prs = prRecords(slots, sets, prIds, names),
+            prs = prRecords(slots, sets, prIds, names, tracking),
             bodyweight = workoutBodyweight(workout.startedAt, weighIns, zone),
         )
     }
