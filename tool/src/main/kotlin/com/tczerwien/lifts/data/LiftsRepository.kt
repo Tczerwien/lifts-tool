@@ -141,6 +141,10 @@ class LiftsRepository private constructor(
         true
     }
 
+    override fun updateSlotNotes(id: Long, notes: String?): Boolean = db.workoutDao.updateSlotNotes(id, notes) > 0
+
+    override fun updateSlotRest(id: Long, restSecWork: Int?): Boolean = db.workoutDao.updateSlotRest(id, restSecWork) > 0
+
     override fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
         db.workoutDao.exercisesForWorkout(workoutId)
 

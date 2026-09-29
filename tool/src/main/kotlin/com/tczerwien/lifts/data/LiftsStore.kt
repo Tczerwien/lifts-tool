@@ -41,6 +41,12 @@ interface LiftsStore {
     /** Deletes one slot with its sets and renumbers the workout's remaining slots 0..n-1. */
     fun deleteSlot(id: Long): Boolean
 
+    /** Writes one slot's note (null clears it). */
+    fun updateSlotNotes(id: Long, notes: String?): Boolean
+
+    /** Writes one slot's work rest (null follows Settings' default). */
+    fun updateSlotRest(id: Long, restSecWork: Int?): Boolean
+
     /** A workout's slots in position order. */
     fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity>
 

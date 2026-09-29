@@ -172,6 +172,50 @@ class ActiveSession(
         !logged && repository.deleteSlot(workoutExerciseId)
     }
 
+    // --- The "…" menu's edits (all refused once the workout has closed) ---
+
+    /**
+     * Renames [workoutId] while it is open. Spaces are tidied; a blank name, or the name it already
+     * has, changes nothing. True when it was renamed.
+     */
+    fun renameWorkout(workoutId: Long, name: String): Boolean = repository.inTransaction {
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return@inTransaction false
+        val tidy = name.replace(Regex("\\s+"), " ").trim()
+        tidy.isNotEmpty() && tidy != workout.name && repository.updateWorkout(workout.copy(name = tidy))
+    }
+
+    /** The workout's note while it is open; blank clears it. True when it changed. */
+    fun setWorkoutNotes(workoutId: Long, text: String): Boolean = repository.inTransaction {
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return@inTransaction false
+        val notes = text.trim().ifEmpty { null }
+        notes != workout.notes && repository.updateWorkout(workout.copy(notes = notes))
+    }
+
+    /**
+     * The note on one exercise of the open workout (slot [slotId]; "left shoulder twinge on set 3"),
+     * shown in Workout Detail and written to every export; blank clears it. True when it changed.
+     */
+    fun setSlotNotes(workoutId: Long, slotId: Long, text: String): Boolean = repository.inTransaction {
+        val slot = openSlot(workoutId, slotId) ?: return@inTransaction false
+        val notes = text.trim().ifEmpty { null }
+        notes != slot.notes && repository.updateSlotNotes(slotId, notes)
+    }
+
+    /**
+     * This exercise's rest for its work sets in the open workout (warm-ups keep theirs), from its next
+     * tick on. A rest equal to Settings' default is stored as none, so the slot follows the default if
+     * that changes. True when it changed.
+     */
+    fun setSlotRest(workoutId: Long, slotId: Long, restSec: Int): Boolean = repository.inTransaction {
+        val slot = openSlot(workoutId, slotId) ?: return@inTransaction false
+        val stored = restSec.coerceAtLeast(0).takeIf { it != settings.snapshot().defaultRestSec }
+        stored != slot.restSecWork && repository.updateSlotRest(slotId, stored)
+    }
+
+    /** Slot [slotId] of [workoutId] while that workout is open; null otherwise. Call inside a transaction. */
+    private fun openSlot(workoutId: Long, slotId: Long): WorkoutExerciseEntity? =
+        if (isOpen(workoutId)) repository.exercisesForWorkout(workoutId).firstOrNull { it.id == slotId } else null
+
     /** Unticks [set], keeping its values, while [workoutId] is open ([updateSet]): a finished workout keeps its log. */
     fun uncompleteSet(workoutId: Long, set: SetEntity): Boolean = updateSet(workoutId, set.copy(completedAt = null))
 

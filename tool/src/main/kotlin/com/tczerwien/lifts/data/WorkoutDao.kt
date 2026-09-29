@@ -89,6 +89,14 @@ interface WorkoutDao {
     @Update
     fun updateWorkoutExercise(workoutExercise: WorkoutExerciseEntity): Int
 
+    /** One slot's note: what he wrote about this exercise in this workout. */
+    @Query("UPDATE workout_exercises SET notes = :notes WHERE id = :id")
+    fun updateSlotNotes(id: Long, notes: String?): Int
+
+    /** One slot's work rest; null follows Settings' default. */
+    @Query("UPDATE workout_exercises SET restSecWork = :restSecWork WHERE id = :id")
+    fun updateSlotRest(id: Long, restSecWork: Int?): Int
+
     @Query("SELECT * FROM sets WHERE id = :id")
     fun setById(id: Long): SetEntity?
 

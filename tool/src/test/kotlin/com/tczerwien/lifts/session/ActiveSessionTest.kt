@@ -329,6 +329,56 @@ class ActiveSessionTest {
         assertEquals(60_000L, stored.completedAt)
     }
 
+    // --- The "…" menu's edits ---
+
+    @Test
+    fun `the menu renames the workout and notes it and its exercises`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "bench")!!
+        assertTrue(session.renameWorkout(workoutId, "  Upper   A "))
+        assertEquals("Upper A", store.workoutById(workoutId)!!.name)
+        assertFalse(session.renameWorkout(workoutId, "   "), "blank keeps the name")
+        assertFalse(session.renameWorkout(workoutId, "Upper A"), "the same name is no change")
+        assertEquals("Upper A", store.workoutById(workoutId)!!.name)
+
+        assertTrue(session.setWorkoutNotes(workoutId, " Slept badly \n"))
+        assertEquals("Slept badly", store.workoutById(workoutId)!!.notes)
+        assertTrue(session.setWorkoutNotes(workoutId, "  "))
+        assertNull(store.workoutById(workoutId)!!.notes, "blank clears it")
+
+        assertTrue(session.setSlotNotes(workoutId, slotId, "left shoulder twinge on set 3 "))
+        assertEquals("left shoulder twinge on set 3", store.slots.getValue(slotId).notes)
+        assertFalse(session.setSlotNotes(workoutId, slotId + 99, "no such slot"))
+    }
+
+    @Test
+    fun `a rest for this exercise equal to the default follows the default`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "fly")!!
+        assertTrue(session.setSlotRest(workoutId, slotId, 60))
+        assertEquals(60, store.slots.getValue(slotId).restSecWork)
+        val row = store.setsForWorkout(workoutId).first()
+        assertEquals(60, session.completeSet(workoutId, row, 20.0, 12, n, now = 5_000)!!.restDurationSec)
+        assertTrue(session.setSlotRest(workoutId, slotId, SettingsStore.DEFAULT_REST_SEC_VALUE))
+        assertNull(store.slots.getValue(slotId).restSecWork, "the default is stored as none")
+        assertTrue(session.setSlotRest(workoutId, slotId, 0))
+        assertEquals(0, store.slots.getValue(slotId).restSecWork, "0 s is a superset's first half, not the default")
+    }
+
+    @Test
+    fun `the menu's edits can't change a workout that has closed`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "bench")!!
+        session.completeSet(workoutId, store.setsForWorkout(workoutId).first(), 100.0, 5, n, now = 60_000)
+        assertTrue(session.closeIfStale(workoutId, now = 60_000 + 5 * 3_600_000L))
+        val before = store.workoutById(workoutId) to store.slots.getValue(slotId)
+        assertFalse(session.renameWorkout(workoutId, "Upper A"))
+        assertFalse(session.setWorkoutNotes(workoutId, "late"))
+        assertFalse(session.setSlotNotes(workoutId, slotId, "late"))
+        assertFalse(session.setSlotRest(workoutId, slotId, 60))
+        assertEquals(before, store.workoutById(workoutId) to store.slots.getValue(slotId))
+    }
+
     @Test
     fun `the summary carries that day's weigh-in, looked up rather than stored`() {
         val workoutId = session.startEmpty(now = 1_000)
