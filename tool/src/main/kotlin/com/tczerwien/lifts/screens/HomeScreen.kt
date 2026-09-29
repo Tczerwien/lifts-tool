@@ -19,6 +19,7 @@ import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.shouldAutoResume
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.settings.barAfterUnitSwitch
 import com.tczerwien.lifts.toolmanager.LiftsEntryPoint
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.RestoreInbox
@@ -30,6 +31,7 @@ import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.SectionLabel
+import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.rememberBarChartIconPainter
 import com.tczerwien.lifts.ui.rememberScaleIconPainter
 import com.thelightphone.sdk.InitialScreen
@@ -211,7 +213,14 @@ class HomeViewModel(
         // Once per install, the first time B9 runs: types started to matter, so an exercise logged with
         // numbers its guessed type hides gets a type that shows them (a belted pull-up, a plank as reps).
         if (!runBlocking { settingsStore.trackingFitted() }) {
-            if (repository.fitTrackingToHistory() > 0) share.logChanged()
+            var changed = repository.fitTrackingToHistory() > 0
+            // A lifter already in kg keeps the 45 lb seed bar only because nothing switched it: B9 would.
+            if (settingsStore.snapshot().units == WeightUnit.KG) {
+                repository.listBars().forEach { bar ->
+                    barAfterUnitSwitch(bar, WeightUnit.LB, WeightUnit.KG)?.let { changed = repository.updateBar(it) || changed }
+                }
+            }
+            if (changed) share.logChanged()
             runBlocking { settingsStore.markTrackingFitted() }
         }
         val now = System.currentTimeMillis()
