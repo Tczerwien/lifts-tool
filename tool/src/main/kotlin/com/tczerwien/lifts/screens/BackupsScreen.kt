@@ -58,16 +58,20 @@ class BackupsViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    /** Bumped on each show, so the folder is read again through the same collector. */
+    private val shown = MutableStateFlow(0L)
+
     init {
         // Every backup that lands, fails or changes the folder re-reads it, including the ones a
         // restore takes, which leave the status as it was.
+        // One collector reads the folder, one read at a time, so an older listing can't land last.
         viewModelScope.launch(Dispatchers.IO) {
-            combine(backups.status, backups.changes) { status, _ -> status }.collect { status -> reload(status) }
+            combine(backups.status, backups.changes, shown) { status, _, _ -> status }.collect { status -> reload(status) }
         }
     }
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { reload(backups.status.value) }
+        shown.update { it + 1 }
     }
 
     /** BACK UP NOW: a dated backup on the write lane, so it survives Back. */
