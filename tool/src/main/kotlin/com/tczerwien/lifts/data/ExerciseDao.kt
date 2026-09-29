@@ -37,15 +37,4 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE id IN (:ids)")
     fun byIds(ids: List<String>): List<ExerciseEntity>
-
-    /** Caller supplies LIKE wildcards, e.g. "%bench%". */
-    @Query("SELECT * FROM exercises WHERE name LIKE :pattern ORDER BY name COLLATE NOCASE")
-    fun searchByName(pattern: String): List<ExerciseEntity>
-
-    /** Matches the JSON-quoted element inside the primaryMuscles JSON array column. */
-    @Query(
-        "SELECT * FROM exercises WHERE primaryMuscles LIKE '%\"' || :muscle || '\"%' " +
-            "ORDER BY name COLLATE NOCASE"
-    )
-    fun listByPrimaryMuscle(muscle: String): List<ExerciseEntity>
 }

@@ -24,11 +24,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewModelScope
-import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.library.CatalogEntry
+import com.tczerwien.lifts.library.catalogEntry
+import com.tczerwien.lifts.library.isRenamed
+import com.tczerwien.lifts.library.searchExercises
+import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.knownCatalogName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -46,11 +51,10 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 
 class ExercisePickerViewModel(
     private val repository: LiftsRepository,
@@ -74,9 +78,23 @@ class ExercisePickerViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
+    /**
+     * The catalog as the search sees it, by shown name, loaded once: it can't change while the picker
+     * is open (a new exercise closes it). Chips and search filter it in memory.
+     */
+    @Volatile
+    private var catalog: List<CatalogEntry> = emptyList()
+
+    private var loadStarted = false
+
+    /**
+     * Loads the catalog the first time only; the SDK calls this straight after creating the view model,
+     * and again on every return. Behind any write still queued, so a rename saved a moment ago shows.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<String>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        if (loadStarted) return
+        loadStarted = true
+        LiftsIo.write({}) { load() }
     }
 
     /**
@@ -90,54 +108,59 @@ class ExercisePickerViewModel(
     }
 
     fun selectMuscle(muscle: String?) {
-        _uiState.value = _uiState.value.copy(selectedMuscle = muscle, searchQuery = null)
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        _uiState.update { it.copy(selectedMuscle = muscle, searchQuery = null).withRows() }
     }
 
     fun openSearch() {
-        val state = _uiState.value
-        _uiState.value = state.copy(searchOpen = true, searchSession = state.searchSession + 1)
+        _uiState.update { it.copy(searchOpen = true, searchSession = it.searchSession + 1) }
     }
 
     fun cancelSearch() {
-        _uiState.value = _uiState.value.copy(searchOpen = false)
+        _uiState.update { it.copy(searchOpen = false) }
     }
 
     /** Blank submit clears the search; otherwise the query replaces any muscle filter. */
     fun submitSearch(raw: String) {
         val query = raw.trim().takeIf { it.isNotEmpty() }
-        _uiState.value = _uiState.value.copy(
-            searchOpen = false,
-            searchQuery = query,
-            selectedMuscle = null,
-        )
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        _uiState.update { it.copy(searchOpen = false, searchQuery = query, selectedMuscle = null).withRows() }
     }
 
     fun clearSearch() {
-        _uiState.value = _uiState.value.copy(searchQuery = null)
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        _uiState.update { it.copy(searchQuery = null).withRows() }
     }
 
-    private fun refresh() {
-        val all = repository.listExercises()
-        val muscles = all.flatMap { it.primaryMuscles }.distinct().sorted()
-        val state = _uiState.value
-        val filtered = when {
-            state.searchQuery != null -> repository.searchExercisesByName("%${state.searchQuery}%")
-            state.selectedMuscle != null -> repository.exercisesByPrimaryMuscle(state.selectedMuscle)
-            else -> all
+    /**
+     * Names come from the light projection, without the instructions. A lift he renamed also answers
+     * to its catalog name; the whole seed is parsed for that only when one of them isn't a lift with a
+     * short name.
+     */
+    private fun load() {
+        val summaries = repository.exerciseSummaries().filterNot { it.hidden }
+        val seedNames = if (summaries.any { isRenamed(it) && knownCatalogName(it.id) == null }) {
+            SeedParser.parse().associate { it.id to it.name }
+        } else {
+            emptyMap()
         }
-        _uiState.value = _uiState.value.copy(
-            muscles = muscles,
-            rows = filtered.map { it.toRow() },
-            loaded = true,
-        )
+        catalog = summaries
+            .map { catalogEntry(it, knownCatalogName(it.id) ?: seedNames[it.id]) }
+            .sortedWith(compareBy({ it.shown.lowercase() }, { it.id }))
+        val muscles = catalog.flatMap { it.primaryMuscles }.distinct().sorted()
+        _uiState.update { it.copy(muscles = muscles, loaded = true).withRows() }
     }
 
-    private fun ExerciseEntity.toRow() = ExerciseRow(
+    /** The rows for this state's filter: a search, a muscle, or the whole catalog. */
+    private fun UiState.withRows(): UiState {
+        val entries = when {
+            searchQuery != null -> searchExercises(catalog, searchQuery)
+            selectedMuscle != null -> catalog.filter { selectedMuscle in it.primaryMuscles }
+            else -> catalog
+        }
+        return copy(rows = entries.map { it.toRow() })
+    }
+
+    private fun CatalogEntry.toRow() = ExerciseRow(
         id = id,
-        name = name,
+        name = shown,
         muscleLabel = primaryMuscles.firstOrNull()?.let(::titleCaseLabel) ?: "—",
     )
 }

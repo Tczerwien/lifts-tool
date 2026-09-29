@@ -9,7 +9,7 @@ class ConvertersTest {
 
     @Test
     fun listsAreStoredAsCompactJson() {
-        // ExerciseDao.listByPrimaryMuscle matches '%"chest"%': the encoding must stay compact.
+        // The stored format: a backup written by any version must read back the same.
         assertEquals("[\"chest\",\"triceps\"]", converters.fromStringList(listOf("chest", "triceps")))
     }
 
