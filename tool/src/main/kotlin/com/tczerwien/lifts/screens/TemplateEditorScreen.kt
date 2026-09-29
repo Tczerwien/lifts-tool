@@ -358,6 +358,8 @@ class TemplateEditorScreen(
                             onBack = viewModel::cancelRename,
                             keyboardOptionsFlow = keyboardOptionsFlow,
                             singleLine = true,
+                            // A capital only for a blank name, not mid-way through the one being edited.
+                            initialCaps = uiState.name.isBlank(),
                             editorKey = "template-rename-${uiState.editorSession}",
                             modifier = Modifier.fillMaxSize(),
                         )

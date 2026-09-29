@@ -272,6 +272,8 @@ class WorkoutDetailScreen(
                             onSubmit = { viewModel.saveNotes(it.toString()) },
                             onBack = { viewModel.cancelEditNotes() },
                             keyboardOptionsFlow = keyboardOptionsFlow,
+                            // A capital to start a new note; none mid-way through one being edited.
+                            initialCaps = uiState.notes.isNullOrBlank(),
                             editorKey = uiState.notesEditSession,
                             modifier = Modifier.fillMaxSize(),
                         )

@@ -285,6 +285,8 @@ class CustomExerciseScreen(
                         onBack = viewModel::closeMode,
                         keyboardOptionsFlow = keyboardOptionsFlow,
                         singleLine = true,
+                        // A capital to start a new name; none mid-way through one filled in or edited.
+                        initialCaps = uiState.name.isBlank(),
                         editorKey = "custom-name-${uiState.editorSession}",
                         modifier = Modifier
                             .fillMaxSize()

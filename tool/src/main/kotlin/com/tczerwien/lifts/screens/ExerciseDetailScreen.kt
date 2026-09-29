@@ -356,6 +356,8 @@ class ExerciseDetailScreen(
                     onSubmit = { if (naming) viewModel.saveName(it.toString()) else viewModel.saveNote(it.toString()) },
                     onBack = viewModel::closeEditor,
                     keyboardOptionsFlow = keyboardOptionsFlow,
+                    // A capital to start a blank note or name; none mid-way through one being edited.
+                    initialCaps = (if (naming) uiState.nameAtOpen else uiState.pinnedNote.orEmpty()).isBlank(),
                     editorKey = "exercise-${editing.name.lowercase()}-${uiState.editSession}",
                     modifier = Modifier
                         .fillMaxSize()

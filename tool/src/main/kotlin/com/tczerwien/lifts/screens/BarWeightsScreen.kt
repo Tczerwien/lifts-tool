@@ -228,6 +228,8 @@ class BarWeightsScreen(
                         onBack = { viewModel.closeEditor() },
                         keyboardOptionsFlow = keyboardOptionsFlow,
                         singleLine = true,
+                        // A capital to start a new name; none mid-way through one being edited.
+                        initialCaps = mode.prefill.isBlank(),
                         submitLabel = "NEXT",
                         editorKey = "lifts-bar-name-${mode.session}",
                         modifier = Modifier.background(LightThemeTokens.colors.background),

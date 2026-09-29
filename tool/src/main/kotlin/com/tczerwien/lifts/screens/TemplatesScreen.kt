@@ -252,6 +252,8 @@ class TemplatesScreen(
                             onBack = viewModel::cancelNameEntry,
                             keyboardOptionsFlow = keyboardOptionsFlow,
                             singleLine = true,
+                            // A new template's name starts with a capital.
+                            initialCaps = true,
                             editorKey = "template-name-${uiState.editorSession}",
                             modifier = Modifier.fillMaxSize(),
                         )
