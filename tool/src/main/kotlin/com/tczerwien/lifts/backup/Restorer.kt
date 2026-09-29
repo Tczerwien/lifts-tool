@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.backup
 
 import android.database.sqlite.SQLiteException
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.tczerwien.lifts.data.LiftsDatabase
@@ -119,8 +120,11 @@ class Restorer(
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
         }
-        // A backup from before B9 has the guessed types beside its history: fit them as an upgrade does.
-        runCatching { live.fitTrackingToHistory() }
+        // A backup from before B9 (its settings have no weight step yet) has the guessed types beside its
+        // history: fit them as an upgrade does. A B9 backup's types are his choices and stay.
+        if (SettingsStore.KEY_WEIGHT_STEP_LB !in prepared.settingsRows) {
+            runCatching { live.fitTrackingToHistory() }.onFailure { Log.w("Lifts", "fitting exercise types after a restore failed", it) }
+        }
         // The rest, the exercise on screen: they name ids of the log just replaced.
         val keysProblem = try {
             ActiveSession.forgetWorkoutState(dataStore)
