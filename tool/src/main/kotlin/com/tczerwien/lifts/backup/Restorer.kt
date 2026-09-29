@@ -103,8 +103,11 @@ class Restorer(
      * [NothingChanged] when it stopped before the rows were replaced.
      */
     suspend fun apply(prepared: Prepared): Outcome {
+        // Restoring from one of the phone's own backups: pruning must not take that file before the
+        // rows are in (it may be the only copy of what it holds).
+        val source = setOfNotNull(prepared.source.name.takeIf { backups.holds(prepared.source) })
         val safety = try {
-            backups.backUp(BackupPolicy.Kind.PRE_RESTORE)
+            backups.backUp(BackupPolicy.Kind.PRE_RESTORE, keep = source)
         } catch (e: Exception) {
             throw NothingChanged("could not save a copy of this phone's log first (${e.message ?: e})")
         }

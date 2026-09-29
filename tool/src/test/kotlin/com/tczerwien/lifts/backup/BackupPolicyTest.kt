@@ -70,7 +70,7 @@ class BackupPolicyTest {
         val others = listOf(stored(BackupPolicy.LATEST, sep1), stored("notes.txt", 0), stored(".backup.tmp", 0))
         val listing = (dated + preRestore + others).shuffled(java.util.Random(6))
 
-        val deleted = BackupPolicy.toDelete(listing).toSet()
+        val deleted = BackupPolicy.toDelete(listing, now = sep1 + 20 * day).toSet()
 
         assertEquals((dated.take(3) + preRestore.take(2)).map { it.name }.toSet(), deleted)
     }
@@ -84,22 +84,37 @@ class BackupPolicyTest {
             stored("pre-restore-2026-09-28-1433.db", sep1 + 60_000),
             stored("pre-restore-2026-09-28-1434.db", sep1 + 90_000),
         )
-        assertEquals(listOf("pre-restore-2026-09-28-1432.db"), BackupPolicy.toDelete(listing))
+        assertEquals(listOf("pre-restore-2026-09-28-1432.db"), BackupPolicy.toDelete(listing, now = sep1 + day))
     }
 
     @Test
-    fun `the file just written is never pruned, even when a wrong clock makes it look oldest`() {
-        val kept = (1..3).map { d -> stored("pre-restore-2026-10-%02d-0800.db".format(d), sep1 + (30 + d) * day) }
+    fun `files from a wrong clock count as oldest, so later backups survive the next prune`() {
+        // The clock ran a month ahead for three pre-restore copies, then was fixed.
+        val future = (1..3).map { d -> stored("pre-restore-2026-10-%02d-0800.db".format(d), sep1 + (30 + d) * day) }
         val fresh = stored("pre-restore-2026-09-01-0800.db", sep1)
-        val deleted = BackupPolicy.toDelete(kept + fresh, justWritten = fresh.name)
-        assertEquals(listOf(kept.first().name), deleted, "three copies stay, the new one among them")
+        assertEquals(listOf(future.first().name), BackupPolicy.toDelete(future + fresh, now = sep1, keep = listOf(fresh.name)))
+        // At the next backup a future-dated copy goes, not the fresh one (before, the fresh one looked oldest).
+        val next = stored("pre-restore-2026-09-02-0800.db", sep1 + day)
+        assertEquals(
+            listOf(future[1].name),
+            BackupPolicy.toDelete(future.drop(1) + fresh + next, now = sep1 + day, keep = listOf(next.name)),
+        )
+    }
+
+    @Test
+    fun `a restore's source is kept while its pre-restore copy is written`() {
+        // Three pre-restore copies; the lifter restores the oldest, the only copy of what it holds.
+        val copies = (1..3).map { d -> stored("pre-restore-2026-09-%02d-0800.db".format(d), sep1 + d * day) }
+        val safety = stored("pre-restore-2026-09-05-0800.db", sep1 + 5 * day)
+        val deleted = BackupPolicy.toDelete(copies + safety, now = sep1 + 5 * day, keep = listOf(safety.name, copies[0].name))
+        assertEquals(listOf(copies[1].name), deleted, "the source and the new copy stay; three in all")
     }
 
     @Test
     fun `nothing is pruned below the limits`() {
         val few = (1..10).map { stored("lifts-2026-09-%02d-0800.db".format(it), sep1 + it * day) } +
             (1..3).map { stored("pre-restore-2026-09-%02d-0800.db".format(it), sep1 + it * day) } + stored(BackupPolicy.LATEST, sep1)
-        assertEquals(emptyList(), BackupPolicy.toDelete(few))
+        assertEquals(emptyList(), BackupPolicy.toDelete(few, now = sep1 + 20 * day))
     }
 
     @Test

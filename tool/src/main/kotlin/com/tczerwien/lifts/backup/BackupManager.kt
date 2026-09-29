@@ -82,8 +82,8 @@ class BackupManager(
      * Call it on the write lane only (inside a [LiftsIo] block): it reads the database and settings
      * as one picture. A failure is kept for [status] until a backup succeeds.
      */
-    fun backUp(kind: BackupPolicy.Kind, now: Long = System.currentTimeMillis()): File = try {
-        write(kind, now).also { lastFailure = null }
+    fun backUp(kind: BackupPolicy.Kind, now: Long = System.currentTimeMillis(), keep: Set<String> = emptySet()): File = try {
+        write(kind, now, keep).also { lastFailure = null }
     } catch (e: Exception) {
         Log.w(TAG, "Backup failed", e)
         lastFailure = e.message ?: e.toString()
@@ -92,7 +92,8 @@ class BackupManager(
         publish()
     }
 
-    private fun write(kind: BackupPolicy.Kind, now: Long): File {
+    /** [keep]: backup names pruning must leave alone this time (a restore's own source). */
+    private fun write(kind: BackupPolicy.Kind, now: Long, keep: Set<String>): File {
         val started = System.nanoTime()
         if (!dir.isDirectory && !dir.mkdirs()) throw IOException("cannot create ${dir.name}")
         val temp = File(dir, TEMP_NAME)
@@ -105,7 +106,7 @@ class BackupManager(
             val target = File(dir, BackupPolicy.uniqueName(kind, now, dir.list().orEmpty().toList()))
             if (!temp.renameTo(target)) throw IOException("cannot name ${target.name}")
             if (kind == BackupPolicy.Kind.DATED) replaceLatest(target)
-            prune(justWritten = target.name)
+            prune(now, keep + target.name)
             Log.i(TAG, "Backup ${target.name}: ${target.length()} B in ${(System.nanoTime() - started) / 1_000_000} ms")
             return target
         } finally {
@@ -136,9 +137,12 @@ class BackupManager(
         }
     }
 
-    private fun prune(justWritten: String) {
-        BackupPolicy.toDelete(stored(), justWritten).forEach { File(dir, it).delete() }
+    private fun prune(now: Long, keep: Set<String>) {
+        BackupPolicy.toDelete(stored(), now, keep).forEach { File(dir, it).delete() }
     }
+
+    /** Whether [file] is one of the backups in this folder (a restore reading its own backup). */
+    fun holds(file: File): Boolean = file.parentFile?.canonicalPath == dir.canonicalPath
 
     /** Flushes [file] to storage, so a power cut right after the rename can't leave an empty backup. */
     private fun sync(file: File) {

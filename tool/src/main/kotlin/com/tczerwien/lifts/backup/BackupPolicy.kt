@@ -59,19 +59,25 @@ object BackupPolicy {
     /**
      * The files of a backups folder ([stored]) to delete: every dated copy but the newest [KEEP_DATED]
      * and every pre-restore copy but the newest [KEEP_PRE_RESTORE], newest by when they were written.
-     * [justWritten] is never on the list, even when a wrong clock makes it look oldest, and neither
-     * are [LATEST] and files Lifts didn't name.
+     * A file written in the future (the clock was wrong, then fixed) counts as oldest: it predates the
+     * fix. Names in [keep] (the file just written, the file a restore is reading) are never on the
+     * list and count toward their kind's limit, and neither are [LATEST] and files Lifts didn't name.
      */
-    fun toDelete(stored: Collection<Stored>, justWritten: String? = null): List<String> {
-        val byKind = stored.distinctBy { it.name }.filter { it.name != justWritten }.groupBy { kindOf(it.name) }
+    fun toDelete(stored: Collection<Stored>, now: Long, keep: Collection<String> = emptyList()): List<String> {
+        val byKind = stored.distinctBy { it.name }.filter { it.name !in keep }.groupBy { kindOf(it.name) }
         return Kind.entries.flatMap { kind ->
-            val keep = when (kind) {
+            val limit = when (kind) {
                 Kind.DATED -> KEEP_DATED
                 Kind.PRE_RESTORE -> KEEP_PRE_RESTORE
-            } - (if (justWritten != null && kindOf(justWritten) == kind) 1 else 0)
+            }
+            val kept = keep.distinct().count { kindOf(it) == kind }
             byKind[kind].orEmpty()
-                .sortedWith(compareByDescending<Stored> { it.writtenAt }.thenByDescending { it.name })
-                .drop(keep)
+                .sortedWith(
+                    compareBy<Stored> { it.writtenAt > now + CLOCK_SLACK_MS }
+                        .thenByDescending { it.writtenAt }
+                        .thenByDescending { it.name },
+                )
+                .drop((limit - kept).coerceAtLeast(0))
                 .map { it.name }
         }
     }
