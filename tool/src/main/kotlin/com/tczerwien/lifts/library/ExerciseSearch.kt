@@ -335,8 +335,15 @@ fun searchExercises(
     return ranked
         .sortedWith(
             compareBy<Pair<CatalogEntry, Int>> { if (it.first.isLift) 0 else 1 }
-                // A name he typed exactly wins; below that, what he did recently beats a closer fit.
-                .thenBy { if (it.second <= LAST_EXACT_RANK) 0 else 1 }
+                // A name he typed exactly wins; below that, what he did recently beats a closer fit, among
+                // names that match: a match through equipment alone ("machine" for Leg Press) comes after.
+                .thenBy {
+                    when {
+                        it.second <= LAST_EXACT_RANK -> 0
+                        it.second < EQUIPMENT_RANK -> 1
+                        else -> 2
+                    }
+                }
                 .thenBy { recency[it.first.id] ?: Int.MAX_VALUE }
                 .thenBy { it.second }
                 .thenBy { it.first.shownName.words.size }

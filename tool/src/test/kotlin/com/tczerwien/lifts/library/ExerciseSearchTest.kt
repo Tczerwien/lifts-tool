@@ -124,6 +124,11 @@ class ExerciseSearchTest {
         assertEquals("hammer-curls", search("curl", recent = listOf("preacher-curl", "hammer-curls"))[1])
         // Two words too: his lift before the phrases that fit closer ("Incline DB Press").
         assertEquals("dumbbell-shoulder-press", search("db press", recent = listOf("dumbbell-shoulder-press")).first())
+        // A name match beats a recent lift that matches only through its equipment (Leg Press is a machine).
+        assertEquals(
+            "machine-shoulder-military-press",
+            search("machine press", recent = listOf("leg-press", "machine-shoulder-military-press")).first(),
+        )
         // But the name typed exactly still wins.
         assertEquals("barbell-bench-press-medium-grip", search("bench press", recent = listOf("dumbbell-bench-press")).first())
     }
