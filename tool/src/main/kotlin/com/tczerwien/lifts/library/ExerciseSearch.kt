@@ -108,12 +108,12 @@ private val FLY_FORMS = mapOf("flye" to "fly", "flyes" to "fly", "flies" to "fly
 internal fun searchWords(text: String): List<String> = words(text).map { FLY_FORMS[it] ?: it }
 
 /**
- * What he typed, as [searchWords], and a word he is still typing on its way to a fly form ("fli",
- * "flie") read as fly, since names now say fly: "cable flie" still finds Incline Cable Flye.
+ * The extra spelling of a word he is still typing on its way to a fly form ("fli", "flie"): fly, since
+ * names say fly; kept beside the word, which may be on its way to "flip" instead ("Tire Flip").
  */
-internal fun typedWords(raw: String): List<String> = searchWords(raw).map { word ->
+private fun flySpelling(word: String): List<List<String>> {
     val onItsWay = word.length >= 3 && !"fly".startsWith(word) && FLY_FORMS.keys.any { it.startsWith(word) }
-    if (onItsWay) "fly" else word
+    return if (onItsWay) listOf(listOf("fly")) else emptyList()
 }
 
 private val NOT_EQUIPMENT = setOf("other", "body only", "none")
@@ -224,7 +224,7 @@ internal class Query(val terms: List<Term>) {
 private const val MAX_FORMS = 64
 
 internal fun parseQuery(raw: String): Query {
-    val typed = typedWords(raw)
+    val typed = searchWords(raw)
     val terms = mutableListOf<Term>()
     var at = 0
     while (at < typed.size) {
@@ -248,7 +248,7 @@ internal fun parseQuery(raw: String): Query {
             } else {
                 ALIAS_PHRASES.filterKeys { it.size == 1 && it[0].startsWith(word) }.values.flatten()
             }
-            terms += Term(listOf(listOf(word)) + begun, whole = finishedLetter(typed, at))
+            terms += Term(listOf(listOf(word)) + begun + flySpelling(word), whole = finishedLetter(typed, at))
             at++
         }
     }
@@ -306,10 +306,10 @@ private fun nearMiss(entry: CatalogEntry, terms: List<Term>): Boolean =
  * shorthand phrase, and a near miss must have two of them, not either of two terms.
  */
 private fun wordTerms(raw: String): List<Term> {
-    val typed = typedWords(raw)
+    val typed = searchWords(raw)
     return typed.mapIndexed { at, word ->
         val keys = listOf(word) + shorthandSingulars(word)
-        val spellings = listOf(listOf(word)) + keys.flatMap { ALIAS_PHRASES[listOf(it)].orEmpty() }
+        val spellings = listOf(listOf(word)) + keys.flatMap { ALIAS_PHRASES[listOf(it)].orEmpty() } + flySpelling(word)
         Term(spellings.distinct(), whole = finishedLetter(typed, at))
     }
 }

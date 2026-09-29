@@ -103,6 +103,8 @@ class ExerciseSearchTest {
         // Half typed on the way to "flies" or "flyes": still the flyes.
         assertTrue("incline-cable-flye" in search("cable flie"))
         assertTrue("incline-cable-flye" in search("cable fli"))
+        // ... while "fli" may also be on its way to flip.
+        assertEquals("tire-flip", search("tire fli").firstOrNull())
         assertTrue(search("dbs").containsAll(listOf("dumbbell-shrug", "dumbbell-bench-press")))
         assertEquals("farmers-walk", search("farmer carry").first())
         // "t-bar" is a phrase in T-Bar Row, and scattered in "... Two-Arm Long Bar Row".
