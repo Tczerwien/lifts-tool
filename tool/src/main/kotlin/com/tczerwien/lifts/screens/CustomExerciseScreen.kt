@@ -146,8 +146,11 @@ class CustomExerciseViewModel(
     private fun UiState.withClash(): UiState =
         copy(nameTaken = nameClash(name, names)?.let { Taken(it.id, it.shown) })
 
+    /** The primary muscle leaves the secondaries, so the form shows what save will store. */
     fun selectPrimaryMuscle(muscle: String) {
-        _uiState.value = _uiState.value.copy(primaryMuscle = muscle, mode = Mode.FORM)
+        _uiState.update {
+            it.copy(primaryMuscle = muscle, secondaryMuscles = it.secondaryMuscles - muscle, mode = Mode.FORM)
+        }
     }
 
     /** Multi-select: toggles membership, keeps the picker open (order follows the option list). */
@@ -299,7 +302,8 @@ class CustomExerciseScreen(
 
                 CustomExerciseViewModel.Mode.SECONDARY_PICKER -> OptionPicker(
                     title = "Secondary Muscles",
-                    options = uiState.muscleOptions,
+                    // The primary is not a secondary too; save would drop it anyway.
+                    options = uiState.muscleOptions - setOfNotNull(uiState.primaryMuscle),
                     isSelected = { it in uiState.secondaryMuscles },
                     onSelect = { it?.let(viewModel::toggleSecondaryMuscle) },
                     onBack = viewModel::closeMode,
