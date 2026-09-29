@@ -267,3 +267,23 @@ fun bodyPartOf(muscle: String): BodyPart? {
 /** The entries whose primary muscle is in [part], in the order given. */
 fun inBodyPart(entries: List<CatalogEntry>, part: BodyPart): List<CatalogEntry> =
     entries.filter { entry -> entry.primaryMuscles.any { bodyPartOf(it) == part } }
+
+/**
+ * A name as duplicate checks compare it: case, spaces, punctuation and a plural s don't count, so
+ * "Pull-Ups", "pull ups" and "Pullup" are one name.
+ */
+fun nameKey(name: String): String {
+    val compact = words(name).joinToString("")
+    return if (compact.length >= 4 && compact.endsWith("s")) compact.dropLast(1) else compact
+}
+
+/**
+ * The exercise, other than [selfId], that already answers to [name] (the name Lifts shows for it,
+ * its stored name, or its catalog name); null when the name is free. Two exercises with one name
+ * would split his history, and the Strong CSV keys exercises by name.
+ */
+fun nameClash(name: String, entries: List<CatalogEntry>, selfId: String? = null): CatalogEntry? {
+    val key = nameKey(name)
+    if (key.isEmpty()) return null
+    return entries.firstOrNull { entry -> entry.id != selfId && entry.allNames.any { nameKey(it) == key } }
+}
