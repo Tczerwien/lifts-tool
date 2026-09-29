@@ -340,7 +340,8 @@ class ActiveWorkoutViewModel(
         val next = nextSetType(set.type, ticked = set.completedAt != null)
         _uiState.update { it.copy(activeSetId = setId) }
         if (next == set.type) return
-        val edit = applySetChange(setId) { it.copy(type = next) } ?: return
+        // A warm-up has no effort rating (its RIR cell hides): one it had would still print as "w95x5 @8".
+        val edit = applySetChange(setId) { it.copy(type = next, rpe = if (next == SET_TYPE_WARMUP) null else it.rpe) } ?: return
         persistSet(edit)
     }
 
