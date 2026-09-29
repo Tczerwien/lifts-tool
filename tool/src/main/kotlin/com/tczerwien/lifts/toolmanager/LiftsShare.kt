@@ -10,6 +10,7 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.export.ExportWriter
 import com.tczerwien.lifts.export.renderExports
+import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.thelightphone.sdk.SealedLightContext
@@ -50,8 +51,9 @@ class LiftsShare private constructor(
         exports.request()
     }
 
-    /** Workout Detail deleted a workout: the exports drop it. */
+    /** Workout Detail deleted a workout: the exports drop it, and an open workout's cached history too. */
     fun workoutDeleted() {
+        HistoryVersion.bump()
         exports.request()
     }
 
@@ -78,6 +80,7 @@ class LiftsShare private constructor(
      * between, which the pre-restore copy still holds).
      */
     fun restored(source: File) {
+        HistoryVersion.bump()
         try {
             if (source.parentFile == restoreDir) moveInto(File(restoreDir, APPLIED), source)
         } catch (e: Exception) {

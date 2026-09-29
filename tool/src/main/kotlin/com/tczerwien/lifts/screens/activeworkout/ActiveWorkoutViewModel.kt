@@ -7,10 +7,11 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
+import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
-import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
@@ -124,16 +125,22 @@ class ActiveWorkoutViewModel(
     private var resolvedWorkoutId: Long? = null
 
     /**
-     * Per exercise, from other workouts, fetched once for the life of this screen: no other workout
-     * can change while this one is open. [lastTimeByExercise] is previousPerformance (for PREVIOUS
-     * and starting values); [priorHistoryByExercise] is every completed set (for PR stars). With
-     * these cached, a reload is four queries, not a scan of the whole history.
+     * Per exercise, from other workouts, fetched once for the life of this screen: other workouts
+     * don't change while this one is open, except by a delete (Workout Detail, reached through
+     * Exercise Detail) or a restore, which bump [HistoryVersion] and so empty these.
+     * [lastTimeByExercise] is previousPerformance (for PREVIOUS and starting values);
+     * [priorHistoryByExercise] is every completed set (for PR stars). With these cached, a reload is
+     * four queries, not a scan of the whole history.
      */
     @Volatile
     private var lastTimeByExercise: Map<String, List<List<SetEntity>>> = emptyMap()
 
     @Volatile
     private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
+
+    /** The [HistoryVersion] the two caches above were filled at. */
+    @Volatile
+    private var cachedHistoryVersion: Long = HistoryVersion.current
 
     private var emptyTickHintJob: Job? = null
 
@@ -690,11 +697,22 @@ class ActiveWorkoutViewModel(
      * running at once can't drop each other's additions.
      */
     private fun cacheHistory(exerciseIds: List<String>, workoutId: Long) {
+        val version = HistoryVersion.current
+        synchronized(refreshLock) {
+            if (version != cachedHistoryVersion) {
+                lastTimeByExercise = emptyMap()
+                priorHistoryByExercise = emptyMap()
+                cachedHistoryVersion = version
+            }
+        }
         val missing = exerciseIds.filterNot { it in lastTimeByExercise }
         if (missing.isEmpty()) return
         val lastTime = session.previousGroupsByExercise(missing)
         val history = session.priorHistory(missing, workoutId)
         synchronized(refreshLock) {
+            // A delete or restore that landed while these were read makes them stale: the next
+            // reload fetches them again.
+            if (cachedHistoryVersion != version) return
             lastTimeByExercise = lastTimeByExercise + lastTime
             priorHistoryByExercise = priorHistoryByExercise + history
         }
