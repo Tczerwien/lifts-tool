@@ -516,7 +516,12 @@ class ExerciseDetailScreen(
         val records = uiState.records
         if (records == null) {
             // Sets only in today's open workout: History shows them, Records waits for the finish.
-            val text = if (uiState.history.isEmpty()) "No sets logged yet" else "No finished sets yet"
+            // Finished sets that set no record (only warm-ups, or 0 reps): no records yet.
+            val text = when {
+                uiState.history.isEmpty() -> "No sets logged yet"
+                uiState.history.all { it.inProgress } -> "No finished sets yet"
+                else -> "No records yet"
+            }
             if (uiState.loaded) EmptyTabMessage(text, modifier)
             return
         }
