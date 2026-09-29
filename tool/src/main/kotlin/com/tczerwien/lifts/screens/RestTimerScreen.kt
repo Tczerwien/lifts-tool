@@ -19,7 +19,9 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.REST_PULSE_TOTAL_MS
@@ -168,14 +170,15 @@ class RestTimerViewModel(
             is RestNext.Next -> context
         }
         val exerciseId = next.slot.exerciseId
+        val exercise = repository.exerciseById(exerciseId)
         val lastTime = previousForSlots(slots, session.previousGroupsByExercise(listOf(exerciseId)))[next.slot.id].orEmpty()
         val aligned = alignPrevious(next.rows, lastTime)
         val units = settingsStore.snapshot().units
-        val seed = seedFor(next.rows, next.index, aligned, units)
+        val seed = seedFor(next.rows, next.index, aligned, units, exercise?.tracking ?: Tracking.WEIGHT_REPS)
         // Only the row's own RPE: a tick logs that, never last session's.
         val rpe = next.rows[next.index].rpe
-        val summary = setNotation(seed.weightKg, seed.reps, units, NotationStyle.SINGLE, rpe = rpe)
-        val exerciseName = repository.exerciseById(exerciseId)?.let { displayName(it) } ?: exerciseId
+        val summary = setNotation(seed.weightKg, seed.reps, units, NotationStyle.SINGLE, durationSec = seed.durationSec, rpe = rpe)
+        val exerciseName = exercise?.let { displayName(it) } ?: exerciseId
         return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
     }
 }

@@ -56,6 +56,9 @@ fun defaultWorkoutName(startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): 
         else -> "Night Workout"
     }
 
+/** A hold's stepper moves 5 s a step. */
+const val DURATION_STEP_SEC = 5
+
 /** The highest RIR the set rows offer: 5 reps left in the tank is already far from a hard set. */
 const val MAX_RIR = 5
 

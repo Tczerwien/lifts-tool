@@ -48,8 +48,9 @@ enum class Tracking(val stored: String, val label: String) {
      */
     fun shownWeight(storedKg: Double?): Double? = storedKg?.let { if (this == ASSISTED_BODYWEIGHT) abs(it) else it }
 
-    /** [shownWeight] back to what is stored: assistance becomes negative. */
-    fun storedWeight(shownKg: Double?): Double? = shownKg?.let { if (this == ASSISTED_BODYWEIGHT) -abs(it) else it }
+    /** [shownWeight] back to what is stored: assistance becomes negative (and none stays 0, not -0). */
+    fun storedWeight(shownKg: Double?): Double? =
+        shownKg?.let { if (this == ASSISTED_BODYWEIGHT && it != 0.0) -abs(it) else it }
 
     companion object {
         /** The tracking an exercise stores; anything unknown is weight × reps, as the column defaults. */

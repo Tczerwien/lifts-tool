@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,6 +23,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.tczerwien.lifts.data.Tracking
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
@@ -44,8 +46,10 @@ data class SetRowState(
     val previous: String?,
     /** Display weight string; null renders an em dash (nothing to start from). */
     val weight: String?,
-    /** Display reps string; null renders an em dash (nothing to start from). */
+    /** Display reps string (a hold's seconds); null renders an em dash (nothing to start from). */
     val reps: String?,
+    /** The exercise records a weight; without one (reps only, a hold) the weight column stays empty. */
+    val weightShown: Boolean = true,
     /** [weight] is a starting value, not entered: it renders dimmed even on the active row. */
     val weightSeeded: Boolean = false,
     /** [reps] is a starting value, not entered: it renders dimmed even on the active row. */
@@ -85,9 +89,13 @@ private const val MARKER_PAD_UNITS = 0.3f
 /** The set list's scrollbar floats over this much of the right edge; nothing tappable goes there. */
 private const val PAD_END_UNITS = 2f
 
-/** Superfine column header, 1.5gu tall. [unit] picks the "Lbs"/"Kg" label. */
+/**
+ * Superfine column header, 1.5gu tall. [unit] picks the "Lbs"/"Kg" label, [tracking] what the columns
+ * hold: "+LBS" is added weight, "-LBS" assistance, "SEC" a hold's seconds; no weight column for reps
+ * only or a hold, and no RIR for a hold.
+ */
 @Composable
-fun SetRowHeader(unit: WeightUnit, modifier: Modifier = Modifier) {
+fun SetRowHeader(unit: WeightUnit, tracking: Tracking, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -103,13 +111,19 @@ fun SetRowHeader(unit: WeightUnit, modifier: Modifier = Modifier) {
         }
         Box(Modifier.weight(1f))
         Box(Modifier.width(COL_WEIGHT_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.CenterEnd) {
-            HeaderLabel(unit.columnLabel.uppercase())
+            val label = unit.columnLabel.uppercase()
+            when (tracking) {
+                Tracking.WEIGHT_REPS -> HeaderLabel(label)
+                Tracking.WEIGHTED_BODYWEIGHT -> HeaderLabel("+$label")
+                Tracking.ASSISTED_BODYWEIGHT -> HeaderLabel("-$label")
+                Tracking.REPS_ONLY, Tracking.DURATION -> Unit
+            }
         }
         Box(Modifier.width(COL_REPS_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.CenterEnd) {
-            HeaderLabel("REPS")
+            HeaderLabel(if (tracking.takesDuration) "SEC" else "REPS")
         }
         Box(Modifier.width(COL_RIR_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.Center) {
-            HeaderLabel("RIR")
+            if (!tracking.takesDuration) HeaderLabel("RIR")
         }
         Box(Modifier.width(COL_CHECK_UNITS.gridUnitsAsDp()))
     }
@@ -213,15 +227,19 @@ fun SetRow(
 
         Box(Modifier.weight(1f))
 
-        // Weight.
+        // Weight. Measured at its own width and kept to the column's end, so "-102.5" or a kg
+        // "102.75" runs into the gap before it rather than losing a digit.
         Box(Modifier.width(COL_WEIGHT_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.CenterEnd) {
-            LightText(
-                text = state.weight ?: "—",
-                variant = LightTextVariant.Copy,
-                lighten = valuesLighten || state.weight == null || state.weightSeeded,
-                monospace = true,
-                maxLines = 1,
-            )
+            if (state.weightShown) {
+                LightText(
+                    text = state.weight ?: "—",
+                    variant = LightTextVariant.Copy,
+                    lighten = valuesLighten || state.weight == null || state.weightSeeded,
+                    monospace = true,
+                    maxLines = 1,
+                    modifier = Modifier.wrapContentWidth(align = Alignment.End, unbounded = true),
+                )
+            }
         }
 
         // Reps (+ PR star).

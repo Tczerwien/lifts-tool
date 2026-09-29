@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.restOver
@@ -40,9 +42,20 @@ internal fun buildMarkers(sets: List<SetEntity>): List<String> {
     }
 }
 
-/** "135 × 8" from a previous-performance set ([setNotation]); "× 8" for a pull-up, null for nothing. */
-internal fun previousSummary(previous: SetEntity?, units: WeightUnit): String? =
-    previous?.let { setNotation(it.weightKg, it.reps, units, NotationStyle.SINGLE) }
+/**
+ * "135 × 8" from a previous-performance set ([setNotation]); "× 8" for a pull-up, "-30 × 8" with
+ * help, "45s" for a hold; null for nothing. Only the numbers the exercise records now ([tracking]).
+ */
+internal fun previousSummary(previous: SetEntity?, units: WeightUnit, tracking: Tracking): String? =
+    previous?.let {
+        setNotation(
+            weightKg = it.weightKg?.takeIf { tracking.takesWeight },
+            reps = it.reps?.takeIf { tracking.takesReps },
+            unit = units,
+            style = NotationStyle.SINGLE,
+            durationSec = it.durationSec?.takeIf { tracking.takesDuration },
+        )
+    }
 
 /** The row the set list opens at when it is built: the one above the active row, so the set just done shows too. */
 internal fun openingListIndex(activeIndex: Int): Int = (activeIndex - 1).coerceAtLeast(0)
@@ -121,22 +134,23 @@ internal fun AddSetRow(onClick: () -> Unit) {
 }
 
 /**
- * Fixed strip between the set list and the rest slot. With no active row (every set ticked) it
- * stays at full height with both steppers greyed out, so nothing below the list moves.
- * The weight stepper gets the wider slot (1.2 to 1) so "102.5" fits between its 4gu targets and
- * the reps slot still holds "100".
+ * Fixed strip between the set list and the rest slot, set by how the exercise is measured
+ * ([tracking]): weight and reps ("Added" for a dip belt, "Assist" for the help on an assisted
+ * machine, shown as the number on its stack), reps alone, or a hold's seconds (±5 s). With no active
+ * row (every set ticked) it stays at full height with its steppers greyed out, so nothing below the
+ * list moves. The weight stepper gets the wider slot (1.2 to 1) so "102.5" fits between its 4gu
+ * targets and the reps slot still holds "100"; a lone stepper takes the middle at that width.
  */
 @Composable
 internal fun StepperStrip(
     viewModel: ActiveWorkoutViewModel,
     uiState: ActiveWorkoutViewModel.UiState,
+    tracking: Tracking,
     activeSet: SetEntity?,
     /** The active row's starting values; shown dimmed where the row has none of its own. */
     seed: RowValues?,
 ) {
     val active = activeSet != null
-    val weightKg = activeSet?.weightKg ?: seed?.weightKg
-    val reps = activeSet?.reps ?: seed?.reps
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -144,39 +158,74 @@ internal fun StepperStrip(
         horizontalArrangement = Arrangement.spacedBy(1f.gridUnitsAsDp()),
         verticalAlignment = Alignment.Bottom,
     ) {
-        Stepper(
-            onStep = viewModel::stepWeight,
-            bigSteps = true,
-            modifier = Modifier.weight(1.2f),
-            label = "Weight (${uiState.units.suffix})",
-            decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),
-            incrementEnabled = active,
-        ) {
-            LightText(
-                text = weightKg?.let { Format.weight(it, uiState.units) } ?: "—",
-                variant = LightTextVariant.Copy,
-                lighten = activeSet?.weightKg == null,
-                monospace = true,
-                maxLines = 1,
-            )
+        if (tracking.takesWeight) {
+            val weightKg = tracking.shownWeight(activeSet?.weightKg ?: seed?.weightKg)
+            val label = when (tracking) {
+                Tracking.WEIGHTED_BODYWEIGHT -> "Added"
+                Tracking.ASSISTED_BODYWEIGHT -> "Assist"
+                else -> "Weight"
+            }
+            Stepper(
+                onStep = viewModel::stepWeight,
+                bigSteps = true,
+                modifier = Modifier.weight(1.2f),
+                label = "$label (${uiState.units.suffix})",
+                decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),
+                incrementEnabled = active,
+            ) {
+                LightText(
+                    text = weightKg?.let { Format.weight(it, uiState.units) } ?: "—",
+                    variant = LightTextVariant.Copy,
+                    lighten = activeSet?.weightKg == null,
+                    monospace = true,
+                    maxLines = 1,
+                )
+            }
+        } else {
+            Spacer(modifier = Modifier.weight(LONE_STEPPER_MARGIN))
         }
-        Stepper(
-            onStep = viewModel::stepReps,
-            modifier = Modifier.weight(1f),
-            label = "Reps",
-            decrementEnabled = active && viewModel.repsDecrementEnabled(uiState),
-            incrementEnabled = active,
-        ) {
-            LightText(
-                text = reps?.toString() ?: "—",
-                variant = LightTextVariant.Copy,
-                lighten = activeSet?.reps == null,
-                monospace = true,
-                maxLines = 1,
-            )
+        if (tracking.takesDuration) {
+            val seconds = activeSet?.durationSec ?: seed?.durationSec
+            Stepper(
+                onStep = viewModel::stepDuration,
+                bigSteps = true,
+                modifier = Modifier.weight(1.2f),
+                label = "Time (sec)",
+                decrementEnabled = active && viewModel.durationDecrementEnabled(uiState),
+                incrementEnabled = active,
+            ) {
+                LightText(
+                    text = seconds?.toString() ?: "—",
+                    variant = LightTextVariant.Copy,
+                    lighten = activeSet?.durationSec == null,
+                    monospace = true,
+                    maxLines = 1,
+                )
+            }
+        } else {
+            val reps = activeSet?.reps ?: seed?.reps
+            Stepper(
+                onStep = viewModel::stepReps,
+                modifier = Modifier.weight(if (tracking.takesWeight) 1f else 1.2f),
+                label = "Reps",
+                decrementEnabled = active && viewModel.repsDecrementEnabled(uiState),
+                incrementEnabled = active,
+            ) {
+                LightText(
+                    text = reps?.toString() ?: "—",
+                    variant = LightTextVariant.Copy,
+                    lighten = activeSet?.reps == null,
+                    monospace = true,
+                    maxLines = 1,
+                )
+            }
         }
+        if (!tracking.takesWeight) Spacer(modifier = Modifier.weight(LONE_STEPPER_MARGIN))
     }
 }
+
+/** Each side of a lone stepper (reps only, a hold): it sits in the middle at the weight stepper's width. */
+private const val LONE_STEPPER_MARGIN = 0.5f
 
 /**
  * Collapsed next-exercise row (2gu + 0.5gu top margin), "NEXT › Overhead Press · 0/3": the exercise

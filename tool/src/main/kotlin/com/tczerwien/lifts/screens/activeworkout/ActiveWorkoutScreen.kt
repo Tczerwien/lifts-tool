@@ -162,7 +162,7 @@ class ActiveWorkoutScreen(
                                 navigateTo({ ExerciseDetailScreen(it, exerciseId = current.slot.exerciseId) })
                             },
                         )
-                        SetRowHeader(unit = uiState.units)
+                        SetRowHeader(unit = uiState.units, tracking = current.tracking)
 
                         // Each exercise gets its own scroll position, opening with the active row in view: the
                         // screen is rebuilt from nothing after the Rest Timer, and the next exercise
@@ -193,14 +193,17 @@ class ActiveWorkoutScreen(
                                     val previous = current.previous.getOrNull(index)
                                     // What a tick logs: the row's own values, else its starting values (dimmed).
                                     val seed = current.seeds[index]
+                                    val timed = current.tracking.takesDuration
                                     SetRow(
                                         state = SetRowState(
                                             marker = markers[index],
-                                            previous = previousSummary(previous, uiState.units),
+                                            previous = previousSummary(previous, uiState.units, current.tracking),
                                             weight = seed.weightKg?.let { Format.weight(it, uiState.units) },
-                                            reps = seed.reps?.toString(),
+                                            // A hold's seconds take the reps column, under "SEC".
+                                            reps = (if (timed) seed.durationSec else seed.reps)?.toString(),
+                                            weightShown = current.tracking.takesWeight,
                                             weightSeeded = set.weightKg == null && seed.weightKg != null,
-                                            repsSeeded = set.reps == null && seed.reps != null,
+                                            repsSeeded = if (timed) set.durationSec == null && seed.durationSec != null else set.reps == null && seed.reps != null,
                                             active = set.id == uiState.activeSetId,
                                             completed = set.completedAt != null,
                                             warmup = set.type == SET_TYPE_WARMUP,
@@ -208,7 +211,7 @@ class ActiveWorkoutScreen(
                                             drop = set.type == SET_TYPE_DROP,
                                             pr = set.id in uiState.prSetIds,
                                             rir = rirOf(set.rpe)?.toString(),
-                                            rirShown = set.type != SET_TYPE_WARMUP,
+                                            rirShown = set.type != SET_TYPE_WARMUP && !timed,
                                         ),
                                         onRowClick = { viewModel.onRowTapped(set.id) },
                                         onMarkerClick = { viewModel.onMarkerTapped(set.id) },
@@ -228,6 +231,7 @@ class ActiveWorkoutScreen(
                         StepperStrip(
                             viewModel = viewModel,
                             uiState = uiState,
+                            tracking = current.tracking,
                             activeSet = activeSet,
                             seed = activeSet?.let { current.seeds[current.sets.indexOf(it)] },
                         )
@@ -248,7 +252,7 @@ class ActiveWorkoutScreen(
                     // A confirm or a hint borrows the rest slot for its few seconds, so nothing above moves.
                     val hint = when {
                         finishArmed -> finishHint(uiState)
-                        uiState.emptyTickHint -> "SET WEIGHT OR REPS FIRST"
+                        uiState.emptyTickHint != null -> uiState.emptyTickHint
                         else -> null
                     }
                     RestSlot(endMillis = uiState.restEndMillis, hint = hint, onOpenTimer = { openTimer(true) })

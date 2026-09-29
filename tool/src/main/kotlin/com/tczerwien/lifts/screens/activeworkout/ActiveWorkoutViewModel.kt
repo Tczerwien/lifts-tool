@@ -4,9 +4,12 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
+import com.tczerwien.lifts.session.DURATION_STEP_SEC
 import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RowValues
@@ -44,6 +47,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** How long "SET WEIGHT OR REPS FIRST" shows after a tick on a row with nothing to log. */
 private const val EMPTY_TICK_HINT_MILLIS = 2_500L
@@ -70,12 +74,14 @@ class ActiveWorkoutViewModel(
         val lastTime: List<SetEntity>,
         /** Display unit; starting weights compare as they show ([seedRows]). */
         val unit: WeightUnit,
+        /** How the exercise is measured: which numbers the rows and steppers take. */
+        val tracking: Tracking = Tracking.WEIGHT_REPS,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
 
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
-        val seeds: List<RowValues> = seedRows(sets, previous, unit)
+        val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking)
     }
 
     data class UiState(
@@ -106,8 +112,8 @@ class ActiveWorkoutViewModel(
         val completeOpen: Boolean = false,
         /** Nothing left to show (discarded, finished, or gone): Content leaves the screen. */
         val leave: Boolean = false,
-        /** A tick on a row with nothing to log: "SET WEIGHT OR REPS FIRST" shows for a moment. */
-        val emptyTickHint: Boolean = false,
+        /** A tick on a row with nothing to log: "SET WEIGHT OR REPS FIRST" (or reps, or time) shows for a moment. */
+        val emptyTickHint: String? = null,
     )
 
     /**
@@ -330,17 +336,21 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * Tap on PREVIOUS: copy last session's exact weight/reps into the row and target it. A logged
-     * set is left alone, so a stray tap can't overwrite what was lifted.
+     * Tap on PREVIOUS: copy last session's exact numbers into the row (those the exercise records) and
+     * target it. A logged set is left alone, so a stray tap can't overwrite what was lifted.
      */
     fun autofill(setId: Long) {
         if (!beginRowAction()) return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         val previous = located.block.previous.getOrNull(located.index) ?: return
-        if (previous.weightKg == null && previous.reps == null) return
+        val tracking = located.block.tracking
+        val weight = previous.weightKg?.takeIf { tracking.takesWeight }
+        val reps = previous.reps?.takeIf { tracking.takesReps }
+        val seconds = previous.durationSec?.takeIf { tracking.takesDuration }
+        if (weight == null && reps == null && seconds == null) return
         val edit = applySetChange(setId) {
-            it.copy(weightKg = previous.weightKg ?: it.weightKg, reps = previous.reps ?: it.reps)
+            it.copy(weightKg = weight ?: it.weightKg, reps = reps ?: it.reps, durationSec = seconds ?: it.durationSec)
         } ?: return
         _uiState.update { it.copy(activeSetId = setId) }
         persistSet(edit)
@@ -369,12 +379,14 @@ class ActiveWorkoutViewModel(
             return
         }
         val seed = located.block.seeds[located.index]
-        if (seed.weightKg == null && seed.reps == null) {
-            showEmptyTickHint()
+        if (seed.isEmpty) {
+            showEmptyTickHint(located.block.tracking)
             return
         }
         val now = System.currentTimeMillis()
-        val edit = applySetChange(setId) { it.copy(weightKg = seed.weightKg, reps = seed.reps, completedAt = now) } ?: return
+        val edit = applySetChange(setId) {
+            it.copy(weightKg = seed.weightKg, reps = seed.reps, durationSec = seed.durationSec, completedAt = now)
+        } ?: return
         _uiState.update { state ->
             val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
@@ -383,7 +395,7 @@ class ActiveWorkoutViewModel(
         val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
         pending?.let { pendingAdvance.value = it }
         val workoutId = _uiState.value.workoutId
-        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now) }) { logged ->
+        LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now, seed.durationSec) }) { logged ->
             settle(edit)
             // Its rest is saved now, so the move can be timed by it; unless a tap has cancelled it since.
             // Nothing logged (the workout closed meanwhile): no move either.
@@ -391,13 +403,21 @@ class ActiveWorkoutViewModel(
         }
     }
 
-    /** "SET WEIGHT OR REPS FIRST" for a couple of seconds, instead of a tick that does nothing. */
-    private fun showEmptyTickHint() {
+    /**
+     * "SET WEIGHT OR REPS FIRST" ("SET REPS FIRST", "SET TIME FIRST", as the exercise is measured) for
+     * a couple of seconds, instead of a tick that does nothing.
+     */
+    private fun showEmptyTickHint(tracking: Tracking) {
         emptyTickHintJob?.cancel()
-        _uiState.update { it.copy(emptyTickHint = true) }
+        val hint = when {
+            tracking.takesDuration -> "SET TIME FIRST"
+            tracking.takesWeight -> "SET WEIGHT OR REPS FIRST"
+            else -> "SET REPS FIRST"
+        }
+        _uiState.update { it.copy(emptyTickHint = hint) }
         emptyTickHintJob = viewModelScope.launch {
             delay(EMPTY_TICK_HINT_MILLIS)
-            _uiState.update { it.copy(emptyTickHint = false) }
+            _uiState.update { it.copy(emptyTickHint = null) }
         }
     }
 
@@ -411,12 +431,29 @@ class ActiveWorkoutViewModel(
         if (!beginAction()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
+        val tracking = currentTracking(state)
         val base = currentWeightDisplay(state, set)
         val next = Format.roundWeight(Format.stepWeight(base, steps, state.weightStep), state.units)
+        // The steppers move the weight as it shows: on an assisted exercise the help, stored negative.
         val edit = applySetChange(set.id) {
-            it.copy(weightKg = Format.displayToKg(next, state.units))
+            it.copy(weightKg = tracking.storedWeight(Format.displayToKg(next, state.units)))
         } ?: return
         persistSet(edit)
+    }
+
+    /** Moves the active row's seconds [steps] steps of [DURATION_STEP_SEC] along their grid; a long hold sends several. */
+    fun stepDuration(steps: Int) {
+        if (!beginAction()) return
+        val state = _uiState.value
+        val set = activeSet(state) ?: return
+        val next = Format.stepWeight(currentDuration(set).toDouble(), steps, DURATION_STEP_SEC.toDouble()).roundToInt()
+        val edit = applySetChange(set.id) { it.copy(durationSec = next) } ?: return
+        persistSet(edit)
+    }
+
+    fun durationDecrementEnabled(state: UiState): Boolean {
+        val set = activeSet(state) ?: return false
+        return currentDuration(set) > 0
     }
 
     fun stepReps(direction: Int) {
@@ -443,12 +480,26 @@ class ActiveWorkoutViewModel(
         return state.exercises.getOrNull(state.currentIndex)?.sets?.firstOrNull { it.id == id }
     }
 
-    /** The active row's weight in display units as it shows: its own, else its starting value, else 0. */
+    /**
+     * The active row's weight in display units as it shows: its own, else its starting value, else 0.
+     * On an assisted exercise that is the help itself (30, for -30 stored).
+     */
     private fun currentWeightDisplay(state: UiState, set: SetEntity): Double {
         val located = locate(set.id)
         val kg = set.weightKg ?: located?.block?.seeds?.getOrNull(located.index)?.weightKg ?: return 0.0
-        return Format.roundWeight(Format.kgToDisplay(kg, state.units), state.units)
+        val shown = currentTracking(state).shownWeight(kg) ?: return 0.0
+        return Format.roundWeight(Format.kgToDisplay(shown, state.units), state.units)
     }
+
+    /** The active row's seconds as they show: its own, else its starting value, else 0. */
+    private fun currentDuration(set: SetEntity): Int {
+        val located = locate(set.id)
+        return set.durationSec ?: located?.block?.seeds?.getOrNull(located.index)?.durationSec ?: 0
+    }
+
+    /** How the exercise on screen is measured. */
+    private fun currentTracking(state: UiState): Tracking =
+        state.exercises.getOrNull(state.currentIndex)?.tracking ?: Tracking.WEIGHT_REPS
 
     /** The active row's reps as they show: its own, else its starting value, else 0. */
     private fun currentReps(set: SetEntity): Int {
@@ -686,11 +737,16 @@ class ActiveWorkoutViewModel(
                         slots = exercises.map { it.slot },
                         workoutSets = exercises.flatMap { it.sets },
                         priorHistory = priorHistoryByExercise,
+                        tracking = trackingOf(exercises),
                     ),
                 )
             }
             changed?.let { PendingEdit(it).also { edit -> pendingEdits[setId] = edit } }
         }
+
+    /** Each exercise's tracking, for the records engine. */
+    private fun trackingOf(blocks: List<ExerciseBlock>): Map<String, Tracking> =
+        blocks.associate { it.slot.exerciseId to it.tracking }
 
     /** Marks [edit]'s save as landed: reloads that start from now on read it from the database. */
     private fun settle(edit: PendingEdit) {
@@ -810,9 +866,10 @@ class ActiveWorkoutViewModel(
                     sets = setsBySlot[slot.id].orEmpty().sortedBy { it.position },
                     lastTime = lastTimeBySlot[slot.id].orEmpty(),
                     unit = settings.units,
+                    tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS,
                 )
             }
-            val prIds = prSetIds(slots, sets, priorHistoryByExercise)
+            val prIds = prSetIds(slots, sets, priorHistoryByExercise, trackingOf(blocks))
             _uiState.update { state ->
                 val lastIndex = (blocks.size - 1).coerceAtLeast(0)
                 val currentIndex = when {
