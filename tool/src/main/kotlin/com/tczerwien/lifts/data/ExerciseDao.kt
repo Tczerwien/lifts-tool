@@ -25,6 +25,13 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises ORDER BY name COLLATE NOCASE")
     fun listAll(): List<ExerciseEntity>
 
+    /** Every exercise without its instructions ([ExerciseSummary]), by name. */
+    @Query(
+        "SELECT id, name, equipment, primaryMuscles, category, isCustom, hidden FROM exercises " +
+            "ORDER BY name COLLATE NOCASE"
+    )
+    fun listSummaries(): List<ExerciseSummary>
+
     @Query("SELECT * FROM exercises WHERE id = :id")
     fun byId(id: String): ExerciseEntity?
 

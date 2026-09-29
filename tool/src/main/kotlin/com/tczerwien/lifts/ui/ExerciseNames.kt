@@ -101,11 +101,14 @@ const val UNKNOWN_EXERCISE = "Unknown exercise"
  * and still has its catalog name ([SHORT_NAMES]), else its own name. A name he gave it (a custom
  * exercise, or a catalog one he renamed) always wins.
  */
-fun displayName(exercise: ExerciseEntity): String =
-    SHORT_NAMES[exercise.id]
-        ?.takeIf { !exercise.isCustom && exercise.name == it.catalogName }
+fun displayName(exercise: ExerciseEntity): String = displayName(exercise.id, exercise.name, exercise.isCustom)
+
+/** [displayName] from the three things it reads, for lists that load exercises without their instructions. */
+fun displayName(id: String, name: String, isCustom: Boolean): String =
+    SHORT_NAMES[id]
+        ?.takeIf { !isCustom && name == it.catalogName }
         ?.short
-        ?: exercise.name.trim()
+        ?: name.trim()
 
 /** The catalog name of a lift with a short name, without reading the catalog; null for the others. */
 fun knownCatalogName(id: String): String? = SHORT_NAMES[id]?.catalogName

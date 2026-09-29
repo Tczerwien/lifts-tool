@@ -43,6 +43,9 @@ class LiftsRepository private constructor(
     fun exercisesByIds(ids: Collection<String>): Map<String, ExerciseEntity> =
         if (ids.isEmpty()) emptyMap() else db.exerciseDao.byIds(ids.distinct()).associateBy { it.id }
 
+    /** Every exercise without its instructions, by name: the picker's catalog. */
+    fun exerciseSummaries(): List<ExerciseSummary> = db.exerciseDao.listSummaries()
+
     /** [pattern] is a raw LIKE pattern, e.g. "%bench%". */
     fun searchExercisesByName(pattern: String): List<ExerciseEntity> =
         db.exerciseDao.searchByName(pattern)
