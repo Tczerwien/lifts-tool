@@ -284,7 +284,8 @@ fun searchExercises(
     val query = parseQuery(raw)
     if (query.terms.isEmpty()) return emptyList()
     var ranked = entries.mapNotNull { entry -> rank(entry, query)?.let { entry to it } }
-    if (ranked.isEmpty() && query.terms.size >= NEAR_MISS_MIN_TERMS) {
+    // Counted in the words he typed: shorthand joins two of them into one term ("reverse cable fly").
+    if (ranked.isEmpty() && words(raw).size >= NEAR_MISS_MIN_TERMS) {
         ranked = entries.filter { nearMiss(it, query) }.map { it to NEAR_MISS_RANK }
     }
     val recency = recentIds.withIndex().associate { (index, id) -> id to index }

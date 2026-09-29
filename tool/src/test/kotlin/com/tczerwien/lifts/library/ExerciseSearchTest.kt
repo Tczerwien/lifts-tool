@@ -136,6 +136,8 @@ class ExerciseSearchTest {
     fun `a long query nothing answers offers the names that miss one word`() {
         assertEquals("dumbbell-shoulder-press", search("seated db shoulder press").first())
         assertEquals("hanging-leg-raise", search("hanging knee raise").first())
+        // Three typed words, though shorthand makes them two terms ("cable fly").
+        assertTrue("cable-rear-delt-fly" in search("reverse cable fly").take(3), "${search("reverse cable fly")}")
         // Two words must both match: no near misses.
         assertEquals(emptyList(), search("hanging kneez"))
     }
