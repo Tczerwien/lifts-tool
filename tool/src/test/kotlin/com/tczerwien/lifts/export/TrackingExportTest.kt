@@ -111,8 +111,12 @@ class TrackingExportTest {
     @Test
     fun `a note on an exercise with nothing ticked is still exported`() {
         val skipped = WorkoutExerciseEntity(id = 6, workoutId = 2, exerciseId = dip.id, position = 3, notes = "skipped: left shoulder")
+        val unticked = SetEntity(id = 9, workoutExerciseId = 6, position = 0, type = "normal", weightKg = 20.0, reps = 8)
+        // A workout closed with only a note (stale, nothing ticked) is no training: it isn't exported.
+        val noteOnly = WorkoutEntity(id = 3, name = "Legs", startedAt = at("2026-07-14T09:00:00Z"), endedAt = at("2026-07-14T09:00:00Z"), notes = "knee sore")
+        val noteOnlySlot = WorkoutExerciseEntity(id = 7, workoutId = 3, exerciseId = plank.id, position = 0, notes = "skipped")
         val noted = ExportFixtures.snapshot(
-            sets = sets, workouts = listOf(week1, week2), slots = slots + skipped, unit = WeightUnit.LB,
+            sets = sets + unticked, workouts = listOf(week1, week2, noteOnly), slots = slots + skipped + noteOnlySlot, unit = WeightUnit.LB,
             exercises = listOf(pullup, dip, plank), bodyweight = emptyList(), bars = emptyList(),
         )
         val log = MarkdownExport.render(noted)
@@ -120,6 +124,8 @@ class TrackingExportTest {
         val exercise = noted.workouts.first().exercises.last()
         assertEquals("skipped: left shoulder", exercise.notes)
         assertTrue(exercise.sets.isEmpty(), "no unticked set sneaks in")
+        assertEquals(listOf(2L, 1L), noted.workouts.map { it.id })
+        assertContains(log, "(2 workouts)")
     }
 
     private fun at(iso: String) = ExportFixtures.millis(iso)

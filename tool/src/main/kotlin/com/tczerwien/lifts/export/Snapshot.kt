@@ -206,8 +206,9 @@ data class SnapshotPr(
  *
  * Rules:
  * - Only finished workouts ([WorkoutEntity.endedAt] set) are exported, and only their completed
- *   sets (completedAt != null); workouts and exercise slots with no completed sets are dropped
- *   entirely. The summary counts the same sets.
+ *   sets (completedAt != null); workouts with no completed set are dropped entirely, and so are
+ *   exercise slots without one unless he wrote a note on them (then with no sets). The summary
+ *   counts the same sets.
  * - PR flags are computed chronologically per exercise (by completedAt, ties by id)
  *   across the full history — see [isPr].
  * - The weekly-volume summary covers the [WEEKLY_SUMMARY_WEEKS] ISO weeks ending at
@@ -262,10 +263,11 @@ fun buildSnapshot(
         .values
         .fold(HashMap<Long, Int>()) { gaps, workoutSets -> gaps.apply { putAll(restGapsSec(workoutSets)) } }
 
-    // A slot with nothing ticked goes in only for his note on it, and a workout only for a tick or a note.
+    // A workout goes in only with a ticked set (one kept for a note alone is no training); within it, a
+    // slot with nothing ticked goes in only for his note on it.
     fun kept(slot: com.tczerwien.lifts.data.WorkoutExerciseEntity) = slot.id in setsBySlot || !slot.notes.isNullOrBlank()
     val snapshotWorkouts = workouts
-        .filter { workout -> slotsByWorkout[workout.id].orEmpty().any(::kept) || !workout.notes.isNullOrBlank() }
+        .filter { workout -> slotsByWorkout[workout.id].orEmpty().any { it.id in setsBySlot } }
         .sortedWith(compareByDescending<WorkoutEntity> { it.startedAt }.thenByDescending { it.id })
         .map { workout ->
             val slots = slotsByWorkout[workout.id].orEmpty()
