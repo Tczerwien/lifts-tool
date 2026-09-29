@@ -100,6 +100,9 @@ class ExerciseSearchTest {
         assertEquals("romanian-deadlift", search("rdls").first())
         assertEquals("butterfly", search("chest flies").first())
         assertTrue("cable-crossover" in search("cable flies"))
+        // Half typed on the way to "flies" or "flyes": still the flyes.
+        assertTrue("incline-cable-flye" in search("cable flie"))
+        assertTrue("incline-cable-flye" in search("cable fli"))
         assertTrue(search("dbs").containsAll(listOf("dumbbell-shrug", "dumbbell-bench-press")))
         assertEquals("farmers-walk", search("farmer carry").first())
         // "t-bar" is a phrase in T-Bar Row, and scattered in "... Two-Arm Long Bar Row".

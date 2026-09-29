@@ -107,6 +107,15 @@ private val FLY_FORMS = mapOf("flye" to "fly", "flyes" to "fly", "flies" to "fly
 /** [words], with the fly forms as one ("Dumbbell Flyes" and "chest flies" both say fly). */
 internal fun searchWords(text: String): List<String> = words(text).map { FLY_FORMS[it] ?: it }
 
+/**
+ * What he typed, as [searchWords], and a word he is still typing on its way to a fly form ("fli",
+ * "flie") read as fly, since names now say fly: "cable flie" still finds Incline Cable Flye.
+ */
+internal fun typedWords(raw: String): List<String> = searchWords(raw).map { word ->
+    val onItsWay = word.length >= 3 && !"fly".startsWith(word) && FLY_FORMS.keys.any { it.startsWith(word) }
+    if (onItsWay) "fly" else word
+}
+
 private val NOT_EQUIPMENT = setOf("other", "body only", "none")
 
 /** Equipment whose own words would mislead: every EZ-bar lift would answer "curl". */
@@ -213,7 +222,7 @@ internal class Query(val terms: List<Term>) {
 private const val MAX_FORMS = 64
 
 internal fun parseQuery(raw: String): Query {
-    val typed = searchWords(raw)
+    val typed = typedWords(raw)
     val terms = mutableListOf<Term>()
     var at = 0
     while (at < typed.size) {
@@ -295,7 +304,7 @@ private fun nearMiss(entry: CatalogEntry, terms: List<Term>): Boolean =
  * shorthand phrase, and a near miss must have two of them, not either of two terms.
  */
 private fun wordTerms(raw: String): List<Term> {
-    val typed = searchWords(raw)
+    val typed = typedWords(raw)
     return typed.mapIndexed { at, word ->
         val keys = listOf(word) + shorthandSingulars(word)
         val spellings = listOf(listOf(word)) + keys.flatMap { ALIAS_PHRASES[listOf(it)].orEmpty() }
