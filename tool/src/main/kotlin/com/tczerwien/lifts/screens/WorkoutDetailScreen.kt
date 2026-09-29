@@ -182,7 +182,7 @@ class WorkoutDetailViewModel(
             )
         }
 
-        val durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt() }
+        val durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt().coerceAtLeast(0) }
         val zone = ZoneId.systemDefault()
         val day = workoutEpochDay(workout.startedAt, zone)
         val bodyweight = workoutBodyweight(

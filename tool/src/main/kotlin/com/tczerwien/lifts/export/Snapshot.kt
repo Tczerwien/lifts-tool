@@ -291,7 +291,7 @@ fun buildSnapshot(
                 endTimeIso = format.dateTime(workout.endedAt ?: workout.startedAt),
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
-                durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt(),
+                durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt().coerceAtLeast(0),
                 bodyweight = workoutBodyweight(workout.startedAt, weighInsNear(workout.startedAt, weighInsByDay, zone), zone)?.let {
                     SnapshotWorkoutBodyweight(it.weightKg, LocalDate.ofEpochDay(it.epochDay).toString(), it.sameDay)
                 },

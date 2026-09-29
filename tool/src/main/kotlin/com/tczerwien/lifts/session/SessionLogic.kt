@@ -277,14 +277,16 @@ fun staleAction(
 /**
  * The endedAt Finish records: now, unless the workout sat idle past [staleAfterMillis] (the phone
  * slept on Active Workout overnight), when it ends at its last logged set, as Home would have
- * closed it ([staleAction]).
+ * closed it ([staleAction]). Never before its start or its last tick: a clock set back mid-workout
+ * would otherwise give a negative duration.
  */
 fun finishedAt(
     startedAt: Long,
     sets: List<SetEntity>,
     now: Long,
     staleAfterMillis: Long = STALE_AFTER_MILLIS,
-): Long = (staleAction(startedAt, sets, now, staleAfterMillis) as? OpenWorkoutAction.CloseAt)?.endedAt ?: now
+): Long = (staleAction(startedAt, sets, now, staleAfterMillis) as? OpenWorkoutAction.CloseAt)?.endedAt
+    ?: maxOf(now, lastActivityMillis(startedAt, sets))
 
 /** One open workout as Home's cleanup sees it. */
 data class OpenWorkout(

@@ -395,6 +395,9 @@ class SessionLogicTest {
         assertEquals(20 * hour, finishedAt(startedAt = 18 * hour, sets = sets, now = 20 * hour))
         // The phone slept on Active Workout and Finish came the next morning.
         assertEquals(19 * hour, finishedAt(startedAt = 18 * hour, sets = sets, now = 32 * hour))
+        // The clock was set back mid-workout: never before the last tick, never a negative duration.
+        assertEquals(19 * hour, finishedAt(startedAt = 18 * hour, sets = sets, now = 18 * hour + 60_000))
+        assertEquals(18 * hour, finishedAt(startedAt = 18 * hour, sets = listOf(set(id = 2)), now = 17 * hour))
     }
 
     @Test

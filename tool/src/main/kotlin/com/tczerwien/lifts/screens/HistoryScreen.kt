@@ -76,7 +76,7 @@ class HistoryViewModel(
                 name = workout.name,
                 dateMillis = workout.startedAt,
                 setCount = completedSets,
-                durationMin = ((endedAt - workout.startedAt) / 60000.0).roundToInt(),
+                durationMin = ((endedAt - workout.startedAt) / 60000.0).roundToInt().coerceAtLeast(0),
             )
         }
         _uiState.value = UiState(loaded = true, rows = rows)
