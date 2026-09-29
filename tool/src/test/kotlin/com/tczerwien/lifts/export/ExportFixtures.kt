@@ -3,6 +3,7 @@ package com.tczerwien.lifts.export
 import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.ExerciseEntity
+import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
@@ -127,12 +128,16 @@ object ExportFixtures {
         bars: List<BarEntity> = ExportFixtures.bars,
         sets: List<SetEntity> = ExportFixtures.sets,
     ): ExportSnapshot = buildSnapshot(
-        exercises = listOf(bench, squat),
-        workouts = listOf(workout1, workout2),
-        workoutExercises = listOf(workoutExercise1, workoutExercise2),
-        sets = sets,
-        bodyweight = bodyweight,
-        bars = bars,
+        rows = LiftsRows(
+            exercises = listOf(bench, squat),
+            workouts = listOf(workout1, workout2),
+            workoutExercises = listOf(workoutExercise1, workoutExercise2),
+            sets = sets,
+            templates = emptyList(),
+            templateExercises = emptyList(),
+            bodyweight = bodyweight,
+            bars = bars,
+        ),
         exportedAtIso = EXPORTED_AT,
         goals = GOALS,
         injuries = listOf("left knee"),

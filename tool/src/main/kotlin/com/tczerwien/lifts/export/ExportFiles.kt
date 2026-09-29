@@ -6,25 +6,20 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 /**
- * The export files for everything in [repository], by file name. The tables are read together on the
- * write lane, so the files agree with each other and include every save made before the request;
- * storage is canonical kg and the generators own all formatting.
+ * The export files for everything in [repository], by file name. Every table is read in one read
+ * transaction ([LiftsRepository.readAll]) on the write lane, so the files agree with each other and
+ * include every save made before the request, even the few made off the lane; the files are then
+ * built off the lane, so a long history never holds up a tick. Storage is canonical kg and the
+ * generators own all formatting.
  */
 suspend fun renderExports(repository: LiftsRepository): Map<String, String> {
-    val snapshot = LiftsIo.inLane {
-        val workouts = repository.listWorkouts()
-        buildSnapshot(
-            exercises = repository.listExercises(),
-            workouts = workouts,
-            workoutExercises = repository.listAllWorkoutExercises(),
-            sets = repository.listAllSets(),
-            bodyweight = repository.listBodyweight(),
-            bars = repository.listBars(),
-            exportedAtIso = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
-            goals = null,
-            injuries = emptyList(),
-        )
-    }
+    val rows = LiftsIo.inLane { repository.readAll() }
+    val snapshot = buildSnapshot(
+        rows = rows,
+        exportedAtIso = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
+        goals = null,
+        injuries = emptyList(),
+    )
     return mapOf(
         ExportWriter.TRAINING_LOG to MarkdownExport.render(snapshot),
         ExportWriter.WORKOUTS_JSON to JsonExport.render(snapshot),

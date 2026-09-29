@@ -1,15 +1,11 @@
 package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.analytics.bodyweightTrend
-import com.tczerwien.lifts.analytics.computePrs
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
+import com.tczerwien.lifts.analytics.computePrs
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
-import com.tczerwien.lifts.data.BarEntity
-import com.tczerwien.lifts.data.BodyweightEntity
-import com.tczerwien.lifts.data.ExerciseEntity
-import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
-import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -122,7 +118,7 @@ data class SnapshotPr(
 )
 
 /**
- * Builds the export snapshot from raw entity lists.
+ * Builds the export snapshot from every row of the database ([rows]).
  *
  * Rules:
  * - Only completed sets (completedAt != null) are exported; workouts and exercise slots
@@ -137,16 +133,17 @@ data class SnapshotPr(
  * @param injuries current injuries/limitations, possibly empty
  */
 fun buildSnapshot(
-    exercises: List<ExerciseEntity>,
-    workouts: List<WorkoutEntity>,
-    workoutExercises: List<WorkoutExerciseEntity>,
-    sets: List<SetEntity>,
-    bodyweight: List<BodyweightEntity>,
-    bars: List<BarEntity>,
+    rows: LiftsRows,
     exportedAtIso: String,
     goals: String?,
     injuries: List<String>,
 ): ExportSnapshot {
+    val exercises = rows.exercises
+    val workouts = rows.workouts
+    val workoutExercises = rows.workoutExercises
+    val sets = rows.sets
+    val bodyweight = rows.bodyweight
+    val bars = rows.bars
     val exercisesById = exercises.associateBy { it.id }
     val workoutIds = workouts.mapTo(HashSet()) { it.id }
     val validSlots = workoutExercises.filter { it.workoutId in workoutIds }
