@@ -119,6 +119,8 @@ class Restorer(
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
         }
+        // A backup from before B9 has the guessed types beside its history: fit them as an upgrade does.
+        runCatching { live.fitTrackingToHistory() }
         // The rest, the exercise on screen: they name ids of the log just replaced.
         val keysProblem = try {
             ActiveSession.forgetWorkoutState(dataStore)

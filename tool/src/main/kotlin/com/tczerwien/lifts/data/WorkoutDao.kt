@@ -49,6 +49,15 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_exercises")
     fun listAllWorkoutExercises(): List<WorkoutExerciseEntity>
 
+    /** Per exercise with a ticked set: whether any has a weight above 0, reps, seconds ([fittedToHistory]). */
+    @Query(
+        "SELECT we.exerciseId AS exerciseId, MAX(COALESCE(s.weightKg, 0) > 0) AS weighted, " +
+            "MAX(s.reps IS NOT NULL) AS hasReps, MAX(s.durationSec IS NOT NULL) AS hasDuration " +
+            "FROM sets s JOIN workout_exercises we ON s.workoutExerciseId = we.id " +
+            "WHERE s.completedAt IS NOT NULL GROUP BY we.exerciseId"
+    )
+    fun loggedFields(): List<LoggedFields>
+
     @Query("SELECT * FROM sets")
     fun listAllSets(): List<SetEntity>
 
@@ -202,6 +211,9 @@ data class WorkoutWithSetCount(
     @Embedded val workout: WorkoutEntity,
     val completedSets: Int,
 )
+
+/** What an exercise's ticked sets carry, for [WorkoutDao.loggedFields]. */
+data class LoggedFields(val exerciseId: String, val weighted: Boolean, val hasReps: Boolean, val hasDuration: Boolean)
 
 /** An exercise's last use, for [WorkoutDao.recentExercises]. */
 data class RecentExercise(val exerciseId: String, val lastStartedAt: Long, val position: Int)

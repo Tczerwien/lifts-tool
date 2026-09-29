@@ -56,11 +56,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class HomeViewModel(
     private val repository: LiftsRepository,
     private val session: ActiveSession,
     private val share: LiftsShare,
+    private val settingsStore: SettingsStore,
 ) : LightViewModel<Unit>() {
 
     data class TemplateRow(val id: Long, val name: String, val exerciseCount: Int)
@@ -206,6 +208,12 @@ class HomeViewModel(
 
     private fun load(): UiState {
         repository.seedIfEmpty()
+        // Once per install, the first time B9 runs: types started to matter, so an exercise logged with
+        // numbers its guessed type hides gets a type that shows them (a belted pull-up, a plank as reps).
+        if (!runBlocking { settingsStore.trackingFitted() }) {
+            if (repository.fitTrackingToHistory() > 0) share.logChanged()
+            runBlocking { settingsStore.markTrackingFitted() }
+        }
         val now = System.currentTimeMillis()
         val tidied = session.tidyOpenWorkouts(now)
         // A stale workout it closed is history now: the exports take it in.
@@ -257,7 +265,8 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
     override val viewModelClass: Class<HomeViewModel>
         get() = HomeViewModel::class.java
 
-    override fun createViewModel() = HomeViewModel(repository, session, lightContext.liftsShare())
+    override fun createViewModel() =
+        HomeViewModel(repository, session, lightContext.liftsShare(), SettingsStore(lightContext.dataStore))
 
     /** Opens a new workout from [templateId] (null: empty). */
     private fun openNew(templateId: Long?) {

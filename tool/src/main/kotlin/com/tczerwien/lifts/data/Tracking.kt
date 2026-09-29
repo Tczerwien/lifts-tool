@@ -64,5 +64,19 @@ enum class Tracking(val stored: String, val label: String) {
     }
 }
 
+/**
+ * The type to give an exercise whose logged sets carry numbers its [current] type hides, or null to
+ * keep it. Types only started to matter in B9, and the seeded ones were guessed (every "body only"
+ * move reps only, holds and stretches duration), so a pull-up logged with a belt, or a plank logged
+ * as reps, would lose its numbers from the rows, the records and the exports. [loggedWeight]: a
+ * ticked set with weight above 0; [loggedReps], [loggedDuration]: a ticked set with reps / seconds.
+ */
+fun fittedToHistory(current: Tracking, loggedWeight: Boolean, loggedReps: Boolean, loggedDuration: Boolean): Tracking? = when {
+    current == Tracking.REPS_ONLY && loggedWeight -> Tracking.WEIGHTED_BODYWEIGHT
+    current == Tracking.DURATION && loggedWeight -> Tracking.WEIGHT_REPS
+    current == Tracking.DURATION && loggedReps && !loggedDuration -> Tracking.REPS_ONLY
+    else -> null
+}
+
 /** How this exercise's sets are measured. */
 val ExerciseEntity.tracking: Tracking get() = Tracking.of(trackingType)

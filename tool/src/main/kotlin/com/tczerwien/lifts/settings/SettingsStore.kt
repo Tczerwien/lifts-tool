@@ -74,6 +74,13 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         )
     }
 
+    /** Whether exercise types were fitted to what he had logged ([com.tczerwien.lifts.data.fittedToHistory]); once per install. */
+    suspend fun trackingFitted(): Boolean = dataStore.data.first()[TRACKING_FITTED] == true
+
+    suspend fun markTrackingFitted() {
+        dataStore.edit { prefs -> prefs[TRACKING_FITTED] = true }
+    }
+
     /** Saves [step] as the weight step for [unit]; a step that unit doesn't offer is ignored. */
     suspend fun setWeightStep(unit: WeightUnit, step: Double) {
         if (step !in unit.weightSteps) return
@@ -132,6 +139,9 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val REST_BEEP = booleanPreferencesKey(KEY_REST_BEEP)
         private val WEIGHT_STEP_LB = doublePreferencesKey(KEY_WEIGHT_STEP_LB)
         private val WEIGHT_STEP_KG = doublePreferencesKey(KEY_WEIGHT_STEP_KG)
+
+        /** Not a setting (backups leave it out): the one-time fit of types to history has run. */
+        private val TRACKING_FITTED = booleanPreferencesKey("lifts_tracking_fitted")
 
         private fun weightStepKey(unit: WeightUnit) = when (unit) {
             WeightUnit.LB -> WEIGHT_STEP_LB

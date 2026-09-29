@@ -43,6 +43,19 @@ class LiftsRepository private constructor(
     fun exercisesByIds(ids: Collection<String>): Map<String, ExerciseEntity> =
         if (ids.isEmpty()) emptyMap() else db.exerciseDao.byIds(ids.distinct()).associateBy { it.id }
 
+    /**
+     * Gives every exercise whose logged sets carry numbers its type hides a type that shows them
+     * ([fittedToHistory]), in one transaction; returns how many changed.
+     */
+    fun fitTrackingToHistory(): Int = inTransaction {
+        db.workoutDao.loggedFields().count { logged ->
+            val exercise = db.exerciseDao.byId(logged.exerciseId) ?: return@count false
+            val fitted = fittedToHistory(exercise.tracking, logged.weighted, logged.hasReps, logged.hasDuration)
+                ?: return@count false
+            db.exerciseDao.update(exercise.copy(trackingType = fitted.stored)) > 0
+        }
+    }
+
     /** Every exercise without its instructions, by name: the picker's catalog. */
     fun exerciseSummaries(): List<ExerciseSummary> = db.exerciseDao.listSummaries()
 
