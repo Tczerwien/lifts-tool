@@ -93,6 +93,9 @@ private val SHORT_NAMES: Map<String, ShortName> = mapOf(
     "wide-grip-lat-pulldown" to ShortName("Wide-Grip Lat Pulldown", "Lat Pulldown"),
 )
 
+/** What a set's exercise is called when its catalog row is missing (Workout Detail, the export files). */
+const val UNKNOWN_EXERCISE = "Unknown exercise"
+
 /**
  * The name the screens show for [exercise]: its short name when it is one of the common catalog lifts
  * and still has its catalog name ([SHORT_NAMES]), else its own name. A name he gave it (a custom

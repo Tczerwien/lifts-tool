@@ -5,7 +5,7 @@ import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 
 /**
- * Renders `strong-compat.csv` — a Strong-iOS-compatible CSV for migrating history into
+ * Renders `strong.csv` — a Strong-iOS-compatible CSV for migrating history into
  * other trackers (Hevy, Reps, Arvo can all import this format).
  *
  * The Weight column is in the unit Lifts shows (Settings), rounded as the screens round it: 135,

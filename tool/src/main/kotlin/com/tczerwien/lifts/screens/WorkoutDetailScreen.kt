@@ -34,6 +34,7 @@ import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.SetLine
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -362,5 +363,3 @@ class WorkoutDetailScreen(
         }
     }
 }
-
-private const val UNKNOWN_EXERCISE = "Unknown exercise"

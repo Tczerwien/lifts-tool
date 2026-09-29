@@ -65,7 +65,23 @@ class MarkdownExportTest {
         // Least-squares over the five entries of 2026-06-17..07-14: -0.3034 kg/week.
         assertContains(lines, "- Rate: -0.30 kg/week over last 4 weeks")
         // Em-dash for the three empty leading weeks and the 2026-06-29 gap week.
-        assertContains(lines, "- Weekly average, the same 8 weeks (oldest → newest): —, —, —, 81.9, 81.6, —, 81.1, 80.5")
+        assertContains(lines, "- Weekly average, weeks starting 2026-05-25 … 2026-07-13 (oldest → newest): —, —, —, 81.9, 81.6, —, 81.1, 80.5")
+    }
+
+    @Test
+    fun bodyweightAveragesNameTheirWeeksWithoutAnyWorkingSets() {
+        // A layoff: weigh-ins, no working sets in the 8 weeks, so no weekly-sets section to borrow dates from.
+        val layoff = MarkdownExport.render(ExportFixtures.snapshot(workouts = emptyList())).split("\n")
+        assertTrue(layoff.none { it.startsWith("### Weekly sets") })
+        assertContains(layoff, "- Weekly average, weeks starting 2026-05-25 … 2026-07-13 (oldest → newest): —, —, —, 81.9, 81.6, —, 81.1, 80.5")
+    }
+
+    @Test
+    fun aMissingExerciseIsUnknownNotItsId() {
+        val orphan = ExportFixtures.snapshot(exercises = listOf(ExportFixtures.squat))
+        assertTrue(MarkdownExport.render(orphan).contains("- **Unknown exercise**"))
+        assertTrue(CsvExport.render(orphan).split("\n")[1].contains(",Unknown exercise,"))
+        assertTrue(ExportFixtures.bench.id !in MarkdownExport.render(orphan))
     }
 
     @Test

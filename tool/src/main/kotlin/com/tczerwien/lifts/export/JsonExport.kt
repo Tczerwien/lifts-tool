@@ -16,8 +16,10 @@ import kotlinx.serialization.json.Json
  *
  * 2.0 (B7) renamed routine → title, duration_sec → duration_seconds, rest_sec → rest_seconds,
  * type "drop" → "dropset", bodyweight_log[].value → weight_kg and best_set → best_set_weight_kg +
- * best_set_reps; replaced duration_min with end_time; and added timezone, units.display, templates,
- * week_starts, e1rm_trend, completed_at, is_custom, hidden, pinned_note and every custom exercise.
+ * best_set_reps; replaced duration_min with end_time; added timezone, units.display, templates,
+ * week_starts, e1rm_trend, completed_at, bodyweight_date, is_custom, hidden, pinned_note, every custom
+ * exercise, and a name on each workout and template exercise; and is written on one line (1.x was
+ * indented).
  */
 object JsonExport {
 

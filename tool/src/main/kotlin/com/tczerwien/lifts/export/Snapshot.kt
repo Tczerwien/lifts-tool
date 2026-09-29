@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.analytics.WORKOUT_BODYWEIGHT_LOOKBACK_DAYS
 import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.computePrs
@@ -8,9 +9,12 @@ import com.tczerwien.lifts.analytics.restGapsSec
 import com.tczerwien.lifts.analytics.trendBlockStarts
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
 import com.tczerwien.lifts.analytics.workoutBodyweight
+import com.tczerwien.lifts.analytics.workoutEpochDay
+import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
 import java.time.Instant
 import java.time.LocalDate
@@ -241,6 +245,8 @@ fun buildSnapshot(
 
     val setsBySlot = completedSets.groupBy { it.workoutExerciseId }
     val slotsByWorkout = validSlots.groupBy { it.workoutId }
+    // Weigh-ins by day (one per day), so each workout looks up its few days instead of the whole log.
+    val weighInsByDay = bodyweight.associateBy { it.epochDay }
     // Rest gaps run across all of a workout's exercises, in the order the sets were ticked.
     val restGaps = completedSets
         .groupBy { slotsById.getValue(it.workoutExerciseId).workoutId }
@@ -259,7 +265,7 @@ fun buildSnapshot(
                     val orderedSets = setsBySlot.getValue(slot.id).sortedBy { it.position }
                     SnapshotWorkoutExercise(
                         exerciseId = slot.exerciseId,
-                        name = names[slot.exerciseId] ?: slot.exerciseId,
+                        name = names[slot.exerciseId] ?: UNKNOWN_EXERCISE,
                         primaryMuscles = exercise?.primaryMuscles ?: emptyList(),
                         secondaryMuscles = exercise?.secondaryMuscles ?: emptyList(),
                         notes = slot.notes,
@@ -286,7 +292,7 @@ fun buildSnapshot(
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
                 durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt(),
-                bodyweight = workoutBodyweight(workout.startedAt, bodyweight, zone)?.let {
+                bodyweight = workoutBodyweight(workout.startedAt, weighInsNear(workout.startedAt, weighInsByDay, zone), zone)?.let {
                     SnapshotWorkoutBodyweight(it.weightKg, LocalDate.ofEpochDay(it.epochDay).toString(), it.sameDay)
                 },
                 notes = workout.notes,
@@ -301,7 +307,7 @@ fun buildSnapshot(
             exercises = templateSlots[template.id].orEmpty().sortedWith(compareBy({ it.position }, { it.id })).map {
                 SnapshotTemplateExercise(
                     exerciseId = it.exerciseId,
-                    name = names[it.exerciseId] ?: it.exerciseId,
+                    name = names[it.exerciseId] ?: UNKNOWN_EXERCISE,
                     targetSets = it.targetSets,
                     warmupSets = it.warmupSets,
                     repMin = it.repMin,
@@ -336,7 +342,7 @@ fun buildSnapshot(
         .map { pr ->
             SnapshotPr(
                 exerciseId = pr.exerciseId,
-                exerciseName = names[pr.exerciseId] ?: pr.exerciseId,
+                exerciseName = names[pr.exerciseId] ?: UNKNOWN_EXERCISE,
                 maxWeightKg = pr.maxWeightKg,
                 maxWeightDateIso = format.date(pr.maxWeightDate),
                 bestE1RmKg = pr.bestE1RmKg,
@@ -396,12 +402,18 @@ fun buildSnapshot(
             blockDays = TREND_BLOCK_DAYS,
             blockStarts = trendBlockStarts(todayEpochDay, TREND_BLOCKS, TREND_BLOCK_DAYS).map { LocalDate.ofEpochDay(it).toString() },
             lifts = e1RmTrend(setsByExercise, todayEpochDay, zone, TREND_BLOCKS, TREND_BLOCK_DAYS, TREND_LIFTS).map {
-                SnapshotLiftTrend(it.exerciseId, names[it.exerciseId] ?: it.exerciseId, it.bestE1RmKg)
+                SnapshotLiftTrend(it.exerciseId, names[it.exerciseId] ?: UNKNOWN_EXERCISE, it.bestE1RmKg)
             },
         ),
         weekStarts = weekStarts,
         weeklySetsPerMuscle = weekly,
     )
+}
+
+/** The weigh-ins from the [WORKOUT_BODYWEIGHT_LOOKBACK_DAYS] days before a workout's local day through that day. */
+private fun weighInsNear(startedAt: Long, byDay: Map<Long, BodyweightEntity>, zone: ZoneId): List<BodyweightEntity> {
+    val day = workoutEpochDay(startedAt, zone)
+    return (day - WORKOUT_BODYWEIGHT_LOOKBACK_DAYS..day).mapNotNull { byDay[it] }
 }
 
 /** Date and number formatting for the export renderers; dates and times are local to [zone]. */

@@ -119,7 +119,9 @@ object MarkdownExport {
                 append("- Rate: ").append(ExportFormat.signed2(Format.kgToDisplay(it, unit)))
                 append(' ').append(unit.suffix).append("/week over last 4 weeks\n")
             }
-            append("- Weekly average, the same ").append(bodyweight.weeklyAvgKg.size).append(" weeks (oldest → newest): ")
+            // Names its weeks itself: the weekly sets, which also list them, are left out without working sets.
+            append("- Weekly average, weeks starting ").append(snapshot.weekStarts.first()).append(" … ")
+            append(snapshot.weekStarts.last()).append(" (oldest → newest): ")
             append(bodyweight.weeklyAvgKg.joinToString(", ") { avg -> avg?.let { Format.bodyweight(it, unit) } ?: "—" })
             append('\n')
         }
