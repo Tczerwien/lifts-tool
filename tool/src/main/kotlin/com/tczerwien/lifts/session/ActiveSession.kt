@@ -102,8 +102,12 @@ class ActiveSession(
      * slot added copies last time's k-th Bench slot (same count, warm-ups kept as warm-ups), so a
      * second Bench gets the back-off sets, not both blocks. With no such slot last time,
      * [DEFAULT_NEW_EXERCISE_SETS] work sets. The slot and its sets are written in one transaction.
+     * Returns null, writing nothing, when the workout is no longer open: the picker can come back
+     * after the workout was closed or deleted as stale underneath it, and a slot for a deleted
+     * workout would break its foreign key (a crash) or add rows to a finished one.
      */
-    fun addExercise(workoutId: Long, exerciseId: String): Long = repository.inTransaction {
+    fun addExercise(workoutId: Long, exerciseId: String): Long? = repository.inTransaction {
+        if (repository.workoutById(workoutId)?.takeIf { it.endedAt == null } == null) return@inTransaction null
         val slots = repository.exercisesForWorkout(workoutId)
         val position = slots.maxOfOrNull { it.position + 1 } ?: 0
         val occurrence = slots.count { it.exerciseId == exerciseId }
@@ -117,12 +121,17 @@ class ActiveSession(
         slotId
     }
 
-    /** Appends one pending "normal" set to [workoutExerciseId]; returns the new set id. */
-    fun addSet(workoutId: Long, workoutExerciseId: Long): Long {
+    /**
+     * Appends one pending "normal" set to [workoutExerciseId]; returns the new set id, or null, writing
+     * nothing, when the workout is no longer open or the slot is gone (removed by a queued "…" action).
+     */
+    fun addSet(workoutId: Long, workoutExerciseId: Long): Long? = repository.inTransaction {
+        if (repository.workoutById(workoutId)?.takeIf { it.endedAt == null } == null) return@inTransaction null
+        if (repository.exercisesForWorkout(workoutId).none { it.id == workoutExerciseId }) return@inTransaction null
         val position = repository.setsForWorkout(workoutId)
             .filter { it.workoutExerciseId == workoutExerciseId }
             .maxOfOrNull { it.position + 1 } ?: 0
-        return repository.addSet(
+        repository.addSet(
             SetEntity(workoutExerciseId = workoutExerciseId, position = position, type = SET_TYPE_NORMAL),
         )
     }

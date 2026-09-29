@@ -91,9 +91,9 @@ class ActiveSessionTest {
             "bench" to List(2) { Triple(n, 70.0, 10) },
         )
         val workoutId = session.startEmpty(now = 2_000_000)
-        val first = session.addExercise(workoutId, "bench")
-        val second = session.addExercise(workoutId, "bench")
-        val third = session.addExercise(workoutId, "bench")
+        val first = session.addExercise(workoutId, "bench")!!
+        val second = session.addExercise(workoutId, "bench")!!
+        val third = session.addExercise(workoutId, "bench")!!
         assertEquals(3, store.setsForWorkout(workoutId).count { it.workoutExerciseId == first })
         assertEquals(2, store.setsForWorkout(workoutId).count { it.workoutExerciseId == second })
         assertEquals(DEFAULT_NEW_EXERCISE_SETS, store.setsForWorkout(workoutId).count { it.workoutExerciseId == third })
@@ -108,8 +108,8 @@ class ActiveSessionTest {
         )
         store.skipSlot(lastWeek, position = 0)
         val workoutId = session.startEmpty(now = 2_000_000)
-        val top = session.addExercise(workoutId, "bench")
-        val backOff = session.addExercise(workoutId, "bench")
+        val top = session.addExercise(workoutId, "bench")!!
+        val backOff = session.addExercise(workoutId, "bench")!!
         // The skipped top slot has nothing to mirror; the back-off slot still mirrors its own two sets.
         assertEquals(DEFAULT_NEW_EXERCISE_SETS, store.setsForWorkout(workoutId).count { it.workoutExerciseId == top })
         assertEquals(2, store.setsForWorkout(workoutId).count { it.workoutExerciseId == backOff })
@@ -214,7 +214,7 @@ class ActiveSessionTest {
     @Test
     fun `a save that lands after a removal keeps the renumbered position`() {
         val workoutId = session.startEmpty(now = 1_000)
-        val slotId = session.addExercise(workoutId, "bench")
+        val slotId = session.addExercise(workoutId, "bench")!!
         val (first, _, third) = store.setsForWorkout(workoutId)
         session.removeSet(first.id)
         // The screen still holds the third row at its old position 2 when a stepper tap saves it.
@@ -242,7 +242,7 @@ class ActiveSessionTest {
     @Test
     fun `finishing with nothing ticked discards the workout`() {
         val workoutId = session.startEmpty(now = 1_000)
-        session.addExercise(workoutId, "bench")
+        session.addExercise(workoutId, "bench")!!
         assertEquals(FinishOutcome.DISCARDED, session.finishOrDiscard(workoutId, now = 60_000))
         assertNull(store.workoutById(workoutId))
         assertTrue(store.sets.isEmpty() && store.slots.isEmpty())
@@ -256,9 +256,9 @@ class ActiveSessionTest {
             secondaryMuscles = emptyList(), category = "strength", level = null, instructions = emptyList(),
         )
         val workoutId = session.startEmpty(now = 2_000_000)
-        val slotId = session.addExercise(workoutId, "bench")
+        val slotId = session.addExercise(workoutId, "bench")!!
         val first = store.setsForWorkout(workoutId).single()
-        val secondId = session.addSet(workoutId, slotId)
+        val secondId = session.addSet(workoutId, slotId)!!
         val warmupId = store.addSet(SetEntity(workoutExerciseId = slotId, position = 2, type = w))
         // Values typed in but never ticked.
         store.addSet(SetEntity(workoutExerciseId = slotId, position = 3, type = n, weightKg = 140.0, reps = 5))
@@ -278,7 +278,7 @@ class ActiveSessionTest {
     @Test
     fun `the summary carries that day's weigh-in, looked up rather than stored`() {
         val workoutId = session.startEmpty(now = 1_000)
-        val slotId = session.addExercise(workoutId, "bench")
+        val slotId = session.addExercise(workoutId, "bench")!!
         session.completeSet(workoutId, store.setsForWorkout(workoutId).first { it.workoutExerciseId == slotId }, 100.0, 5, n, now = 60_000)
         session.finishOrDiscard(workoutId, now = 120_000)
         // Logged after the workout, on its day (epoch day 0 in UTC); the day before is older.
@@ -286,6 +286,32 @@ class ActiveSessionTest {
         store.bodyweight += BodyweightEntity(id = 2, epochDay = 0, weightKg = 80.5)
 
         assertEquals(WorkoutBodyweight(80.5, 0, sameDay = true), session.summarize(workoutId, ZoneOffset.UTC)!!.bodyweight)
+    }
+
+    @Test
+    fun `nothing is added to a workout closed or deleted while the picker was open`() {
+        // Closed as stale (it had a tick) while he picked an exercise: no rows join a finished workout.
+        val closed = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(closed, "bench")!!
+        session.completeSet(closed, store.setsForWorkout(closed).first { it.workoutExerciseId == slotId }, 100.0, 5, n, now = 60_000)
+        assertTrue(session.closeIfStale(closed, now = 60_000 + 5 * 3_600_000L))
+        val before = store.setsForWorkout(closed).size to store.exercisesForWorkout(closed).size
+        assertNull(session.addExercise(closed, "squat"))
+        assertNull(session.addSet(closed, slotId))
+        assertEquals(before, store.setsForWorkout(closed).size to store.exercisesForWorkout(closed).size)
+
+        // Deleted as stale (nothing ticked): no orphan rows (on the phone, a foreign-key crash).
+        val deleted = session.startEmpty(now = 20_000_000)
+        assertTrue(session.closeIfStale(deleted, now = 20_000_000 + 5 * 3_600_000L))
+        assertNull(store.workoutById(deleted))
+        assertNull(session.addExercise(deleted, "bench"))
+        assertTrue(store.slots.values.none { it.workoutId == deleted })
+
+        // A slot removed by a queued "…" action takes no new set.
+        val open = session.startEmpty(now = 40_000_000)
+        val gone = session.addExercise(open, "bench")!!
+        session.removeExercise(open, gone)
+        assertNull(session.addSet(open, gone))
     }
 
     // --- Home's cleanup ---
