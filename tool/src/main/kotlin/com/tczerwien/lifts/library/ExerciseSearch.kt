@@ -244,3 +244,26 @@ fun searchExercises(
         )
         .map { it.first }
 }
+
+/**
+ * The picker's body-part chips, in gym order, over the catalog's 17 muscles. Neck has no chip: its 8
+ * exercises stay under All and search.
+ */
+enum class BodyPart(val label: String, val muscles: Set<String>) {
+    CHEST("Chest", setOf("chest")),
+    BACK("Back", setOf("lats", "middle back", "lower back", "traps")),
+    LEGS("Legs", setOf("quadriceps", "hamstrings", "glutes", "calves", "adductors", "abductors")),
+    SHOULDERS("Shoulders", setOf("shoulders")),
+    ARMS("Arms", setOf("biceps", "triceps", "forearms")),
+    CORE("Core", setOf("abdominals")),
+}
+
+/** The chip a catalog muscle ("middle back") belongs to; null for neck and anything unknown. */
+fun bodyPartOf(muscle: String): BodyPart? {
+    val key = muscle.trim().lowercase()
+    return BodyPart.entries.firstOrNull { key in it.muscles }
+}
+
+/** The entries whose primary muscle is in [part], in the order given. */
+fun inBodyPart(entries: List<CatalogEntry>, part: BodyPart): List<CatalogEntry> =
+    entries.filter { entry -> entry.primaryMuscles.any { bodyPartOf(it) == part } }
