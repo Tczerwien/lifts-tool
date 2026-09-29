@@ -119,7 +119,10 @@ class HomeViewModel(
                 // the write lane, so it can't bring back a file a restore has just moved.
                 delay(RestoreInbox.SETTLE_MS + 500)
                 if (showing) {
+                    // A load asked for after this look has newer data; the look then leaves it alone.
+                    val ticket = latestLoad
                     LiftsIo.write({ share.waitingRestore() }) { file ->
+                        if (ticket != latestLoad) return@write
                         val waiting = file?.let { RestoreWaiting(it.name, it.absolutePath) }
                         _uiState.update { it.copy(restoreWaiting = waiting) }
                     }

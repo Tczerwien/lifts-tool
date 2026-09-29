@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.toolmanager
 
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import com.tczerwien.lifts.backup.BackupManager
@@ -60,9 +61,17 @@ class LiftsShare private constructor(
         return name?.let { File(restoreDir, it) }
     }
 
-    /** A restore from [source] landed: an upload moves to restore/applied, and the exports catch up. */
+    /**
+     * A restore from [source] landed: an upload moves to restore/applied, and the exports catch up.
+     * Never throws, so a failed move can't make a restore that landed read as failed; at worst Home
+     * offers the file again and checking it says it is gone.
+     */
     fun restored(source: File) {
-        if (source.parentFile == restoreDir) moveInto(File(restoreDir, APPLIED), source)
+        try {
+            if (source.parentFile == restoreDir) moveInto(File(restoreDir, APPLIED), source)
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not move ${source.name} to restore/$APPLIED", e)
+        }
         exports.request()
     }
 
@@ -97,6 +106,7 @@ class LiftsShare private constructor(
             }
         }
 
+        private const val TAG = "LiftsShare"
         private const val APPLIED = "applied"
         private const val REJECTED = "rejected"
 

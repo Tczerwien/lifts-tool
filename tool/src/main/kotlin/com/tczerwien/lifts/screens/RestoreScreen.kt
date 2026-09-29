@@ -136,8 +136,7 @@ class RestoreViewModel(
         _uiState.update { it.copy(phase = Phase.Restoring) }
         // The upload moves out of Restore in the same lane step, so a Home reload queued behind it
         // can't still offer it.
-        // A failed move can't turn a restore that landed into "failed".
-        LiftsIo.write({ runCatching { share.restorer.apply(ready).also { runCatching { share.restored(source) } } } }) { result ->
+        LiftsIo.write({ runCatching { share.restorer.apply(ready).also { share.restored(source) } } }) { result ->
             val phase = result.fold(
                 onSuccess = { outcome ->
                     prepared = null

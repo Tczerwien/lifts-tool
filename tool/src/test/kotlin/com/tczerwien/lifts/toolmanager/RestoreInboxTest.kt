@@ -32,6 +32,12 @@ class RestoreInboxTest {
     }
 
     @Test
+    fun `an old upload from a fast clock doesn't hide today's`() {
+        val uploads = listOf(Upload("from-a-fast-clock.db", now + 3_600_000), Upload("today.db", now - 10_000))
+        assertEquals("today.db", RestoreInbox.pick(uploads, now))
+    }
+
+    @Test
     fun `dot files and an empty folder offer nothing`() {
         assertNull(RestoreInbox.pick(listOf(Upload(".incoming", now - 60_000)), now))
         assertNull(RestoreInbox.pick(emptyList(), now))

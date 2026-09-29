@@ -12,12 +12,14 @@ object RestoreInbox {
     /**
      * The newest of [uploads] to offer, or null. Tool Manager writes an upload in place, so a file
      * changed in the last [SETTLE_MS] may still be arriving and waits. A file changed well in the
-     * future isn't arriving (the clock was wrong, then fixed) and is offered at once. Dot files are
-     * never offered: they are copies still being made (lifts-adb.sh push-restore uses one).
+     * future isn't arriving (the clock was wrong, then fixed): it is offered, but after any file with a
+     * real time, so an old one can't hide today's upload. Dot files are never offered: they are copies
+     * still being made (lifts-adb.sh push-restore uses one).
      */
     fun pick(uploads: Collection<Upload>, now: Long): String? = uploads
         .filter { !it.name.startsWith(".") }
         .filter { val age = now - it.modifiedAt; age >= SETTLE_MS || age < -SETTLE_MS }
-        .maxByOrNull { it.modifiedAt }
+        .sortedWith(compareBy<Upload> { it.modifiedAt - now > SETTLE_MS }.thenByDescending { it.modifiedAt })
+        .firstOrNull()
         ?.name
 }
