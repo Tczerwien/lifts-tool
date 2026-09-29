@@ -108,5 +108,19 @@ class TrackingExportTest {
         assertEquals(Format.lbToKg(-30.0), pullupSet.getValue("weight_kg").jsonPrimitive.content.toDouble(), 1e-9)
     }
 
+    @Test
+    fun `a note on an exercise with nothing ticked is still exported`() {
+        val skipped = WorkoutExerciseEntity(id = 6, workoutId = 2, exerciseId = dip.id, position = 3, notes = "skipped: left shoulder")
+        val noted = ExportFixtures.snapshot(
+            sets = sets, workouts = listOf(week1, week2), slots = slots + skipped, unit = WeightUnit.LB,
+            exercises = listOf(pullup, dip, plank), bodyweight = emptyList(), bars = emptyList(),
+        )
+        val log = MarkdownExport.render(noted)
+        assertContains(log, "  > skipped: left shoulder")
+        val exercise = noted.workouts.first().exercises.last()
+        assertEquals("skipped: left shoulder", exercise.notes)
+        assertTrue(exercise.sets.isEmpty(), "no unticked set sneaks in")
+    }
+
     private fun at(iso: String) = ExportFixtures.millis(iso)
 }

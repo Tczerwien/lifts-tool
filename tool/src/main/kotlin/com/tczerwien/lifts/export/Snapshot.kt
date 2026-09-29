@@ -262,16 +262,18 @@ fun buildSnapshot(
         .values
         .fold(HashMap<Long, Int>()) { gaps, workoutSets -> gaps.apply { putAll(restGapsSec(workoutSets)) } }
 
+    // A slot with nothing ticked goes in only for his note on it, and a workout only for a tick or a note.
+    fun kept(slot: com.tczerwien.lifts.data.WorkoutExerciseEntity) = slot.id in setsBySlot || !slot.notes.isNullOrBlank()
     val snapshotWorkouts = workouts
-        .filter { workout -> slotsByWorkout[workout.id].orEmpty().any { it.id in setsBySlot } }
+        .filter { workout -> slotsByWorkout[workout.id].orEmpty().any(::kept) || !workout.notes.isNullOrBlank() }
         .sortedWith(compareByDescending<WorkoutEntity> { it.startedAt }.thenByDescending { it.id })
         .map { workout ->
-            val slots = slotsByWorkout.getValue(workout.id)
-                .filter { it.id in setsBySlot }
+            val slots = slotsByWorkout[workout.id].orEmpty()
+                .filter(::kept)
                 .sortedBy { it.position }
                 .map { slot ->
                     val exercise = exercisesById[slot.exerciseId]
-                    val orderedSets = setsBySlot.getValue(slot.id).sortedBy { it.position }
+                    val orderedSets = setsBySlot[slot.id].orEmpty().sortedBy { it.position }
                     SnapshotWorkoutExercise(
                         exerciseId = slot.exerciseId,
                         name = nameOf(slot.exerciseId),

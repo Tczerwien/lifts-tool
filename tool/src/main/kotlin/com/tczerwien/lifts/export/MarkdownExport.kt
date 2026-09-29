@@ -151,7 +151,9 @@ object MarkdownExport {
                 append("\n- **").append(exercise.name).append("**")
                 muscleTag(exercise)?.let { append(' ').append(it) }
                 append('\n')
-                append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit) }).append('\n')
+                if (exercise.sets.isNotEmpty()) {
+                    append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit) }).append('\n')
+                }
                 exercise.notes?.let { append(quote(it, indent = "  ")) }
             }
         }

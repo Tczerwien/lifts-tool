@@ -25,6 +25,7 @@ import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.analytics.workoutBodyweight
 import com.tczerwien.lifts.analytics.workoutEpochDay
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
@@ -195,7 +196,9 @@ class WorkoutDetailViewModel(
         val prSetIds = computePrSetIds(exercises.keys + slots.map { it.exerciseId }, exercises.mapValues { it.value.tracking })
 
         val blocks = slots.sortedBy { it.position }.mapNotNull { slot ->
+            // An exercise with nothing ticked shows only for his note on it ("skipped: left shoulder").
             val completed = setsBySlot[slot.id]?.sortedBy { it.position }
+                ?: emptyList<SetEntity>().takeIf { !slot.notes.isNullOrBlank() }
                 ?: return@mapNotNull null
             ExerciseBlock(
                 exerciseId = slot.exerciseId,
@@ -348,7 +351,11 @@ class WorkoutDetailScreen(
                                         )
                                         LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
                                     }
-                                    SetLine(runs = block.runs, lighten = true)
+                                    if (block.runs.isEmpty()) {
+                                        LightText(text = "No sets", variant = LightTextVariant.Detail, lighten = true)
+                                    } else {
+                                        SetLine(runs = block.runs, lighten = true)
+                                    }
                                     // His note on this exercise, in his words.
                                     block.notes?.let { note ->
                                         LightText(
