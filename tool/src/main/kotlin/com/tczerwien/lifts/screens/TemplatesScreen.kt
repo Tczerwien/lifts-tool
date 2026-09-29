@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.alpha
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.library.reorderPositions
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
@@ -151,25 +152,19 @@ class TemplatesViewModel(
     }
 
     /**
-     * Swaps the template with its neighbor ([delta] = ±1) and renumbers positions 0..n-1, on the write
-     * lane (serial, survives Back); the exports catch up when anything moved.
+     * Swaps the template with its neighbor ([delta] = ±1), positions 0..n-1 ([reorderPositions]), on the
+     * write lane (serial, survives Back); the exports catch up when anything moved.
      */
     fun moveTemplate(id: Long, delta: Int) {
         LiftsIo.write({
-            val templates = repository.listTemplates().toMutableList()
-            val index = templates.indexOfFirst { it.id == id }
-            val target = index + delta
-            if (index < 0 || target !in templates.indices) {
+            val templates = repository.listTemplates()
+            val moves = reorderPositions(templates, templates.indexOfFirst { it.id == id }, delta) { it.position }
+            if (moves == null) {
                 refresh()
                 return@write false
             }
-            templates[index] = templates[target].also { templates[target] = templates[index] }
             repository.inTransaction {
-                templates.forEachIndexed { position, template ->
-                    if (template.position != position) {
-                        repository.updateTemplate(template.copy(position = position))
-                    }
-                }
+                moves.forEach { (template, position) -> repository.updateTemplate(template.copy(position = position)) }
             }
             refresh()
             true

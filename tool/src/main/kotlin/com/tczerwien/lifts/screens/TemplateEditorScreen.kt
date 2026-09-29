@@ -21,6 +21,8 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.library.renumber
+import com.tczerwien.lifts.library.reorderPositions
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
@@ -178,18 +180,14 @@ class TemplateEditorViewModel(
         )
     }
 
-    /** Swaps the exercise with its neighbor ([delta] = ±1) and renumbers positions 0..n-1. */
+    /** Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1 ([reorderPositions]). */
     fun moveExercise(templateExerciseId: Long, delta: Int) = mutate {
-        val exercises = repository.exercisesForTemplate(templateId).toMutableList()
+        val exercises = repository.exercisesForTemplate(templateId)
         val index = exercises.indexOfFirst { it.id == templateExerciseId }
-        val target = index + delta
-        if (index < 0 || target !in exercises.indices) return@mutate
-        exercises[index] = exercises[target].also { exercises[target] = exercises[index] }
+        val moves = reorderPositions(exercises, index, delta) { it.position } ?: return@mutate
         repository.inTransaction {
-            exercises.forEachIndexed { position, exercise ->
-                if (exercise.position != position) {
-                    repository.updateTemplateExercise(exercise.copy(position = position))
-                }
+            moves.forEach { (exercise, position) ->
+                repository.updateTemplateExercise(exercise.copy(position = position))
             }
         }
     }
@@ -226,10 +224,8 @@ class TemplateEditorViewModel(
         mutate {
             repository.inTransaction {
                 repository.deleteTemplateExercise(mode.templateExerciseId)
-                repository.exercisesForTemplate(templateId).forEachIndexed { position, exercise ->
-                    if (exercise.position != position) {
-                        repository.updateTemplateExercise(exercise.copy(position = position))
-                    }
+                renumber(repository.exercisesForTemplate(templateId)) { it.position }.forEach { (exercise, position) ->
+                    repository.updateTemplateExercise(exercise.copy(position = position))
                 }
             }
         }
