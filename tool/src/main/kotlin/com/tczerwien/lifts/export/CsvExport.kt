@@ -10,7 +10,8 @@ package com.tczerwien.lifts.export
  *
  * Format notes (mirroring Strong iOS exports):
  * - One row per completed set, chronological (oldest workout first).
- * - Date is the workout start time ("yyyy-MM-dd HH:mm:ss", UTC), repeated on every row.
+ * - Date is the workout start time in the phone's local time with no offset ("yyyy-MM-dd HH:mm:ss"),
+ *   as Strong writes it, repeated on every row.
  * - Duration is a human string ("1h 38m", "44m"), empty for in-progress workouts.
  * - Set types are NOT exported (Strong limitation); warm-ups appear as plain rows.
  * - Distance is always 0 (no distance cardio in v1); Seconds is durationSec or 0.
@@ -27,9 +28,10 @@ object CsvExport {
 
     fun render(snapshot: ExportSnapshot): String = buildString {
         append(HEADER).append('\n')
+        val format = ExportFormat(snapshot.zone)
         // Snapshot is newest-first; Strong exports chronologically.
         for (workout in snapshot.workouts.asReversed()) {
-            val date = ExportFormat.csvDateTime(workout.startEpochMillis)
+            val date = format.csvDateTime(workout.startEpochMillis)
             val duration = workout.durationMin?.let { formatDuration(it) } ?: ""
             for (exercise in workout.exercises) {
                 for (set in exercise.sets) {
@@ -55,7 +57,7 @@ object CsvExport {
 
     /**
      * Renders `bodyweight.csv` — one row per bodyweight entry, chronological (oldest
-     * first). Date is yyyy-MM-dd (UTC); Weight is always KILOGRAMS, trailing zeros
+     * first). Date is the local yyyy-MM-dd it was logged on; Weight is always KILOGRAMS, trailing zeros
      * trimmed ("82", "80.5"). Same RFC-4180 rules as [render].
      */
     fun renderBodyweight(snapshot: ExportSnapshot): String = buildString {

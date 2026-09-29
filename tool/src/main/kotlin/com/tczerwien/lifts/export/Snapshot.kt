@@ -8,17 +8,16 @@ import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
 import java.time.Instant
 import java.time.LocalDate
-import java.time.OffsetDateTime
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.format.DateTimeParseException
 import java.util.Locale
 import kotlin.math.roundToInt
 
 /**
  * Export snapshot model — plain data classes decoupled from Room, built once from entity
- * lists and rendered by [MarkdownExport], [JsonExport] and [CsvExport]. All calendar
- * formatting is done here via java.time in UTC (deterministic across devices).
+ * lists and rendered by [MarkdownExport], [JsonExport] and [CsvExport]. Dates and times are the
+ * phone's local ones ([ExportSnapshot.zone]), as the screens show them: an evening workout keeps
+ * its day. Tests pass a fixed zone.
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
@@ -29,7 +28,10 @@ const val WEEKLY_SUMMARY_WEEKS = 8
 
 data class ExportSnapshot(
     val schemaVersion: String,
+    /** With its offset, e.g. 2026-07-14T07:00:00-05:00. */
     val exportedAtIso: String,
+    /** The zone every date and time is in, e.g. America/Chicago. */
+    val zone: ZoneId,
     val goals: String?,
     val injuries: List<String>,
     /** User-defined implements, ordered by position. */
@@ -54,7 +56,7 @@ data class SnapshotBar(val name: String, val weightKg: Double)
 
 data class SnapshotBodyweightTrend(
     val currentKg: Double,
-    /** yyyy-MM-dd (UTC) of the most recent entry. */
+    /** yyyy-MM-dd of the most recent entry. */
     val currentDateIso: String,
     /** [WEEKLY_SUMMARY_WEEKS] ISO-week averages, oldest first; null for weeks with no entry. */
     val weeklyAvgKg: List<Double?>,
@@ -72,9 +74,9 @@ data class SnapshotExercise(
 
 data class SnapshotWorkout(
     val id: Long,
-    /** yyyy-MM-dd (UTC) of [startEpochMillis]. */
+    /** Local yyyy-MM-dd of [startEpochMillis]. */
     val dateIso: String,
-    /** Full ISO-8601 instant, e.g. 2026-07-13T10:00:00Z. */
+    /** Local ISO-8601 time with its offset, e.g. 2026-07-13T19:30:00-05:00. */
     val startTimeIso: String,
     val startEpochMillis: Long,
     val name: String,
@@ -126,15 +128,17 @@ data class SnapshotPr(
  * - PR flags are computed chronologically per exercise (by completedAt, ties by id)
  *   across the full history — see [isPr].
  * - The weekly-volume summary covers the [WEEKLY_SUMMARY_WEEKS] ISO weeks ending at
- *   [exportedAtIso].
+ *   [exportedAtMillis], in [zone].
  *
- * @param exportedAtIso ISO-8601 timestamp of the export, e.g. "2026-07-14T12:00:00Z"
+ * @param exportedAtMillis when the export was made
+ * @param zone the phone's zone: every date, time and week is local to it
  * @param goals optional free-text athlete goals for the front matter / profile
  * @param injuries current injuries/limitations, possibly empty
  */
 fun buildSnapshot(
     rows: LiftsRows,
-    exportedAtIso: String,
+    exportedAtMillis: Long,
+    zone: ZoneId,
     goals: String?,
     injuries: List<String>,
 ): ExportSnapshot {
@@ -144,6 +148,7 @@ fun buildSnapshot(
     val sets = rows.sets
     val bodyweight = rows.bodyweight
     val bars = rows.bars
+    val format = ExportFormat(zone)
     val exercisesById = exercises.associateBy { it.id }
     val workoutIds = workouts.mapTo(HashSet()) { it.id }
     val validSlots = workoutExercises.filter { it.workoutId in workoutIds }
@@ -189,8 +194,8 @@ fun buildSnapshot(
                 }
             SnapshotWorkout(
                 id = workout.id,
-                dateIso = ExportFormat.date(workout.startedAt),
-                startTimeIso = ExportFormat.isoInstant(workout.startedAt),
+                dateIso = format.date(workout.startedAt),
+                startTimeIso = format.dateTime(workout.startedAt),
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
                 durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt() },
@@ -212,9 +217,9 @@ fun buildSnapshot(
                 exerciseId = pr.exerciseId,
                 exerciseName = exercisesById[pr.exerciseId]?.name ?: pr.exerciseId,
                 maxWeightKg = pr.maxWeightKg,
-                maxWeightDateIso = ExportFormat.date(pr.maxWeightDate),
+                maxWeightDateIso = format.date(pr.maxWeightDate),
                 bestE1RmKg = pr.bestE1RmKg,
-                bestE1RmDateIso = pr.bestE1RmDate?.let { ExportFormat.date(it) },
+                bestE1RmDateIso = pr.bestE1RmDate?.let { format.date(it) },
                 bestSetNotation = pr.bestSetNotation,
             )
         }
@@ -226,15 +231,16 @@ fun buildSnapshot(
         workoutExercises = workoutExercises,
         sets = sets,
         weeks = WEEKLY_SUMMARY_WEEKS,
-        todayEpochMillis = parseExportedAt(exportedAtIso),
+        todayEpochMillis = exportedAtMillis,
+        zone = zone,
     )
 
     val bodyweightLog = bodyweight
         .sortedBy { it.epochDay }
         .map { BodyweightPoint(LocalDate.ofEpochDay(it.epochDay).toString(), it.weightKg) }
 
-    val todayEpochDay = Instant.ofEpochMilli(parseExportedAt(exportedAtIso))
-        .atZone(ZoneOffset.UTC).toLocalDate().toEpochDay()
+    // Bodyweight is logged by local day, so "today" is local too.
+    val todayEpochDay = Instant.ofEpochMilli(exportedAtMillis).atZone(zone).toLocalDate().toEpochDay()
     val trend = bodyweightTrend(bodyweight, weeks = WEEKLY_SUMMARY_WEEKS, todayEpochDay = todayEpochDay)
         ?.let {
             SnapshotBodyweightTrend(
@@ -247,7 +253,8 @@ fun buildSnapshot(
 
     return ExportSnapshot(
         schemaVersion = EXPORT_SCHEMA_VERSION,
-        exportedAtIso = exportedAtIso,
+        exportedAtIso = format.dateTime(exportedAtMillis),
+        zone = zone,
         goals = goals,
         injuries = injuries,
         bars = bars.sortedBy { it.position }.map { SnapshotBar(it.name, it.weightKg) },
@@ -260,38 +267,30 @@ fun buildSnapshot(
     )
 }
 
-/** Accepts "2026-07-14T12:00:00Z", offset date-times, or a bare "2026-07-14". */
-private fun parseExportedAt(iso: String): Long = try {
-    Instant.parse(iso).toEpochMilli()
-} catch (_: DateTimeParseException) {
-    try {
-        OffsetDateTime.parse(iso).toInstant().toEpochMilli()
-    } catch (_: DateTimeParseException) {
-        LocalDate.parse(iso.take(10)).atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+/** Date and number formatting for the export renderers; dates and times are local to [zone]. */
+internal class ExportFormat(zone: ZoneId) {
+    private val date = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT).withZone(zone)
+    private val csvDateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT).withZone(zone)
+    private val dateTime = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.ROOT).withZone(zone)
+
+    /** "2026-07-13" */
+    fun date(epochMillis: Long): String = date.format(Instant.ofEpochMilli(epochMillis))
+
+    /** "2026-07-13 19:30:00", local wall-clock time with no offset, as Strong writes it. */
+    fun csvDateTime(epochMillis: Long): String = csvDateTime.format(Instant.ofEpochMilli(epochMillis))
+
+    /** "2026-07-13T19:30:00-05:00" ("Z" in UTC). */
+    fun dateTime(epochMillis: Long): String = dateTime.format(Instant.ofEpochMilli(epochMillis))
+
+    companion object {
+        /** "100" for 100.0, "102.5" for 102.5 — no trailing ".0". */
+        fun number(value: Double): String =
+            if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+
+        /** Rounds to one decimal, then trims like [number] (119.5833 -> "119.6"). */
+        fun rounded1(value: Double): String = number(kotlin.math.round(value * 10) / 10.0)
+
+        /** Signed with two decimals ("+0.25", "-0.30"). */
+        fun signed2(value: Double): String = String.format(Locale.ROOT, "%+.2f", value)
     }
-}
-
-/** Shared UTC date/number formatting for the export renderers. */
-internal object ExportFormat {
-    private val DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ROOT).withZone(ZoneOffset.UTC)
-    private val CSV_DATE_TIME =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.ROOT).withZone(ZoneOffset.UTC)
-    private val ISO_INSTANT_SECONDS =
-        DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.ROOT).withZone(ZoneOffset.UTC)
-
-    fun date(epochMillis: Long): String = DATE.format(Instant.ofEpochMilli(epochMillis))
-
-    fun csvDateTime(epochMillis: Long): String = CSV_DATE_TIME.format(Instant.ofEpochMilli(epochMillis))
-
-    fun isoInstant(epochMillis: Long): String = ISO_INSTANT_SECONDS.format(Instant.ofEpochMilli(epochMillis))
-
-    /** "100" for 100.0, "102.5" for 102.5 — no trailing ".0". */
-    fun number(value: Double): String =
-        if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
-
-    /** Rounds to one decimal, then trims like [number] (119.5833 -> "119.6"). */
-    fun rounded1(value: Double): String = number(kotlin.math.round(value * 10) / 10.0)
-
-    /** Signed with two decimals ("+0.25", "-0.30"). */
-    fun signed2(value: Double): String = String.format(Locale.ROOT, "%+.2f", value)
 }

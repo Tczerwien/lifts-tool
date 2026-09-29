@@ -2,8 +2,7 @@ package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.session.LiftsIo
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.time.ZoneId
 
 /**
  * The export files for everything in [repository], by file name. Every table is read in one read
@@ -16,7 +15,8 @@ suspend fun renderExports(repository: LiftsRepository): Map<String, String> {
     val rows = LiftsIo.inLane { repository.readAll() }
     val snapshot = buildSnapshot(
         rows = rows,
-        exportedAtIso = Instant.now().truncatedTo(ChronoUnit.SECONDS).toString(),
+        exportedAtMillis = System.currentTimeMillis(),
+        zone = ZoneId.systemDefault(),
         goals = null,
         injuries = emptyList(),
     )

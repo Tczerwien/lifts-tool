@@ -7,7 +7,7 @@ import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 
 /**
@@ -16,8 +16,9 @@ import java.time.temporal.ChronoUnit
  * Conventions (shared with the export layer):
  * - A set counts as "completed" when [SetEntity.completedAt] is non-null.
  * - Warm-up sets ([SetEntity.type] == "warmup") never contribute to PRs or volume.
- * - Epoch-millis timestamps are interpreted in UTC when bucketing by calendar date/week,
- *   so results are deterministic regardless of device timezone.
+ * - Epoch-millis timestamps are bucketed by calendar date/week in the zone the caller passes: the
+ *   phone's own zone in the app, so a Sunday-evening workout counts in the week the screens show;
+ *   tests pass a fixed zone.
  */
 
 private const val SET_TYPE_WARMUP = "warmup"
@@ -126,7 +127,7 @@ fun computePrs(
 
 /**
  * Completed non-warmup set counts per muscle over the last [weeks] ISO weeks
- * (Monday-based, UTC), newest week last. The current week is the last element.
+ * (Monday-based, in [zone]), newest week last. The current week is the last element.
  * Each completed non-warmup set adds 1.0 to every primary muscle of its exercise
  * and 0.5 to every secondary muscle. Muscles with no contribution in the window
  * are omitted; keys are sorted alphabetically.
@@ -138,9 +139,10 @@ fun weeklySetsPerMuscle(
     sets: List<SetEntity>,
     weeks: Int,
     todayEpochMillis: Long,
+    zone: ZoneId,
 ): Map<String, List<Double>> {
     require(weeks > 0) { "weeks must be positive" }
-    val today = Instant.ofEpochMilli(todayEpochMillis).atZone(ZoneOffset.UTC).toLocalDate()
+    val today = Instant.ofEpochMilli(todayEpochMillis).atZone(zone).toLocalDate()
     val currentMonday = today.minusDays((today.dayOfWeek.value - 1).toLong())
     val firstMonday = currentMonday.minusWeeks((weeks - 1).toLong())
 
@@ -155,7 +157,7 @@ fun weeklySetsPerMuscle(
         val slot = weById[set.workoutExerciseId] ?: continue
         val exercise = exercisesById[slot.exerciseId] ?: continue
 
-        val date = Instant.ofEpochMilli(completedAt).atZone(ZoneOffset.UTC).toLocalDate()
+        val date = Instant.ofEpochMilli(completedAt).atZone(zone).toLocalDate()
         val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
         val index = ChronoUnit.WEEKS.between(firstMonday, monday).toInt()
         if (index < 0 || index >= weeks) continue
@@ -241,15 +243,16 @@ fun bodyweightTrend(
 }
 
 /**
- * Finished workouts per ISO week (Monday-based, UTC) over the last [weeks] weeks ending
+ * Finished workouts per ISO week (Monday-based) over the last [weeks] weeks ending
  * at [todayEpochDay]'s week — oldest week first, so the current week is the last element.
- * Only finished workouts ([WorkoutEntity.endedAt] != null) count, bucketed by the UTC
- * calendar date of their start time.
+ * Only finished workouts ([WorkoutEntity.endedAt] != null) count, bucketed by the calendar
+ * date of their start time in [zone].
  */
 fun workoutsPerWeek(
     workouts: List<WorkoutEntity>,
     weeks: Int,
     todayEpochDay: Long,
+    zone: ZoneId,
 ): List<Int> {
     require(weeks > 0) { "weeks must be positive" }
     val today = LocalDate.ofEpochDay(todayEpochDay)
@@ -259,13 +262,26 @@ fun workoutsPerWeek(
     val counts = IntArray(weeks)
     for (workout in workouts) {
         if (workout.endedAt == null) continue
-        val date = Instant.ofEpochMilli(workout.startedAt).atZone(ZoneOffset.UTC).toLocalDate()
+        val date = Instant.ofEpochMilli(workout.startedAt).atZone(zone).toLocalDate()
         val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
         val index = ChronoUnit.WEEKS.between(firstMonday, monday).toInt()
         if (index < 0 || index >= weeks) continue
         counts[index]++
     }
     return counts.toList()
+}
+
+/**
+ * ISO weeks from the week of [firstEpochMillis] (in [zone]) through [todayEpochDay]'s week, counting
+ * both: the window [workoutsPerWeek] needs to cover a whole history. At least 1, so a workout dated in
+ * a future week (a clock set wrong when it was logged) can't make an empty window.
+ */
+fun weeksSince(firstEpochMillis: Long, todayEpochDay: Long, zone: ZoneId): Int {
+    val first = Instant.ofEpochMilli(firstEpochMillis).atZone(zone).toLocalDate()
+    val firstMonday = first.minusDays((first.dayOfWeek.value - 1).toLong())
+    val today = LocalDate.ofEpochDay(todayEpochDay)
+    val currentMonday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    return (ChronoUnit.WEEKS.between(firstMonday, currentMonday) + 1).toInt().coerceAtLeast(1)
 }
 
 /**

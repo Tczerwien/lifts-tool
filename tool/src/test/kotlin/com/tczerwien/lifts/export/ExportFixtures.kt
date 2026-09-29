@@ -9,6 +9,8 @@ import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 /**
  * Shared fixture for all export tests: two bench workouts a week apart with a warmup,
@@ -127,10 +129,12 @@ object ExportFixtures {
         bodyweight: List<BodyweightEntity> = ExportFixtures.bodyweight,
         bars: List<BarEntity> = ExportFixtures.bars,
         sets: List<SetEntity> = ExportFixtures.sets,
+        workouts: List<WorkoutEntity> = listOf(workout1, workout2),
+        zone: ZoneId = ZoneOffset.UTC,
     ): ExportSnapshot = buildSnapshot(
         rows = LiftsRows(
             exercises = listOf(bench, squat),
-            workouts = listOf(workout1, workout2),
+            workouts = workouts,
             workoutExercises = listOf(workoutExercise1, workoutExercise2),
             sets = sets,
             templates = emptyList(),
@@ -138,7 +142,8 @@ object ExportFixtures {
             bodyweight = bodyweight,
             bars = bars,
         ),
-        exportedAtIso = EXPORTED_AT,
+        exportedAtMillis = millis(EXPORTED_AT),
+        zone = zone,
         goals = GOALS,
         injuries = listOf("left knee"),
     )

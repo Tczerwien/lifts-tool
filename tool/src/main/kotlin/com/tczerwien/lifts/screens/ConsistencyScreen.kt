@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.longestStreak
+import com.tczerwien.lifts.analytics.weeksSince
 import com.tczerwien.lifts.analytics.workoutsPerWeek
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
@@ -31,11 +32,9 @@ import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -81,9 +80,10 @@ class ConsistencyViewModel(
 
     private fun refresh() {
         val workouts = repository.listWorkouts()
-        // Analytics bucket calendar weeks in UTC (house convention), so "today" is UTC too.
-        val todayEpochDay = LocalDate.now(ZoneOffset.UTC).toEpochDay()
-        val counts = workoutsPerWeek(workouts, weeks = CHART_WEEKS, todayEpochDay = todayEpochDay)
+        // Weeks are the phone's calendar weeks, as History shows them.
+        val zone = ZoneId.systemDefault()
+        val todayEpochDay = LocalDate.now(zone).toEpochDay()
+        val counts = workoutsPerWeek(workouts, weeks = CHART_WEEKS, todayEpochDay = todayEpochDay, zone = zone)
 
         val currentMonday = mondayOf(LocalDate.ofEpochDay(todayEpochDay))
         val monthLabels = List(CHART_WEEKS) { index ->
@@ -101,14 +101,9 @@ class ConsistencyViewModel(
         val longestStreakWeeks = if (finished.isEmpty()) {
             0
         } else {
-            val earliestMonday = mondayOf(
-                Instant.ofEpochMilli(finished.minOf { it.startedAt })
-                    .atZone(ZoneOffset.UTC)
-                    .toLocalDate(),
-            )
-            val spanWeeks = (ChronoUnit.WEEKS.between(earliestMonday, currentMonday) + 1).toInt()
+            val spanWeeks = weeksSince(finished.minOf { it.startedAt }, todayEpochDay, zone)
             longestStreak(
-                workoutsPerWeek(workouts, weeks = spanWeeks, todayEpochDay = todayEpochDay),
+                workoutsPerWeek(workouts, weeks = spanWeeks, todayEpochDay = todayEpochDay, zone = zone),
                 threshold = STREAK_THRESHOLD_WORKOUTS,
             )
         }

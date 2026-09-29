@@ -7,6 +7,8 @@ import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -116,7 +118,7 @@ class AnalyticsTest {
             SetEntity(id = 5, workoutExerciseId = 3, position = 0, type = "normal", weightKg = 90.0, reps = 5, completedAt = millis("2026-06-01T10:15:00Z")),
         )
 
-        val weekly = weeklySetsPerMuscle(listOf(bench), workouts, slots, sets, weeks = 4, todayEpochMillis = today)
+        val weekly = weeklySetsPerMuscle(listOf(bench), workouts, slots, sets, weeks = 4, todayEpochMillis = today, zone = ZoneOffset.UTC)
 
         assertEquals(setOf("chest", "triceps", "shoulders"), weekly.keys)
         assertEquals(listOf(0.0, 0.0, 2.0, 1.0), weekly.getValue("chest"))
@@ -236,7 +238,7 @@ class AnalyticsTest {
             finished(id = 7, startIso = "2026-06-21T10:00:00Z"),
         )
 
-        val counts = workoutsPerWeek(workouts, weeks = 4, todayEpochDay = day("2026-07-14"))
+        val counts = workoutsPerWeek(workouts, weeks = 4, todayEpochDay = day("2026-07-14"), zone = ZoneOffset.UTC)
 
         assertEquals(listOf(2, 0, 1, 2), counts)
     }
@@ -249,7 +251,7 @@ class AnalyticsTest {
             finished(id = 2, startIso = "2026-07-12T10:00:00Z"),
         )
 
-        val counts = workoutsPerWeek(workouts, weeks = 1, todayEpochDay = day("2026-07-14"))
+        val counts = workoutsPerWeek(workouts, weeks = 1, todayEpochDay = day("2026-07-14"), zone = ZoneOffset.UTC)
 
         assertEquals(listOf(1), counts)
     }
@@ -260,9 +262,44 @@ class AnalyticsTest {
             WorkoutEntity(id = 1, name = "In progress", startedAt = millis("2026-07-13T10:00:00Z")),
         )
 
-        val counts = workoutsPerWeek(workouts, weeks = 3, todayEpochDay = day("2026-07-14"))
+        val counts = workoutsPerWeek(workouts, weeks = 3, todayEpochDay = day("2026-07-14"), zone = ZoneOffset.UTC)
 
         assertEquals(listOf(0, 0, 0), counts)
+    }
+
+    @Test
+    fun workoutsPerWeekUsesTheLocalWeek() {
+        // Sunday 2026-07-12 at 20:00 in Chicago is already Monday 01:00 UTC: it belongs to the
+        // week before, as History shows it, not to the current week.
+        val sundayEvening = listOf(finished(id = 1, startIso = "2026-07-13T01:00:00Z"))
+        val chicago = ZoneId.of("America/Chicago")
+
+        assertEquals(listOf(1, 0), workoutsPerWeek(sundayEvening, weeks = 2, todayEpochDay = day("2026-07-14"), zone = chicago))
+        assertEquals(listOf(0, 1), workoutsPerWeek(sundayEvening, weeks = 2, todayEpochDay = day("2026-07-14"), zone = ZoneOffset.UTC))
+    }
+
+    // --- weeksSince ---
+
+    @Test
+    fun weeksSinceCountsBothEnds() {
+        // Monday 2026-06-22 through Tuesday 2026-07-14: 4 weeks.
+        assertEquals(4, weeksSince(millis("2026-06-22T06:00:00Z"), day("2026-07-14"), ZoneOffset.UTC))
+        assertEquals(1, weeksSince(millis("2026-07-13T06:00:00Z"), day("2026-07-14"), ZoneOffset.UTC))
+    }
+
+    @Test
+    fun weeksSinceIsNeverEmptyForAFutureWorkout() {
+        // Logged while the clock ran weeks ahead (#129): the window stays one week, never 0 or less,
+        // so Consistency opens instead of crashing.
+        val future = millis("2026-08-20T10:00:00Z")
+        assertEquals(1, weeksSince(future, day("2026-07-14"), ZoneOffset.UTC))
+        val counts = workoutsPerWeek(
+            listOf(finished(id = 1, startIso = "2026-08-20T10:00:00Z")),
+            weeks = weeksSince(future, day("2026-07-14"), ZoneOffset.UTC),
+            todayEpochDay = day("2026-07-14"),
+            zone = ZoneOffset.UTC,
+        )
+        assertEquals(listOf(0), counts)
     }
 
     private fun finished(id: Long, startIso: String) = WorkoutEntity(

@@ -19,6 +19,7 @@ object MarkdownExport {
         append("---\n")
         append("schema_version: \"").append(snapshot.schemaVersion).append("\"\n")
         append("exported_at: ").append(snapshot.exportedAtIso).append('\n')
+        append("timezone: ").append(snapshot.zone.id).append('\n')
         append("units:\n")
         append("  weight: kg\n")
         if (snapshot.goals != null || snapshot.injuries.isNotEmpty()) {

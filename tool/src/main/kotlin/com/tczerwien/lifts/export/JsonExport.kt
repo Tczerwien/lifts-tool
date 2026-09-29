@@ -18,6 +18,7 @@ object JsonExport {
         val document = JsonExportDocument(
             schemaVersion = snapshot.schemaVersion,
             exportedAt = snapshot.exportedAtIso,
+            timezone = snapshot.zone.id,
             units = JsonUnits(weight = "kg"),
             profile = JsonProfile(
                 goals = snapshot.goals,
@@ -95,6 +96,8 @@ object JsonExport {
 data class JsonExportDocument(
     @SerialName("schema_version") val schemaVersion: String,
     @SerialName("exported_at") val exportedAt: String,
+    /** The zone of every date and time in the file, e.g. America/Chicago. */
+    val timezone: String,
     val units: JsonUnits,
     val profile: JsonProfile,
     val exercises: List<JsonExercise>,
