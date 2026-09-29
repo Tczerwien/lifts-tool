@@ -210,7 +210,8 @@ class ActiveWorkoutScreen(
                                         state = SetRowState(
                                             marker = markers[index],
                                             previous = previousSummary(previous, uiState.units, current.tracking),
-                                            weight = seed.weightKg?.let { Format.weight(it, uiState.units) },
+                                            // Help as its size under "-LBS", as the stepper and Strong show it.
+                                            weight = current.tracking.shownWeight(seed.weightKg)?.let { Format.weight(it, uiState.units) },
                                             // A hold's seconds take the reps column, under "SEC".
                                             reps = (if (timed) seed.durationSec else seed.reps)?.toString(),
                                             weightShown = current.tracking.takesWeight,
