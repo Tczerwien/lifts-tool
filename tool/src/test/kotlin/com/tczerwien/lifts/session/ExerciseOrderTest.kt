@@ -4,7 +4,9 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** Moving between exercises: the next-exercise row, auto-advance, and the Rest Timer agreeing with both. */
 class ExerciseOrderTest {
@@ -92,4 +94,13 @@ class ExerciseOrderTest {
         type = SET_TYPE_NORMAL,
         completedAt = if (done) at else null,
     )
+
+    @Test
+    fun `an untick right after the tick is a double tap`() {
+        assertTrue(untickIsDoubleTap(completedAt = 10_000, now = 10_000))
+        assertTrue(untickIsDoubleTap(completedAt = 10_000, now = 10_599))
+        assertFalse(untickIsDoubleTap(completedAt = 10_000, now = 10_600))
+        // A tick stamped later than the tap (clock moved back) is not a double tap.
+        assertFalse(untickIsDoubleTap(completedAt = 10_000, now = 9_000))
+    }
 }

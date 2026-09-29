@@ -22,6 +22,7 @@ import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
+import com.tczerwien.lifts.session.untickIsDoubleTap
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
@@ -326,13 +327,15 @@ class ActiveWorkoutViewModel(
      * Checkbox toggle. Completing logs exactly what the row shows: its starting value ([seedRows])
      * wherever it has none of its own. A row with nothing to log shows a hint instead. Completing
      * advances the active row and starts rest per the completion result. Uncompleting keeps the
-     * logged values.
+     * logged values; a tap right after the tick ([untickIsDoubleTap]) is a double tap and is ignored.
      */
     fun toggleComplete(setId: Long) {
         if (!beginRowAction()) return
         val located = locate(setId) ?: return
         val set = located.block.sets[located.index]
-        if (set.completedAt != null) {
+        val completedAt = set.completedAt
+        if (completedAt != null) {
+            if (untickIsDoubleTap(completedAt, System.currentTimeMillis())) return
             val edit = applySetChange(setId) { it.copy(completedAt = null) } ?: return
             LiftsIo.write({ session.uncompleteSet(set) }) { settle(edit) }
             return
@@ -439,7 +442,17 @@ class ActiveWorkoutViewModel(
     /** Result of the exercise list: that exercise, on its first unticked set. */
     fun jumpTo(slotId: Long) {
         if (!beginAction()) return
+        rowsMovedUnderFinger()
         showExercise(slotId)
+    }
+
+    /**
+     * The rows changed as another screen (exercise list, picker, "…" menu) closed: a bounce or a tap
+     * already on its way was aimed at that screen, so the rows ignore taps for a moment, as after the
+     * screen moves on by itself ([tapTooSoonAfterMove]).
+     */
+    private fun rowsMovedUnderFinger() {
+        movedOnAt = System.currentTimeMillis()
     }
 
     /** Puts exercise [slotId] on screen with the steppers on its first unticked row, and saves it as the one on screen. */
@@ -489,6 +502,7 @@ class ActiveWorkoutViewModel(
     fun addExercise(exerciseId: String) {
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
+        rowsMovedUnderFinger()
         LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { refresh(focusLastExercise = true) }
     }
 
@@ -557,6 +571,7 @@ class ActiveWorkoutViewModel(
         if (!beginAction()) return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
+        rowsMovedUnderFinger()
         LiftsIo.write({ session.removeSet(setId) }) { refresh() }
     }
 
@@ -566,6 +581,7 @@ class ActiveWorkoutViewModel(
         val workoutId = resolvedWorkoutId ?: return
         val block = _uiState.value.exercises.firstOrNull { it.slot.id == slotId } ?: return
         if (block.sets.any { it.completedAt != null }) return
+        rowsMovedUnderFinger()
         LiftsIo.write({ session.removeExercise(workoutId, slotId) }) { refresh() }
     }
 
