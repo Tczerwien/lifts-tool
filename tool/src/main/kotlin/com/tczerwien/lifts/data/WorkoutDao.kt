@@ -49,6 +49,20 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_exercises")
     fun listAllWorkoutExercises(): List<WorkoutExerciseEntity>
 
+    /** Makes [exerciseId]'s logged weights help (negative), keeping their size: it became Assisted. */
+    @Query(
+        "UPDATE sets SET weightKg = -ABS(weightKg) WHERE weightKg > 0 AND workoutExerciseId IN " +
+            "(SELECT id FROM workout_exercises WHERE exerciseId = :exerciseId)"
+    )
+    fun makeWeightsHelp(exerciseId: String): Int
+
+    /** Makes [exerciseId]'s logged weights load (positive), keeping their size: it stopped being Assisted. */
+    @Query(
+        "UPDATE sets SET weightKg = ABS(weightKg) WHERE weightKg < 0 AND workoutExerciseId IN " +
+            "(SELECT id FROM workout_exercises WHERE exerciseId = :exerciseId)"
+    )
+    fun makeWeightsLoad(exerciseId: String): Int
+
     /** Per exercise with a ticked set: whether any has a weight above 0, reps, seconds ([fittedToHistory]). */
     @Query(
         "SELECT we.exerciseId AS exerciseId, MAX(COALESCE(s.weightKg, 0) > 0) AS weighted, " +

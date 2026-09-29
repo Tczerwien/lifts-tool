@@ -50,10 +50,30 @@ class LiftsRepository private constructor(
     fun fitTrackingToHistory(): Int = inTransaction {
         db.workoutDao.loggedFields().count { logged ->
             val exercise = db.exerciseDao.byId(logged.exerciseId) ?: return@count false
+            // Help logged as a plain +40 before the type was set (the seeded band-assisted pull-up) is help.
+            if (exercise.tracking == Tracking.ASSISTED_BODYWEIGHT && logged.weighted) {
+                return@count db.workoutDao.makeWeightsHelp(exercise.id) > 0
+            }
             val fitted = fittedToHistory(exercise.tracking, logged.weighted, logged.hasReps, logged.hasDuration)
                 ?: return@count false
             db.exerciseDao.update(exercise.copy(trackingType = fitted.stored)) > 0
         }
+    }
+
+    /**
+     * Measures [exerciseId] by [tracking] from now on, and its logged weights with it, in one
+     * transaction: the sign says which (help is negative), so they keep the size he entered and read
+     * as the new type means them. False when nothing changed.
+     */
+    fun setTracking(exerciseId: String, tracking: Tracking): Boolean = inTransaction {
+        val exercise = db.exerciseDao.byId(exerciseId) ?: return@inTransaction false
+        if (exercise.trackingType == tracking.stored) return@inTransaction false
+        db.exerciseDao.update(exercise.copy(trackingType = tracking.stored))
+        when {
+            tracking == Tracking.ASSISTED_BODYWEIGHT -> db.workoutDao.makeWeightsHelp(exerciseId)
+            tracking.takesWeight -> db.workoutDao.makeWeightsLoad(exerciseId)
+        }
+        true
     }
 
     /** Every exercise without its instructions, by name: the picker's catalog. */

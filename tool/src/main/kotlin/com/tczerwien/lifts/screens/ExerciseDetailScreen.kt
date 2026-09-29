@@ -38,6 +38,7 @@ import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.library.renameClash
 import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
@@ -177,16 +178,17 @@ class ExerciseDetailViewModel(
 
     /**
      * Measures the exercise by [tracking] from now on: its rows and steppers, its records and stars
-     * (so the exports catch up). Sets already logged keep their numbers; an assisted exercise's are
-     * negative, so they still read as help under any type.
+     * (so the exports catch up). Logged weights keep their size and take the new type's sign
+     * ([LiftsRepository.setTracking]): 40 of help becomes 40 added and back. That is history
+     * changing under an open workout, so its cached history is dropped ([HistoryVersion]).
      */
     fun chooseType(tracking: Tracking) {
         _uiState.update { it.copy(pickingType = false, tracking = tracking) }
-        LiftsIo.write({
-            val exercise = repository.exerciseById(exerciseId) ?: return@write false
-            exercise.trackingType != tracking.stored && repository.updateExercise(exercise.copy(trackingType = tracking.stored))
-        }) { changed ->
-            if (changed) share.logChanged()
+        LiftsIo.write({ repository.setTracking(exerciseId, tracking) }) { changed ->
+            if (changed) {
+                HistoryVersion.bump()
+                share.logChanged()
+            }
             refresh()
         }
     }
