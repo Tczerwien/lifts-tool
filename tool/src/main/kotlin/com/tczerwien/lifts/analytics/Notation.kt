@@ -12,13 +12,13 @@ import com.tczerwien.lifts.ui.WeightUnit
  * weight, keeps its sign: an assisted pull-up with 30 lb of help reads "-30×8".
  */
 enum class NotationStyle {
-    /** A set in a list on screen: "w95×10", "140×8F @9", "×12", "20×45s". */
+    /** A set in a list on screen: "w95×10", "140×8F RIR1", "×12", "20×45s". */
     LIST,
 
-    /** One set on its own, spaced, without type markers (the row shows them): "135 × 8", "× 12", "165 × 5 @ 8". */
+    /** One set on its own, spaced, without type markers (the row shows them): "135 × 8", "× 12", "165 × 5 RIR 2". */
     SINGLE,
 
-    /** training-log.md: plain ASCII "x", markers and the rest gap: "w60x8", "100x5F @9 r180". */
+    /** training-log.md: plain ASCII "x", markers, RPE and the rest gap: "w60x8", "100x5F @9 r180". */
     EXPORT,
 }
 
@@ -30,7 +30,9 @@ private const val TYPE_DROP = "drop"
  * [set]'s numbers in [style], or null when it has none (no weight, reps or duration). In [NotationStyle.LIST]
  * and [NotationStyle.EXPORT] a warm-up is prefixed "w", a set to failure ends "F" and a drop set "D";
  * [restSec] (EXPORT only) adds " r180". [withUnit] (SINGLE only) writes the unit after the weight,
- * "165 lb × 5", for a record shown on its own.
+ * "165 lb × 5", for a record shown on its own. The effort ([SetEntity.rpe], logged as RIR, stored as
+ * RPE = 10 − RIR) reads as he logged it on screen, "RIR2", and as RPE in the export, "@8", the scale
+ * programs and AIs read.
  */
 fun setNotation(
     set: SetEntity,
@@ -88,7 +90,13 @@ fun setNotation(
         append(core)
         if (marked && type == TYPE_FAILURE) append('F')
         if (marked && type == TYPE_DROP) append('D')
-        rpe?.let { append(if (style == NotationStyle.SINGLE) " @ " else " @").append(plainNumber(it)) }
+        rpe?.let {
+            when (style) {
+                NotationStyle.EXPORT -> append(" @").append(plainNumber(it))
+                NotationStyle.LIST -> append(" RIR").append(plainNumber(10.0 - it))
+                NotationStyle.SINGLE -> append(" RIR ").append(plainNumber(10.0 - it))
+            }
+        }
         if (style == NotationStyle.EXPORT) restSec?.let { append(" r").append(it) }
     }
 }

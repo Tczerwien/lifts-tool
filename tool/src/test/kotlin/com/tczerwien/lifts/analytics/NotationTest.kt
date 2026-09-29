@@ -98,14 +98,17 @@ class NotationTest {
     }
 
     @Test
-    fun rpeAndRest() {
+    fun effortReadsAsRirOnScreenAndRpeInTheExport() {
+        // Logged as RIR 2, stored as RPE 8.
         val top = set(lb = 165.0, reps = 5, rpe = 8.0)
-        assertEquals("165×5 @8", setNotation(top, lb, NotationStyle.LIST))
-        assertEquals("165 × 5 @ 8", setNotation(top, lb, NotationStyle.SINGLE))
+        assertEquals("165×5 RIR2", setNotation(top, lb, NotationStyle.LIST))
+        assertEquals("165 × 5 RIR 2", setNotation(top, lb, NotationStyle.SINGLE))
         assertEquals("165x5 @8 r180", setNotation(top, lb, NotationStyle.EXPORT, restSec = 180))
         assertEquals("165x5F @9.5", setNotation(set("failure", 165.0, 5, rpe = 9.5), lb, NotationStyle.EXPORT))
+        assertEquals("165×5F RIR0.5", setNotation(set("failure", 165.0, 5, rpe = 9.5), lb, NotationStyle.LIST))
+        assertEquals("165×5 RIR0", setNotation(set(lb = 165.0, reps = 5, rpe = 10.0), lb, NotationStyle.LIST))
         // Rest belongs to the export only.
-        assertEquals("165×5 @8", setNotation(top, lb, NotationStyle.LIST, restSec = 180))
+        assertEquals("165×5 RIR2", setNotation(top, lb, NotationStyle.LIST, restSec = 180))
     }
 
     @Test

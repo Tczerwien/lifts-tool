@@ -60,7 +60,8 @@ object MarkdownExport {
         val example = if (snapshot.unit == WeightUnit.LB) "225" else "100"
         append("\nHow to read this: `").append(example).append("x5` is ").append(example).append(' ').append(unit)
         append(" for 5 reps; `x12` is 12 reps with no weight; `45s` is seconds. A `w` before a set marks a warm-up,")
-        append(" an `F` after it a set to failure, a `D` a drop set. `@8` is RPE. `r150` is the seconds since the")
+        append(" an `F` after it a set to failure, a `D` a drop set. `@8` is RPE, logged as reps in reserve (RPE = 10 − RIR,")
+        append(" so `@8` left 2 reps in the tank). `r150` is the seconds since the")
         append(" previous set was ticked (the rest plus the set itself; none after a break over 15 minutes).")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
