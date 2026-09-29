@@ -341,7 +341,8 @@ class ActiveWorkoutViewModel(
         if (set.completedAt != null) {
             lastToggle = setId to tapAt
             val edit = applySetChange(setId) { it.copy(completedAt = null) } ?: return
-            LiftsIo.write({ session.uncompleteSet(set) }) { settle(edit) }
+            val workoutId = _uiState.value.workoutId
+            LiftsIo.write({ session.uncompleteSet(workoutId, set) }) { settle(edit) }
             return
         }
         val seed = located.block.seeds[located.index]
@@ -670,7 +671,8 @@ class ActiveWorkoutViewModel(
 
     /** Saves [edit] on the app-wide write queue, so pressing Back right after a tap can't drop it. */
     private fun persistSet(edit: PendingEdit) {
-        LiftsIo.write({ session.updateSet(edit.set) }) { settle(edit) }
+        val workoutId = _uiState.value.workoutId
+        LiftsIo.write({ session.updateSet(workoutId, edit.set) }) { settle(edit) }
     }
 
     private fun nextType(type: String): String = when (type) {

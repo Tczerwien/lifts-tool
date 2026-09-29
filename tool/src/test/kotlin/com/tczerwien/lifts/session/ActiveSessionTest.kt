@@ -140,7 +140,7 @@ class ActiveSessionTest {
             WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "bench", position = 0, restSecWarmup = 45),
         )
         val setId = store.addSet(SetEntity(workoutExerciseId = slotId, position = 0, type = w))
-        val completion = session.completeSet(workoutId, store.setById(setId)!!, 40.0, 10, w, now = 10_000)
+        val completion = session.completeSet(workoutId, store.setById(setId)!!, 40.0, 10, w, now = 10_000)!!
         assertEquals(45, completion.restDurationSec)
         assertEquals(55_000L, completion.restEndMillis)
 
@@ -163,7 +163,7 @@ class ActiveSessionTest {
         session.completeSet(workoutId, store.setById(rowSet)!!, 60.0, 8, n, now = 10_000)
         assertNotNull(session.restStateSnapshot())
 
-        val completion = session.completeSet(workoutId, store.setById(benchSet)!!, 80.0, 5, n, now = 60_000)
+        val completion = session.completeSet(workoutId, store.setById(benchSet)!!, 80.0, 5, n, now = 60_000)!!
         assertNull(completion.restEndMillis)
         assertNull(session.restStateSnapshot())
     }
@@ -173,7 +173,7 @@ class ActiveSessionTest {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "bench", position = 0))
         val setId = store.addSet(SetEntity(workoutExerciseId = slotId, position = 0, type = n))
-        val end = session.completeSet(workoutId, store.setById(setId)!!, 60.0, 5, n, now = 10_000).restEndMillis!!
+        val end = session.completeSet(workoutId, store.setById(setId)!!, 60.0, 5, n, now = 10_000)!!.restEndMillis!!
         // No frame ever looked at it: the screen went dark straight after the tick.
         assertEquals(RestAlert.MISSED, alarm.check(end, end + 60_000))
     }
@@ -218,7 +218,7 @@ class ActiveSessionTest {
         val (first, _, third) = store.setsForWorkout(workoutId)
         session.removeSet(first.id)
         // The screen still holds the third row at its old position 2 when a stepper tap saves it.
-        session.updateSet(third.copy(weightKg = 50.0))
+        session.updateSet(workoutId, third.copy(weightKg = 50.0))
         val rows = store.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }
         assertEquals(listOf(0, 1), rows.map { it.position })
         assertEquals(50.0, rows.last().weightKg)
@@ -312,6 +312,31 @@ class ActiveSessionTest {
         val gone = session.addExercise(open, "bench")!!
         session.removeExercise(open, gone)
         assertNull(session.addSet(open, gone))
+    }
+
+    @Test
+    fun `a tick, untick or value queued behind a stale close changes nothing in the finished workout`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slotId = session.addExercise(workoutId, "bench")!!
+        val (first, second) = store.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }
+        session.completeSet(workoutId, first, 100.0, 5, n, now = 60_000)
+        assertTrue(session.closeIfStale(workoutId, now = 60_000 + 5 * 3_600_000L))
+        val logged = store.setsForWorkout(workoutId)
+        val restBefore = session.restStateSnapshot()
+
+        // The screen still showed the old rows when these taps were made.
+        assertNull(session.completeSet(workoutId, second, 100.0, 5, n, now = 20_000_000))
+        assertFalse(session.uncompleteSet(workoutId, store.setById(first.id)!!))
+        assertFalse(session.updateSet(workoutId, second.copy(weightKg = 120.0)))
+        assertEquals(logged, store.setsForWorkout(workoutId))
+        assertEquals(restBefore, session.restStateSnapshot())
+
+        // While it is open, a slot removed by a queued action takes no value either.
+        val open = session.startEmpty(now = 40_000_000)
+        val gone = session.addExercise(open, "squat")!!
+        val row = store.setsForWorkout(open).first { it.workoutExerciseId == gone }
+        session.removeExercise(open, gone)
+        assertFalse(session.updateSet(open, row.copy(weightKg = 60.0)))
     }
 
     // --- Home's cleanup ---

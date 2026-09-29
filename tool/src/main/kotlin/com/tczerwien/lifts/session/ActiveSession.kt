@@ -136,8 +136,14 @@ class ActiveSession(
         )
     }
 
-    /** Saves [set]'s values; see [LiftsStore.updateSetValues]. */
-    fun updateSet(set: SetEntity): Boolean = repository.updateSetValues(set)
+    /**
+     * Saves [set]'s values ([LiftsStore.updateSetValues]) while [workoutId] is open; false, writing
+     * nothing, once it has ended or gone. A tap made just before a stale close landed must not change a
+     * finished workout. (A set whose slot was removed is gone with it, so that writes nothing either.)
+     */
+    fun updateSet(workoutId: Long, set: SetEntity): Boolean = repository.inTransaction {
+        repository.workoutById(workoutId)?.let { it.endedAt == null } == true && repository.updateSetValues(set)
+    }
 
     /** Removes a set that hasn't been logged; a logged set is left alone. */
     fun removeSet(setId: Long): Boolean = repository.inTransaction {
@@ -152,11 +158,12 @@ class ActiveSession(
         !logged && repository.deleteSlot(workoutExerciseId)
     }
 
-    fun uncompleteSet(set: SetEntity): Boolean = repository.updateSetValues(set.copy(completedAt = null))
+    /** Unticks [set], keeping its values, while [workoutId] is open ([updateSet]): a finished workout keeps its log. */
+    fun uncompleteSet(workoutId: Long, set: SetEntity): Boolean = updateSet(workoutId, set.copy(completedAt = null))
 
     /**
      * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null when no
-     * rest started: the workout has already ended or was deleted, or the slot rests 0 s.
+     * rest started because the slot rests 0 s. (A workout that has ended logs nothing: [completeSet] is null.)
      */
     data class SetCompletion(
         val set: SetEntity,
@@ -168,7 +175,9 @@ class ActiveSession(
      * Marks [set] completed with the given values, selects the rest duration (exercise
      * override else settings default; warm-up pair for warm-up sets), and persists the rest
      * end timestamp — the DataStore keys are written on set completion, as the timer contract
-     * requires. PR stars are worked out by the screen from [prSetIds].
+     * requires. PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
+     * starting no rest, when the workout has closed (a tick queued behind a stale close) or the
+     * set is gone.
      */
     fun completeSet(
         workoutId: Long,
@@ -177,11 +186,11 @@ class ActiveSession(
         reps: Int?,
         type: String,
         now: Long = System.currentTimeMillis(),
-    ): SetCompletion {
+    ): SetCompletion? {
         val slots = repository.exercisesForWorkout(workoutId)
         val slot = slots.firstOrNull { it.id == set.workoutExerciseId }
         val completed = set.copy(weightKg = weightKg, reps = reps, type = type, completedAt = now)
-        repository.updateSetValues(completed)
+        if (!updateSet(workoutId, completed)) return null
 
         val snapshot = settings.snapshot()
         val restSec = restDurationSec(
@@ -191,10 +200,10 @@ class ActiveSession(
             defaultRestSec = snapshot.defaultRestSec,
             warmupRestSec = snapshot.warmupRestSec,
         )
-        val workoutOpen = repository.workoutById(workoutId)?.let { it.endedAt == null } == true
+        // The workout is open: the write above checked, and nothing else writes between (one lane).
         // A slot that rests 0 s (a superset's first half) means no rest: the tick still ends any other.
-        val rests = workoutOpen && restSec > 0
-        if (workoutOpen) runBlocking { if (rests) startRest(restSec, now) else clearRest() }
+        val rests = restSec > 0
+        runBlocking { if (rests) startRest(restSec, now) else clearRest() }
         return SetCompletion(
             set = completed,
             restDurationSec = restSec,
