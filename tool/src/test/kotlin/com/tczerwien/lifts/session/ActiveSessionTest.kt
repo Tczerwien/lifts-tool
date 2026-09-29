@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -203,7 +204,9 @@ class ActiveSessionTest {
     @Test
     fun `the exercise on screen is remembered across a restart, for its own workout only`() {
         kotlinx.coroutines.runBlocking { session.rememberCurrentSlot(workoutId = 7, slotId = 42) }
-        scopes.forEach { it.cancel() }
+        // Wait for the old DataStore to close: cancel() alone returns first, and opening the same file
+        // while it is still active throws ("multiple DataStores active"), now and then.
+        kotlinx.coroutines.runBlocking { scopes.forEach { it.coroutineContext[kotlinx.coroutines.Job]!!.cancelAndJoin() } }
         dataStore = openDataStore()
         session = newSession()
         assertEquals(42L, session.currentSlotSnapshot(workoutId = 7))
