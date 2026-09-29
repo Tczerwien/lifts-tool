@@ -172,6 +172,8 @@ internal fun StepperStrip(
                 label = "$label (${uiState.units.suffix})",
                 decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),
                 incrementEnabled = active,
+                // A tap on the number types one in: the sled, the odd dumbbell.
+                onValueClick = viewModel::openWeightEntry.takeIf { active },
             ) {
                 LightText(
                     text = weightKg?.let { Format.weight(it, uiState.units) } ?: "—",

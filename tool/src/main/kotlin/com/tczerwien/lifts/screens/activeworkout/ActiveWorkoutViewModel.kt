@@ -14,6 +14,7 @@ import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.TypedWeight
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
 import com.tczerwien.lifts.session.autoAdvanceSlotId
@@ -21,6 +22,7 @@ import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.nextRir
 import com.tczerwien.lifts.session.nextSetType
 import com.tczerwien.lifts.session.openingSlotId
+import com.tczerwien.lifts.session.parseTypedWeight
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.rirOf
@@ -114,7 +116,16 @@ class ActiveWorkoutViewModel(
         val leave: Boolean = false,
         /** A tick on a row with nothing to log: "SET WEIGHT OR REPS FIRST" (or reps, or time) shows for a moment. */
         val emptyTickHint: String? = null,
+        /** The weight's number entry, while it is open. */
+        val weightEntry: WeightEntry? = null,
     )
+
+    /**
+     * The keyboard for one row's weight ([setId]), opened by a tap on the weight between its steppers:
+     * for what the steppers make slow (a 118 lb sled, 17.5 lb dumbbells on a 5 lb step). [refused]
+     * after text that isn't a weight; [session] starts a fresh editor each time.
+     */
+    data class WeightEntry(val setId: Long, val prefill: String, val session: Int, val refused: Boolean = false)
 
     /**
      * What the "…" menu can offer for the current exercise and row. The ids travel with the menu, so
@@ -229,9 +240,13 @@ class ActiveWorkoutViewModel(
         super.onCleared()
     }
 
-    /** Back cancels an armed Finish before it leaves the screen. */
+    /** Back closes the weight's keyboard, or cancels an armed Finish, before it leaves the screen. */
     override fun onBackPressed(): Boolean {
         val state = _uiState.value
+        if (state.weightEntry != null && !state.finishing && !state.leave) {
+            closeWeightEntry()
+            return true
+        }
         if (state.finishing || state.leave || !finishArm.armed.value) return false
         finishArm.disarm()
         return true
@@ -439,6 +454,51 @@ class ActiveWorkoutViewModel(
             it.copy(weightKg = tracking.storedWeight(Format.displayToKg(next, state.units)))
         } ?: return
         persistSet(edit)
+    }
+
+    private var weightEntrySession = 0
+
+    /**
+     * A tap on the weight between the steppers: the keyboard opens on the active row's weight as it
+     * shows (blank for none), in the unit shown; on an assisted exercise the help itself.
+     */
+    fun openWeightEntry() {
+        if (!beginAction()) return
+        val state = _uiState.value
+        val set = activeSet(state) ?: return
+        if (!currentTracking(state).takesWeight) return
+        val located = locate(set.id) ?: return
+        val shows = set.weightKg ?: located.block.seeds[located.index].weightKg
+        val prefill = shows?.let { Format.weight(currentTracking(state).shownWeight(it)!!, state.units) }.orEmpty()
+        _uiState.update { it.copy(weightEntry = WeightEntry(set.id, prefill, ++weightEntrySession)) }
+    }
+
+    /**
+     * The keyboard's SUBMIT: the typed weight ([parseTypedWeight]) goes on the row it was opened for,
+     * stored as the exercise records it (help as a negative weight); blank clears the row back to its
+     * starting value. Text that isn't a weight keeps the keyboard open, saying so.
+     */
+    fun submitWeightEntry(text: String) {
+        val state = _uiState.value
+        val entry = state.weightEntry ?: return
+        val typed = parseTypedWeight(text, state.units)
+        if (typed == null) {
+            _uiState.update { it.copy(weightEntry = entry.copy(prefill = text, session = ++weightEntrySession, refused = true)) }
+            return
+        }
+        _uiState.update { it.copy(weightEntry = null) }
+        if (locked) return
+        val located = locate(entry.setId) ?: return
+        val weightKg = when (typed) {
+            TypedWeight.Clear -> null
+            is TypedWeight.Value -> located.block.tracking.storedWeight(Format.displayToKg(typed.display, state.units))
+        }
+        val edit = applySetChange(entry.setId) { it.copy(weightKg = weightKg) } ?: return
+        persistSet(edit)
+    }
+
+    fun closeWeightEntry() {
+        _uiState.update { it.copy(weightEntry = null) }
     }
 
     /** Moves the active row's seconds [steps] steps of [DURATION_STEP_SEC] along their grid; a long hold sends several. */

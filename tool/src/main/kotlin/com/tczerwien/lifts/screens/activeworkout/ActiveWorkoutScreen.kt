@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -12,7 +13,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.ExerciseDetailScreen
 import com.tczerwien.lifts.screens.ExerciseJumpScreen
@@ -42,11 +45,13 @@ import com.tczerwien.lifts.ui.SetRowHeader
 import com.tczerwien.lifts.ui.SetRowState
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.SealedLightActivity
+import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
 import com.thelightphone.sdk.ui.LightScrollBarPosition
+import com.thelightphone.sdk.ui.LightTextInputEditor
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
@@ -138,6 +143,11 @@ class ActiveWorkoutScreen(
         }
 
         LiftsFrame(sealedActivity, lightContext) {
+            val entry = uiState.weightEntry
+            if (entry != null && current != null) {
+                WeightEntryEditor(entry, current.tracking, uiState)
+                return@LiftsFrame
+            }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -317,6 +327,35 @@ class ActiveWorkoutScreen(
             } else {
                 null
             },
+        )
+    }
+
+    /** The weight's keyboard: "Weight (lb)", "Added (lb)", "Assist (lb)"; "Not a weight (lb)" after text that isn't one. */
+    @Composable
+    private fun WeightEntryEditor(
+        entry: ActiveWorkoutViewModel.WeightEntry,
+        tracking: Tracking,
+        uiState: ActiveWorkoutViewModel.UiState,
+    ) {
+        val keyboardOptionsFlow = rememberKeyboardOptions()
+        val textState = remember(entry.session) { TextFieldState(entry.prefill) }
+        val what = when {
+            entry.refused -> "Not a weight"
+            tracking == Tracking.WEIGHTED_BODYWEIGHT -> "Added"
+            tracking == Tracking.ASSISTED_BODYWEIGHT -> "Assist"
+            else -> "Weight"
+        }
+        LightTextInputEditor(
+            title = "$what (${uiState.units.suffix})",
+            state = textState,
+            onSubmit = { viewModel.submitWeightEntry(it.toString()) },
+            onBack = viewModel::closeWeightEntry,
+            keyboardOptionsFlow = keyboardOptionsFlow,
+            singleLine = true,
+            editorKey = "lifts-weight-${entry.session}",
+            modifier = Modifier
+                .fillMaxSize()
+                .background(LightThemeTokens.colors.background),
         )
     }
 

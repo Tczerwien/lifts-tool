@@ -22,6 +22,8 @@ import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.TypedWeight
+import com.tczerwien.lifts.session.parseTypedWeight
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
@@ -79,6 +81,12 @@ class BarWeightsViewModel(
             val displayWeight: Double,
             val stepped: Boolean = false,
         ) : Mode
+
+        /**
+         * The keyboard for [editing]'s weight, opened by a tap on it: for a sled or machine that is
+         * no whole number of steps (118 lb). [refused] after text that isn't a weight.
+         */
+        data class TypeWeight(val editing: EditWeight, val prefill: String, val session: Int, val refused: Boolean = false) : Mode
     }
 
     data class UiState(
@@ -137,6 +145,29 @@ class BarWeightsViewModel(
         _uiState.update { it.copy(mode = mode.copy(displayWeight = next, stepped = true)) }
     }
 
+    /** A tap on the weight: the keyboard, opening on the weight as it shows. */
+    fun openWeightEntry() {
+        val state = _uiState.value
+        val mode = state.mode as? Mode.EditWeight ?: return
+        val prefill = Format.weight(Format.displayToKg(mode.displayWeight, state.units), state.units)
+        _uiState.update { it.copy(mode = Mode.TypeWeight(mode, prefill, ++editorSession)) }
+    }
+
+    /**
+     * The keyboard's SUBMIT: back to the stepper with the typed weight ([parseTypedWeight]), or as it
+     * was for blank; text that isn't a weight keeps the keyboard open, saying so. ACCEPT still saves.
+     */
+    fun submitWeightEntry(text: String) {
+        val state = _uiState.value
+        val mode = state.mode as? Mode.TypeWeight ?: return
+        val next = when (val typed = parseTypedWeight(text, state.units)) {
+            null -> mode.copy(prefill = text, session = ++editorSession, refused = true)
+            TypedWeight.Clear -> mode.editing
+            is TypedWeight.Value -> mode.editing.copy(displayWeight = typed.display, stepped = true)
+        }
+        _uiState.update { it.copy(mode = next) }
+    }
+
     fun save() {
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
@@ -175,8 +206,12 @@ class BarWeightsViewModel(
         }
     }
 
+    /** Back from an editor: the keyboard goes back to the stepper, anything else to the list. */
     fun closeEditor() {
-        _uiState.update { it.copy(mode = Mode.BarList) }
+        _uiState.update { state ->
+            val mode = state.mode
+            state.copy(mode = if (mode is Mode.TypeWeight) mode.editing else Mode.BarList)
+        }
     }
 
     override fun onBackPressed(): Boolean {
@@ -197,7 +232,7 @@ class BarWeightsViewModel(
 /**
  * Bar Weights (design/screens/bar-weights.html): named implements (bars, machines,
  * sleds) for the plate calculator. Add via top-bar plus or the trailing row; tap a row
- * to re-edit. Editing = SDK name editor, then a weight stepper committed with ACCEPT;
+ * to re-edit. Editing = SDK name editor, then a weight stepper (a tap on its number types one in) committed with ACCEPT;
  * delete lives in the stepper's bottom bar (no long-press exists on the platform).
  */
 class BarWeightsScreen(
@@ -240,6 +275,20 @@ class BarWeightsScreen(
                 }
 
                 is BarWeightsViewModel.Mode.EditWeight -> WeightEditor(mode, uiState.units)
+
+                is BarWeightsViewModel.Mode.TypeWeight -> {
+                    val textState = remember(mode.session) { TextFieldState(mode.prefill) }
+                    LightTextInputEditor(
+                        title = if (mode.refused) "Not a weight (${uiState.units.suffix})" else "Weight (${uiState.units.suffix})",
+                        state = textState,
+                        onSubmit = { viewModel.submitWeightEntry(it.toString()) },
+                        onBack = { viewModel.closeEditor() },
+                        keyboardOptionsFlow = keyboardOptionsFlow,
+                        singleLine = true,
+                        editorKey = "lifts-bar-weight-${mode.session}",
+                        modifier = Modifier.background(LightThemeTokens.colors.background),
+                    )
+                }
             }
         }
     }
@@ -342,6 +391,8 @@ class BarWeightsScreen(
                     onStep = viewModel::stepWeight,
                     label = "Weight (${units.suffix})",
                     decrementEnabled = mode.displayWeight > 0.0,
+                    // A tap on the number types one in.
+                    onValueClick = viewModel::openWeightEntry,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4f.gridUnitsAsDp()),
