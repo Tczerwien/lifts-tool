@@ -27,6 +27,7 @@ import com.tczerwien.lifts.analytics.SetToken
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.compactNotation
 import com.tczerwien.lifts.analytics.exerciseRecords
+import com.tczerwien.lifts.analytics.recordLoadKg
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
@@ -227,7 +228,7 @@ class ExerciseDetailViewModel(
      */
     fun saveNote(raw: String) {
         synchronized(reloadLock) { noteSaves++ }
-        _uiState.value = _uiState.value.copy(editing = null, pinnedNote = raw.trim().takeIf { it.isNotEmpty() })
+        _uiState.update { it.copy(editing = null, pinnedNote = raw.trim().takeIf { note -> note.isNotEmpty() }) }
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val note = raw.trim().takeIf { it.isNotEmpty() }
@@ -380,7 +381,7 @@ class ExerciseDetailViewModel(
             records.maxWeightSet?.let { set ->
                 val label = when (tracking) {
                     // The help as the machine's stack shows it; none at all is a plain pull-up.
-                    Tracking.ASSISTED_BODYWEIGHT -> set.weightKg?.let(Math::abs)?.takeIf { it > 0.0 }
+                    Tracking.ASSISTED_BODYWEIGHT -> (-recordLoadKg(set, tracking)).takeIf { it > 0.0 }
                         ?.let { setNotation(it, set.reps, unit, NotationStyle.SINGLE, withUnit = true) }
                         ?: "None × ${set.reps ?: 0}"
                     else -> setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
