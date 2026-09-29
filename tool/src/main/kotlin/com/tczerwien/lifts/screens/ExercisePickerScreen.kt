@@ -32,6 +32,7 @@ import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.catalogEntry
 import com.tczerwien.lifts.library.inBodyPart
 import com.tczerwien.lifts.library.isRenamed
+import com.tczerwien.lifts.library.nameFromQuery
 import com.tczerwien.lifts.library.searchExercises
 import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
@@ -45,6 +46,7 @@ import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
+import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
 import com.thelightphone.sdk.ui.LightScrollBarPosition
@@ -275,7 +277,8 @@ class ExercisePickerScreen(
 
             FilterRow(uiState)
 
-            if (uiState.loaded && uiState.rows.isEmpty()) {
+            val query = uiState.searchQuery
+            if (uiState.loaded && uiState.rows.isEmpty() && query == null) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -302,8 +305,16 @@ class ExercisePickerScreen(
                         listState = listState.forKey(uiState.listGeneration),
                         uniformItemHeightGridUnits = EXERCISE_ROW_HEIGHT_UNITS,
                     ) {
+                        if (query != null && uiState.loaded && uiState.rows.isEmpty()) {
+                            item(key = NO_MATCH_KEY) { NoMatchRow() }
+                        }
                         items(uiState.rows, key = { it.id }) { row ->
                             ExerciseRow(row = row, showMuscle = uiState.showMuscles, onClick = { goBack(row.id) })
+                        }
+                        // After the results, not instead of them: none may be the one he means.
+                        if (query != null && uiState.loaded) {
+                            val name = nameFromQuery(query)
+                            item(key = CREATE_KEY) { CreateRow(name = name, onClick = { createExercise(name) }) }
                         }
                     }
                 }
@@ -314,13 +325,16 @@ class ExercisePickerScreen(
                     LightBarButton.LightIcon(
                         icon = LightIcons.ADD,
                         contentDescription = "new exercise",
-                        onClick = {
-                            navigateTo(::CustomExerciseScreen) { createdId -> goBack(createdId) }
-                        },
+                        onClick = { createExercise(name = "") },
                     ),
                 ),
             )
         }
+    }
+
+    /** Opens New Exercise with [name] filled in; the exercise he saves is the pick. */
+    private fun createExercise(name: String) {
+        navigateTo({ CustomExerciseScreen(it, initialName = name) }) { createdId -> goBack(createdId) }
     }
 
     /**
@@ -433,6 +447,51 @@ private fun ExerciseRow(row: ExercisePickerViewModel.ExerciseRow, showMuscle: Bo
                 .height(1.dp)
                 .background(LightThemeTokens.colors.contentSecondary.copy(alpha = ROW_DIVIDER_ALPHA)),
         )
+    }
+}
+
+/** Lazy-list keys of the two rows that aren't exercises; exercise ids never look like these. */
+private const val NO_MATCH_KEY = " no-match"
+private const val CREATE_KEY = " create"
+
+/** A search nothing answers: says so, as a row, so the Create row below still sits in the list. */
+@Composable
+private fun NoMatchRow() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(EXERCISE_ROW_HEIGHT_UNITS.gridUnitsAsDp())
+            .padding(start = 1f.gridUnitsAsDp(), end = 2f.gridUnitsAsDp()),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        LightText(text = "No exercises found", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
+    }
+}
+
+/**
+ * Last row of a search: 'Create "Hanging Knee Raise"' and a plus, opening New Exercise with that name
+ * filled in (#058), so a lift the catalog lacks isn't typed twice.
+ */
+@Composable
+private fun CreateRow(name: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(EXERCISE_ROW_HEIGHT_UNITS.gridUnitsAsDp())
+            .lightClickable(onClick = onClick)
+            .padding(start = 1f.gridUnitsAsDp(), end = 2f.gridUnitsAsDp()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        LightText(
+            text = "Create \u201C$name\u201D",
+            variant = LightTextVariant.Copy,
+            lighten = true,
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(0.5f.gridUnitsAsDp()))
+        LightIcon(icon = LightIcons.ADD, size = 1.6f)
     }
 }
 

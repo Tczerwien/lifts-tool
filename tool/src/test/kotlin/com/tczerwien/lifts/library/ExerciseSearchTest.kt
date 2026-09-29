@@ -173,6 +173,15 @@ class ExerciseSearchTest {
     }
 
     @Test
+    fun `a search he creates from becomes a tidy name`() {
+        assertEquals("Hanging Knee Raise", nameFromQuery("  hanging   knee raise "))
+        assertEquals("DB Hip Thrust", nameFromQuery("db hip thrust"))
+        assertEquals("RDL Dumbbell", nameFromQuery("rdl dumbbell"))
+        assertEquals("McGill Curl-up", nameFromQuery("McGill curl-up"))
+        assertEquals("", nameFromQuery("   "))
+    }
+
+    @Test
     fun `a catalog lift is renamed only when its name no longer runs together to its id`() {
         assertTrue(catalog.none { isRenamed(it.summary()) }, catalog.filter { isRenamed(it.summary()) }.map { it.id }.toString())
         val shrug = catalog.first { it.id == "dumbbell-shrug" }

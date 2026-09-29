@@ -246,6 +246,23 @@ fun searchExercises(
 }
 
 /**
+ * A search turned into a new exercise's name: each word capitalised, shorthand in capitals ("db
+ * hip thrust" is "DB Hip Thrust"), and a word he typed with a capital in it kept as he typed it
+ * ("McGill curl-up" stays). Spaces collapse; hyphens and other marks stay where he put them.
+ */
+fun nameFromQuery(raw: String): String =
+    raw.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ") { word ->
+        when {
+            word.any { it.isUpperCase() } -> word
+            listOf(word) in ALIAS_PHRASES && word.length <= SHORTHAND_MAX_LENGTH -> word.uppercase()
+            else -> word.replaceFirstChar { it.uppercase() }
+        }
+    }
+
+/** Shorthand this short is written in capitals (DB, RDL, OHP); "dumbbell" is a word. */
+private const val SHORTHAND_MAX_LENGTH = 4
+
+/**
  * The picker's body-part chips, in gym order, over the catalog's 17 muscles. Neck has no chip: its 8
  * exercises stay under All and search.
  */

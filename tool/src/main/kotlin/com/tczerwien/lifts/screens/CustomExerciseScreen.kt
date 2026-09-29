@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 class CustomExerciseViewModel(
     private val repository: LiftsRepository,
     private val share: LiftsShare,
+    initialName: String = "",
 ) : LightViewModel<String>() {
 
     enum class Mode { FORM, NAME_EDITOR, PRIMARY_PICKER, SECONDARY_PICKER, EQUIPMENT_PICKER, CATEGORY_PICKER }
@@ -78,7 +79,7 @@ class CustomExerciseViewModel(
             get() = name.isNotBlank() && primaryMuscle != null
     }
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(UiState(name = initialName.trim()))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private var saving = false
@@ -193,10 +194,12 @@ class CustomExerciseViewModel(
  * Custom exercise form (design/screens/custom-exercise.html): five field rows — name via
  * the SDK editor, the rest via inline picker-list modes fed from the live catalog values.
  * The top-bar checkmark appears once name + primary muscle are set; save inserts and
- * returns the new exerciseId via goBack.
+ * returns the new exerciseId via goBack. [initialName] fills the name (the picker's
+ * Create row passes what he searched for).
  */
 class CustomExerciseScreen(
     private val sealedActivity: SealedLightActivity,
+    private val initialName: String = "",
 ) : LightScreen<String, CustomExerciseViewModel>(sealedActivity) {
 
     override val viewModelClass: Class<CustomExerciseViewModel>
@@ -205,6 +208,7 @@ class CustomExerciseScreen(
     override fun createViewModel() = CustomExerciseViewModel(
         lightContext.liftsRepository(),
         lightContext.liftsShare(),
+        initialName,
     )
 
     @Composable
