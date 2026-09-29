@@ -30,7 +30,9 @@ import com.tczerwien.lifts.analytics.exerciseRecords
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.nameClash
@@ -48,6 +50,7 @@ import com.tczerwien.lifts.ui.LiftsTabRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.SetLine
+import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.knownCatalogName
@@ -101,6 +104,10 @@ class ExerciseDetailViewModel(
 
     data class UiState(
         val name: String = "",
+        /** How the exercise is measured (About's Type row); records follow it. */
+        val tracking: Tracking = Tracking.WEIGHT_REPS,
+        /** The Type list is showing. */
+        val pickingType: Boolean = false,
         val tab: Int = TAB_HISTORY,
         val pinnedNote: String? = null,
         val instructions: List<String> = emptyList(),
@@ -153,9 +160,35 @@ class ExerciseDetailViewModel(
      * routes the system Back key straight to the activity.
      */
     override fun onBackPressed(): Boolean {
+        if (_uiState.value.pickingType) {
+            _uiState.update { it.copy(pickingType = false) }
+            return true
+        }
         if (_uiState.value.editing == null) return false
         closeEditor()
         return true
+    }
+
+    /** About's Type row: the list of ways to measure it. */
+    fun openTypePicker() {
+        if (!_uiState.value.loaded) return
+        _uiState.update { it.copy(pickingType = true) }
+    }
+
+    /**
+     * Measures the exercise by [tracking] from now on: its rows and steppers, its records and stars
+     * (so the exports catch up). Sets already logged keep their numbers; an assisted exercise's are
+     * negative, so they still read as help under any type.
+     */
+    fun chooseType(tracking: Tracking) {
+        _uiState.update { it.copy(pickingType = false, tracking = tracking) }
+        LiftsIo.write({
+            val exercise = repository.exerciseById(exerciseId) ?: return@write false
+            exercise.trackingType != tracking.stored && repository.updateExercise(exercise.copy(trackingType = tracking.stored))
+        }) { changed ->
+            if (changed) share.logChanged()
+            refresh()
+        }
     }
 
     fun selectTab(index: Int) {
@@ -266,6 +299,7 @@ class ExerciseDetailViewModel(
     private fun refresh() {
         val exercise = repository.exerciseById(exerciseId)
         val unit = settings.snapshot().units
+        val tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS
 
         // Every workout containing this exercise, newest first, with its completed sets in slot
         // then set order: two queries, whatever the history length.
@@ -284,7 +318,7 @@ class ExerciseDetailViewModel(
 
         // A set is starred when it beat every set completed before it (shared records engine).
         val allSets = perWorkout.flatMap { it.sets }
-        val prSetIds = chronologicalPrSetIds(allSets)
+        val prSetIds = chronologicalPrSetIds(allSets, tracking)
 
         val history = perWorkout.map { entry ->
             HistoryRow(
@@ -297,11 +331,12 @@ class ExerciseDetailViewModel(
 
         // Records count finished workouts only: a mistaken tick in today's workout isn't a record until
         // the workout is done. Today's row and its live stars stay, as Active Workout shows them.
-        val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit)
+        val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit, tracking)
         // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
         _uiState.update { state ->
             state.copy(
                 name = exercise?.let(::displayName) ?: "Exercise",
+                tracking = tracking,
                 pinnedNote = exercise?.pinnedNote,
                 instructions = exercise?.instructions ?: emptyList(),
                 history = history,
@@ -314,14 +349,28 @@ class ExerciseDetailViewModel(
     private fun SetEntity.toToken(unit: WeightUnit, pr: Boolean) =
         SetToken(setNotation(this, unit, NotationStyle.LIST) ?: "-", pr)
 
-    /** The Records tab, formatted from the shared records engine. */
-    private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit): Records? {
-        val records = exerciseRecords(sets, REP_MAX_TARGETS) ?: return null
+    /** The Records tab, formatted from the shared records engine, as the exercise is measured. */
+    private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit, tracking: Tracking): Records? {
+        val records = exerciseRecords(sets, REP_MAX_TARGETS, tracking) ?: return null
         fun weightLabel(kg: Double) = "${Format.weight(kg, unit)} ${unit.suffix}"
         val stats = buildList {
             records.maxWeightSet?.let { set ->
-                val label = setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
-                add(Stat("Max Weight", label, Format.dateWithYear(set.completedAt ?: 0L)))
+                val label = when (tracking) {
+                    // The help as the machine's stack shows it; none at all is a plain pull-up.
+                    Tracking.ASSISTED_BODYWEIGHT -> set.weightKg?.takeIf { it < 0.0 }
+                        ?.let { setNotation(-it, set.reps, unit, NotationStyle.SINGLE, withUnit = true) }
+                        ?: "None × ${set.reps ?: 0}"
+                    else -> setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
+                }
+                val title = when (tracking) {
+                    Tracking.WEIGHTED_BODYWEIGHT -> "Max Added"
+                    Tracking.ASSISTED_BODYWEIGHT -> "Least Assistance"
+                    else -> "Max Weight"
+                }
+                add(Stat(title, label, Format.dateWithYear(set.completedAt ?: 0L)))
+            }
+            records.longestSet?.let { set ->
+                add(Stat("Longest", "${set.durationSec ?: 0}s", Format.dateWithYear(set.completedAt ?: 0L)))
             }
             val bestE1Rm = records.bestE1RmKg
             val bestE1RmSet = records.bestE1RmSet
@@ -369,9 +418,10 @@ class ExerciseDetailViewModel(
 /**
  * Exercise detail (design/screens/exercise-detail.html): ABOUT / HISTORY / RECORDS tabs.
  * History lists one row per workout (date + compact set notation with PR stars); Records
- * shows max weight, best e1RM, best volume set, and 1/5/8 rep maxes; About shows the
- * pinned note and the catalog instructions. Top-bar pencil edits the pinned note; a tap on the
- * name (top bar, or About's Name row) renames the exercise.
+ * shows max weight, best e1RM, best volume set, and 1/5/8 rep maxes (or what the exercise's type
+ * records: max reps, max added, least assistance, longest hold); About shows its name, its Type
+ * (how it is measured, changeable), the pinned note and the catalog instructions. Top-bar pencil
+ * edits the pinned note; a tap on the name (top bar, or About's Name row) renames the exercise.
  * Opens on History — the common in-workout question is "what did I do last time".
  */
 class ExerciseDetailScreen(
@@ -425,6 +475,8 @@ class ExerciseDetailScreen(
                         .fillMaxSize()
                         .background(LightThemeTokens.colors.background),
                 )
+            } else if (uiState.pickingType) {
+                TypePicker(uiState.tracking)
             } else if (!renameOnly) {
                 DetailContent(uiState)
             } else {
@@ -477,6 +529,7 @@ class ExerciseDetailScreen(
         val note = uiState.pinnedNote
         LightScrollView(modifier = modifier) {
             LiftsFieldRow(label = "Name", value = uiState.name, onClick = viewModel::openNameEditor, chevron = true)
+            LiftsFieldRow(label = "Type", value = uiState.tracking.label, onClick = viewModel::openTypePicker, chevron = true)
             if (uiState.loaded && note == null && uiState.instructions.isEmpty()) {
                 LightText(
                     text = "No instructions",
@@ -512,6 +565,61 @@ class ExerciseDetailScreen(
                 }
             }
         }
+    }
+
+    /** The ways to measure an exercise, each with what it is for; the current one says so. */
+    @Composable
+    private fun TypePicker(current: Tracking) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(LightThemeTokens.colors.background),
+        ) {
+            LightTopBar(
+                leftButton = LightBarButton.LightIcon(
+                    icon = LightIcons.BACK,
+                    onClick = { goBack() },
+                ),
+                center = LightTopBarCenter.Text("Type"),
+            )
+            LightScrollView(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                Tracking.entries.forEachIndexed { index, tracking ->
+                    if (index > 0) RowDivider()
+                    LiftsListRow(
+                        onClick = { viewModel.chooseType(tracking) },
+                        heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
+                        left = {
+                            Column {
+                                LightText(text = tracking.label, variant = LightTextVariant.Copy, maxLines = 1)
+                                LightText(
+                                    text = typeExample(tracking),
+                                    variant = LightTextVariant.Detail,
+                                    lighten = true,
+                                    maxLines = 1,
+                                )
+                            }
+                        },
+                        right = if (tracking == current) {
+                            { LightText(text = "CURRENT", variant = LightTextVariant.Superfine, maxLines = 1) }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    private fun typeExample(tracking: Tracking): String = when (tracking) {
+        Tracking.WEIGHT_REPS -> "Barbell, dumbbell, cable, machine"
+        Tracking.REPS_ONLY -> "Push-ups, dead bugs, hanging raises"
+        Tracking.WEIGHTED_BODYWEIGHT -> "Added weight: belt dips, pull-ups"
+        Tracking.ASSISTED_BODYWEIGHT -> "Machine help: assisted pull-ups"
+        Tracking.DURATION -> "Seconds: planks, holds"
     }
 
     @Composable
@@ -555,7 +663,7 @@ class ExerciseDetailScreen(
         LightScrollView(modifier = modifier) {
             records.stats.forEach { stat -> StatRow(stat) }
 
-            SectionLabel("Rep Maxes")
+            if (records.repMaxes.isNotEmpty()) SectionLabel("Rep Maxes")
             records.repMaxes.forEachIndexed { index, repMax ->
                 if (index > 0) RowDivider()
                 LiftsListRow(
