@@ -16,9 +16,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.SetRun
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
+import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
-import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
@@ -28,7 +30,7 @@ import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
-import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.SetLine
 import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -56,9 +58,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Suffix appended to PR set tokens (design's inline star, U+2605). */
-private const val PR_STAR = "★"
-
 class WorkoutDetailViewModel(
     private val repository: LiftsRepository,
     private val settings: SettingsStore,
@@ -66,7 +65,8 @@ class WorkoutDetailViewModel(
     private val workoutId: Long,
 ) : LightViewModel<Unit>() {
 
-    data class ExerciseBlock(val exerciseId: String, val name: String, val notation: String)
+    /** One exercise's logged sets, one run per set ("w95×10; 140×8F @9"), PRs starred. */
+    data class ExerciseBlock(val exerciseId: String, val name: String, val runs: List<SetRun>)
 
     data class UiState(
         val loaded: Boolean = false,
@@ -168,9 +168,9 @@ class WorkoutDetailViewModel(
                 ?: return@mapNotNull null
             ExerciseBlock(
                 exerciseId = slot.exerciseId,
-                name = repository.exerciseById(slot.exerciseId)?.let { displayName(it) } ?: slot.exerciseId,
-                notation = completed.joinToString("; ") { set ->
-                    setToken(set, unit) + if (set.id in prSetIds) PR_STAR else ""
+                name = repository.exerciseById(slot.exerciseId)?.let { displayName(it) } ?: UNKNOWN_EXERCISE,
+                runs = completed.map { set ->
+                    SetRun(setNotation(set, unit, NotationStyle.LIST) ?: "-", set.id in prSetIds, 1)
                 },
             )
         }
@@ -297,13 +297,21 @@ class WorkoutDetailScreen(
                                         )
                                         LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
                                     }
-                                    LightText(
-                                        text = block.notation,
-                                        variant = LightTextVariant.Detail,
-                                        lighten = true,
-                                        monospace = true,
-                                    )
+                                    SetLine(runs = block.runs, lighten = true)
                                 }
+                            }
+
+                            if (uiState.loaded && uiState.blocks.isEmpty()) {
+                                LightText(
+                                    text = "No sets logged",
+                                    variant = LightTextVariant.Detail,
+                                    lighten = true,
+                                    modifier = Modifier.padding(
+                                        start = 1f.gridUnitsAsDp(),
+                                        end = 1f.gridUnitsAsDp(),
+                                        top = 0.5f.gridUnitsAsDp(),
+                                    ),
+                                )
                             }
 
                             uiState.bodyweightText?.let { bodyweight ->
@@ -339,27 +347,4 @@ class WorkoutDetailScreen(
     }
 }
 
-/**
- * Compact display notation for one completed set — consistent with the export layer's
- * MarkdownExport notation but in display units with "×": warm-ups prefixed "w"
- * ("w95×10"), working sets "140×8", " @8" when RPE was recorded, duration sets "45s".
- * Rest is omitted on screen; the caller appends [PR_STAR] for PR sets.
- */
-private fun setToken(set: SetEntity, unit: WeightUnit): String = buildString {
-    if (set.type == "warmup") append('w')
-    val weight = set.weightKg?.let { Format.weight(it, unit) }
-    when {
-        weight != null && set.reps != null -> append(weight).append('×').append(set.reps)
-        weight != null && set.durationSec != null ->
-            append(weight).append('×').append(set.durationSec).append('s')
-        weight != null -> append(weight)
-        set.reps != null -> append('×').append(set.reps)
-        set.durationSec != null -> append(set.durationSec).append('s')
-        else -> append('-')
-    }
-    set.rpe?.let { append(" @").append(trimNumber(it)) }
-}
-
-/** "8" for 8.0, "7.5" for 7.5 (matches the export layer's number formatting). */
-private fun trimNumber(value: Double): String =
-    if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()
+private const val UNKNOWN_EXERCISE = "Unknown exercise"
