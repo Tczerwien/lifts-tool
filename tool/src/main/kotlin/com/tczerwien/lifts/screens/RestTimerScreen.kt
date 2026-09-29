@@ -105,6 +105,8 @@ class RestTimerViewModel(
     private fun sync() {
         viewModelScope.launch(Dispatchers.IO) {
             syncMutex.withLock {
+                // Skipped: the rest is cleared and the screen is leaving; a load now must not start one.
+                if (skipped) return@withLock
                 // Read behind any save still queued: a tick just before opening the timer writes its
                 // own rest end, and a stepper tap changes what NEXT should show.
                 LiftsIo.write {}.join()
@@ -144,10 +146,19 @@ class RestTimerViewModel(
         }
     }
 
-    /** Skip: clear the persisted timer, then leave (callback runs on Main). */
+    /** Set by [skip]: no load after it may start a rest. */
+    @Volatile
+    private var skipped = false
+
+    /**
+     * Skip: clear the persisted timer, then leave (callback runs on Main). Under the same lock as the
+     * loads, and marked first: a Skip tapped before the timer had loaded used to race the first load,
+     * which could start the rest again after the clear.
+     */
     fun skip(onCleared: () -> Unit) {
+        skipped = true
         viewModelScope.launch(Dispatchers.IO) {
-            session.clearRest()
+            syncMutex.withLock { session.clearRest() }
             withContext(Dispatchers.Main) { onCleared() }
         }
     }
