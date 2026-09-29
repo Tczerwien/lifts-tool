@@ -15,10 +15,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.library.CatalogEntry
+import com.tczerwien.lifts.library.catalogEntries
+import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
@@ -26,6 +30,7 @@ import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
+import com.tczerwien.lifts.ui.SectionLabel
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -72,17 +77,31 @@ class CustomExerciseViewModel(
         val equipmentOptions: List<String> = emptyList(),
         val categoryOptions: List<String> = emptyList(),
         val editorSession: Int = 0,
-        /** Set once the insert succeeded; the screen returns it via goBack. */
+        /** Another exercise already answers to [name] ([nameClash]); he can use it instead. */
+        val nameTaken: Taken? = null,
+        /**
+         * The pick, returned via goBack: the new exercise once the insert succeeded, or the existing one
+         * he chose over a taken name.
+         */
         val createdId: String? = null,
     ) {
         val valid: Boolean
-            get() = name.isNotBlank() && primaryMuscle != null
+            get() = name.isNotBlank() && primaryMuscle != null && nameTaken == null
     }
+
+    /** The exercise that has the name: its id, and the name Lifts shows for it. */
+    data class Taken(val id: String, val shown: String)
 
     private val _uiState = MutableStateFlow(UiState(name = initialName.trim()))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    /** A save is on its way; set on Main, cleared on the lane when the name turned out taken. */
+    @Volatile
     private var saving = false
+
+    /** Every exercise's names, for the duplicate check; hidden ones too, since the files still list them. */
+    @Volatile
+    private var names: List<CatalogEntry> = emptyList()
 
     /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
     override fun onScreenShow(screen: SimpleLightScreen<String>) {
@@ -115,8 +134,17 @@ class CustomExerciseViewModel(
     }
 
     fun submitName(raw: String) {
-        _uiState.value = _uiState.value.copy(name = raw.trim(), mode = Mode.FORM)
+        _uiState.update { it.copy(name = raw.replace(Regex("\\s+"), " ").trim(), mode = Mode.FORM).withClash() }
     }
+
+    /** He takes the exercise that already has the name: it becomes the pick, and nothing is created. */
+    fun useExisting() {
+        val taken = _uiState.value.nameTaken ?: return
+        _uiState.update { it.copy(createdId = taken.id) }
+    }
+
+    private fun UiState.withClash(): UiState =
+        copy(nameTaken = nameClash(name, names)?.let { Taken(it.id, it.shown) })
 
     fun selectPrimaryMuscle(muscle: String) {
         _uiState.value = _uiState.value.copy(primaryMuscle = muscle, mode = Mode.FORM)
@@ -141,7 +169,11 @@ class CustomExerciseViewModel(
         _uiState.value = _uiState.value.copy(category = category, mode = Mode.FORM)
     }
 
-    /** Inserts the exercise as "custom-<uuid>"; the primary muscle is dropped from secondaries. */
+    /**
+     * Inserts the exercise as "custom-<uuid>"; the primary muscle is dropped from secondaries. The name
+     * is checked again on the lane, against the catalog as it is then: a name taken meanwhile creates
+     * nothing and shows the clash instead.
+     */
     fun save() {
         val state = _uiState.value
         val primaryMuscle = state.primaryMuscle
@@ -150,29 +182,45 @@ class CustomExerciseViewModel(
         val id = "custom-${UUID.randomUUID()}"
         // On the write lane, so Back can't drop it half-way.
         LiftsIo.write({
-            repository.addExercise(
-                ExerciseEntity(
-                    id = id,
-                    name = state.name.trim(),
-                    equipment = state.equipment,
-                    primaryMuscles = listOf(primaryMuscle),
-                    secondaryMuscles = state.secondaryMuscles.filterNot { it == primaryMuscle },
-                    category = state.category,
-                    level = null,
-                    instructions = emptyList(),
-                    isCustom = true,
-                ),
-            )
-        }) {
-            // workouts.json lists every custom exercise, used or not.
-            share.logChanged()
-            // Atomic: a mode tap on Main in the same instant must not write createdId back to null.
-            _uiState.update { it.copy(createdId = id) }
+            val current = catalogEntries(repository.exerciseSummaries())
+            names = current
+            val clash = nameClash(state.name, current)
+            if (clash == null) {
+                repository.addExercise(
+                    ExerciseEntity(
+                        id = id,
+                        name = state.name.trim(),
+                        equipment = state.equipment,
+                        primaryMuscles = listOf(primaryMuscle),
+                        secondaryMuscles = state.secondaryMuscles.filterNot { it == primaryMuscle },
+                        category = state.category,
+                        level = null,
+                        instructions = emptyList(),
+                        isCustom = true,
+                    ),
+                )
+            }
+            clash
+        }) { clash ->
+            if (clash != null) {
+                saving = false
+                _uiState.update { it.withClash() }
+            } else {
+                // workouts.json lists every custom exercise, used or not.
+                share.logChanged()
+                // Atomic: a mode tap on Main in the same instant must not write createdId back to null.
+                _uiState.update { it.copy(createdId = id) }
+            }
         }
     }
 
-    /** Option lists derive from the live catalog so custom values stay dataset-consistent. */
+    /**
+     * Option lists derive from the live catalog so custom values stay dataset-consistent; the names
+     * load for the duplicate check (a name filled in by the picker is checked as soon as they land).
+     */
     private fun loadOptions() {
+        names = catalogEntries(repository.exerciseSummaries())
+        _uiState.update { it.withClash() }
         val all = repository.listExercises()
         val muscles = (all.flatMap { it.primaryMuscles } + all.flatMap { it.secondaryMuscles })
             .distinct()
@@ -313,6 +361,22 @@ class CustomExerciseScreen(
                     onClick = { viewModel.openNameEditor() },
                     chevron = true,
                 )
+                uiState.nameTaken?.let { taken ->
+                    // Two exercises with one name would split his history: offer the one he has.
+                    SectionLabel("Name in use")
+                    LiftsListRow(
+                        onClick = viewModel::useExisting,
+                        left = {
+                            LightText(
+                                text = "Use ${taken.shown}",
+                                variant = LightTextVariant.Copy,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                        right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },
+                    )
+                }
                 LiftsFieldRow(
                     label = "Primary Muscle",
                     value = uiState.primaryMuscle?.let(::titleCaseLabel) ?: "—",
