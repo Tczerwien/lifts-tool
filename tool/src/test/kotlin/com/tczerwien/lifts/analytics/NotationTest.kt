@@ -73,6 +73,17 @@ class NotationTest {
     }
 
     @Test
+    fun assistanceKeepsItsSign() {
+        val assisted = set(lb = -30.0, reps = 8)
+        assertEquals("-30×8", setNotation(assisted, lb, NotationStyle.LIST))
+        assertEquals("-30 × 8", setNotation(assisted, lb, NotationStyle.SINGLE))
+        assertEquals("-30x8", setNotation(assisted, lb, NotationStyle.EXPORT))
+        assertEquals("-30 lb × 8", setNotation(Format.lbToKg(-30.0), 8, lb, NotationStyle.SINGLE, withUnit = true))
+        // A sliver of help that shows as 0 is no weight either way.
+        assertEquals("×8", setNotation(-0.1, 8, lb, NotationStyle.LIST))
+    }
+
+    @Test
     fun durationsAndWeightOnly() {
         assertEquals("45s", setNotation(set(durationSec = 45), lb, NotationStyle.LIST))
         assertEquals("25×45s", setNotation(set(lb = 25.0, durationSec = 45), lb, NotationStyle.LIST))
