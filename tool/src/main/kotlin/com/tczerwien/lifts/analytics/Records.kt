@@ -1,16 +1,25 @@
 package com.tczerwien.lifts.analytics
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 
 /**
  * The one PR/records engine. Every screen and export that stars a set or shows a record goes
- * through here, so they all agree on what counts.
+ * through here, so they all agree on what counts. What counts depends on how the exercise is
+ * measured ([Tracking]); callers that don't say get weight × reps.
  *
  * Rules:
- * - Only completed working sets with at least one rep count ([recordEligible]). Warm-ups, failed
- *   0-rep attempts and sets with no reps never set or hold a record.
- * - Weighted sets (weight > 0) compete on weight, then on Epley e1RM. Weightless sets (reps only,
- *   e.g. pull-ups) compete on reps, separately from weighted sets of the same exercise.
+ * - Only completed working sets with something to measure count ([recordEligible]): at least one
+ *   rep, or for a hold at least one second. Warm-ups and failed 0-rep attempts never set or hold a
+ *   record.
+ * - Weight × reps: weighted sets (weight > 0) compete on weight, then on Epley e1RM. Weightless sets
+ *   (a pull-up logged under a barbell lift) compete on reps, separately.
+ * - Reps only: more reps. A hold: more seconds. Neither looks at a weight.
+ * - Weighted bodyweight: sets with added weight compete on it, then on reps at that weight (an e1RM
+ *   of the belt alone would rank 20×8 below 25×5, which with the body is the wrong way round). Sets
+ *   at bodyweight compete on reps, separately.
+ * - Assisted bodyweight: less assistance, then more reps at that assistance. No assistance is the
+ *   least; the stored weight is negative help, so this is the higher weight ([Tracking]).
  * - A set is compared only with sets completed before it, never with later workouts.
  * - Weights within [WEIGHT_TOLERANCE_KG] count as equal, so lb↔kg rounding never fakes a PR.
  */
@@ -23,17 +32,48 @@ const val WEIGHT_TOLERANCE_KG = 0.12
 
 private const val SET_TYPE_WARMUP = "warmup"
 
-/** Whether a logged set can set or hold a record: completed, not a warm-up, at least one rep. */
-fun recordEligible(set: SetEntity): Boolean =
-    set.completedAt != null && set.type != SET_TYPE_WARMUP && (set.reps ?: 0) >= 1
+/** Whether a logged set can set or hold a record: completed, not a warm-up, something measured. */
+fun recordEligible(set: SetEntity, tracking: Tracking = Tracking.WEIGHT_REPS): Boolean =
+    set.completedAt != null && set.type != SET_TYPE_WARMUP && measured(set, tracking) != null
+
+/** The reps a set counts with, or its seconds for a hold; null (or under 1) is nothing measured. */
+private fun measured(set: SetEntity, tracking: Tracking): Int? =
+    (if (tracking == Tracking.DURATION) set.durationSec else set.reps)?.takeIf { it >= 1 }
 
 private fun SetEntity.isWeighted(): Boolean = (weightKg ?: 0.0) > 0.0
 
 /**
- * Running record state for one exercise. Feed sets in completion order with [record]; ask
- * [wouldBePr] before recording a set to learn whether it beats everything seen so far.
+ * A heaviest-load record with reps as the tie-break: a set beats it with more load, or with the same
+ * load (within [WEIGHT_TOLERANCE_KG]) and more reps. For the bodyweight kinds, where no e1RM applies.
  */
-class RecordTracker {
+private class LoadRecord {
+    var bestLoadKg: Double? = null
+        private set
+    private var repsAtBest = 0
+
+    fun beats(loadKg: Double, reps: Int): Boolean {
+        val best = bestLoadKg ?: return true
+        if (loadKg > best + WEIGHT_TOLERANCE_KG) return true
+        return loadKg >= best - WEIGHT_TOLERANCE_KG && reps > repsAtBest
+    }
+
+    fun record(loadKg: Double, reps: Int) {
+        val best = bestLoadKg
+        when {
+            best == null || loadKg > best + WEIGHT_TOLERANCE_KG -> {
+                bestLoadKg = loadKg
+                repsAtBest = reps
+            }
+            loadKg >= best - WEIGHT_TOLERANCE_KG -> repsAtBest = maxOf(repsAtBest, reps)
+        }
+    }
+}
+
+/**
+ * Running record state for one exercise measured by [tracking]. Feed sets in completion order with
+ * [record]; ask [wouldBePr] before recording a set to learn whether it beats everything seen so far.
+ */
+class RecordTracker(private val tracking: Tracking = Tracking.WEIGHT_REPS) {
     var maxWeightKg: Double? = null
         private set
     var bestE1RmKg: Double? = null
@@ -41,15 +81,30 @@ class RecordTracker {
     var maxRepsWeightless: Int? = null
         private set
 
+    /** Reps only: most reps; a hold: most seconds. */
+    private var bestAmount: Int? = null
+
+    /** The bodyweight kinds' load record ([LoadRecord]). */
+    private val load = LoadRecord()
+
     /**
      * Whether [set] beats every set recorded so far. [set] need not be completed yet (the UI
-     * asks before logging), but it must be a working set with reps. The first weighted set of
-     * an exercise is a PR; so is the first weightless one.
+     * asks before logging), but it must be a working set with something measured. The first set
+     * of each kind of record is a PR.
      */
     fun wouldBePr(set: SetEntity): Boolean {
         if (set.type == SET_TYPE_WARMUP) return false
-        val reps = set.reps ?: return false
-        if (reps < 1) return false
+        val amount = measured(set, tracking) ?: return false
+        return when (tracking) {
+            Tracking.REPS_ONLY, Tracking.DURATION -> amount > (bestAmount ?: return true)
+            Tracking.ASSISTED_BODYWEIGHT -> load.beats(set.weightKg ?: 0.0, amount)
+            Tracking.WEIGHTED_BODYWEIGHT ->
+                if (set.isWeighted()) load.beats(set.weightKg!!, amount) else amount > (maxRepsWeightless ?: return true)
+            Tracking.WEIGHT_REPS -> weightRepsPr(set, amount)
+        }
+    }
+
+    private fun weightRepsPr(set: SetEntity, reps: Int): Boolean {
         if (!set.isWeighted()) {
             val best = maxRepsWeightless ?: return true
             return reps > best
@@ -64,25 +119,37 @@ class RecordTracker {
 
     /** Adds a logged set to the running state; ineligible sets are ignored. */
     fun record(set: SetEntity) {
-        if (!recordEligible(set)) return
-        val reps = set.reps ?: return
-        if (!set.isWeighted()) {
-            maxRepsWeightless = maxOf(maxRepsWeightless ?: 0, reps)
-            return
+        if (!recordEligible(set, tracking)) return
+        val amount = measured(set, tracking) ?: return
+        when (tracking) {
+            Tracking.REPS_ONLY, Tracking.DURATION -> bestAmount = maxOf(bestAmount ?: 0, amount)
+            Tracking.ASSISTED_BODYWEIGHT -> load.record(set.weightKg ?: 0.0, amount)
+            Tracking.WEIGHTED_BODYWEIGHT ->
+                if (set.isWeighted()) load.record(set.weightKg!!, amount) else recordWeightless(amount)
+            Tracking.WEIGHT_REPS -> {
+                if (!set.isWeighted()) {
+                    recordWeightless(amount)
+                    return
+                }
+                val weight = set.weightKg ?: return
+                maxWeightKg = maxOf(maxWeightKg ?: weight, weight)
+                epleyE1RmKg(weight, amount)?.let { e1Rm -> bestE1RmKg = maxOf(bestE1RmKg ?: e1Rm, e1Rm) }
+            }
         }
-        val weight = set.weightKg ?: return
-        maxWeightKg = maxOf(maxWeightKg ?: weight, weight)
-        epleyE1RmKg(weight, reps)?.let { e1Rm -> bestE1RmKg = maxOf(bestE1RmKg ?: e1Rm, e1Rm) }
+    }
+
+    private fun recordWeightless(reps: Int) {
+        maxRepsWeightless = maxOf(maxRepsWeightless ?: 0, reps)
     }
 }
 
 /**
  * Whether [newSet] would be a personal record against [history] (earlier sets of the same
- * exercise; history is filtered to eligible sets here, so callers may pass raw lists, but it
- * must not contain [newSet] itself).
+ * exercise, measured by [tracking]; history is filtered to eligible sets here, so callers may pass
+ * raw lists, but it must not contain [newSet] itself).
  */
-fun isPr(newSet: SetEntity, history: List<SetEntity>): Boolean {
-    val tracker = RecordTracker()
+fun isPr(newSet: SetEntity, history: List<SetEntity>, tracking: Tracking = Tracking.WEIGHT_REPS): Boolean {
+    val tracker = RecordTracker(tracking)
     history.forEach(tracker::record)
     return tracker.wouldBePr(newSet)
 }
@@ -90,22 +157,29 @@ fun isPr(newSet: SetEntity, history: List<SetEntity>): Boolean {
 private val COMPLETION_ORDER = compareBy<SetEntity>({ it.completedAt }, { it.id })
 
 /**
- * Ids of the sets of ONE exercise that were PRs when they were completed: each completed set is
- * compared with the sets completed before it. One pass with running maxima.
+ * Ids of the sets of ONE exercise (measured by [tracking]) that were PRs when they were completed:
+ * each completed set is compared with the sets completed before it. One pass with running maxima.
  */
-fun chronologicalPrSetIds(sets: List<SetEntity>): Set<Long> {
-    val tracker = RecordTracker()
+fun chronologicalPrSetIds(sets: List<SetEntity>, tracking: Tracking = Tracking.WEIGHT_REPS): Set<Long> {
+    val tracker = RecordTracker(tracking)
     val result = HashSet<Long>()
     for (set in sets.filter { it.completedAt != null }.sortedWith(COMPLETION_ORDER)) {
-        if (recordEligible(set) && tracker.wouldBePr(set)) result.add(set.id)
+        if (recordEligible(set, tracking) && tracker.wouldBePr(set)) result.add(set.id)
         tracker.record(set)
     }
     return result
 }
 
-/** [chronologicalPrSetIds] for several exercises at once, keyed by exercise id. */
-fun chronologicalPrSetIds(setsByExercise: Map<String, List<SetEntity>>): Set<Long> =
-    setsByExercise.values.flatMapTo(HashSet()) { chronologicalPrSetIds(it) }
+/**
+ * [chronologicalPrSetIds] for several exercises at once, keyed by exercise id, each by its own
+ * [tracking] (an exercise missing from it is weight × reps).
+ */
+fun chronologicalPrSetIds(
+    setsByExercise: Map<String, List<SetEntity>>,
+    tracking: Map<String, Tracking> = emptyMap(),
+): Set<Long> = setsByExercise.flatMapTo(HashSet()) { (exerciseId, sets) ->
+    chronologicalPrSetIds(sets, tracking[exerciseId] ?: Tracking.WEIGHT_REPS)
+}
 
 /** A rep-max row: the heaviest weight for [reps] reps, actual or [estimated] from the best e1RM. */
 data class RepMaxRecord(
@@ -116,8 +190,14 @@ data class RepMaxRecord(
 )
 
 /**
- * Records for one exercise. Weighted fields are null when no eligible weighted set exists;
- * [maxRepsSet] is the best weightless set, null when there is none.
+ * Records for one exercise; each field is null (or empty) where it doesn't apply to the exercise's
+ * [Tracking] or no eligible set has it yet.
+ * - [maxWeightSet]: weight × reps: the heaviest weighted set. Weighted bodyweight: the most added
+ *   weight, then reps. Assisted: the least assistance, then reps (unassisted is the least).
+ * - [bestE1RmKg], [bestE1RmSet], [bestVolumeSet], [repMaxes]: weight × reps only.
+ * - [maxRepsSet]: the most reps without weight: weightless sets of a weight × reps lift, every set of
+ *   a reps-only one, bodyweight sets of a weighted bodyweight one.
+ * - [longestSet]: a hold's longest set.
  */
 data class ExerciseRecords(
     val maxWeightSet: SetEntity?,
@@ -126,17 +206,56 @@ data class ExerciseRecords(
     val bestVolumeSet: SetEntity?,
     val maxRepsSet: SetEntity?,
     val repMaxes: List<RepMaxRecord>,
+    val longestSet: SetEntity? = null,
 )
 
 /**
- * Records over one exercise's [sets] (any order; only eligible sets count). Ties keep the first
- * set to reach a value. A rep max for N reps is the heaviest set of at least N reps (145×10
- * proves you can do 145×8); with no such set it is estimated from the best e1RM by inverse
- * Epley. Returns null when no eligible set exists.
+ * Records over one exercise's [sets] (any order; only eligible sets count), measured by [tracking].
+ * Ties keep the first set to reach a value. A rep max for N reps is the heaviest set of at least N
+ * reps (145×10 proves you can do 145×8); with no such set it is estimated from the best e1RM by
+ * inverse Epley. Returns null when no eligible set exists.
  */
-fun exerciseRecords(sets: List<SetEntity>, repTargets: List<Int> = listOf(1, 5, 8)): ExerciseRecords? {
-    val eligible = sets.filter(::recordEligible).sortedWith(COMPLETION_ORDER)
+fun exerciseRecords(
+    sets: List<SetEntity>,
+    repTargets: List<Int> = listOf(1, 5, 8),
+    tracking: Tracking = Tracking.WEIGHT_REPS,
+): ExerciseRecords? {
+    val eligible = sets.filter { recordEligible(it, tracking) }.sortedWith(COMPLETION_ORDER)
     if (eligible.isEmpty()) return null
+    fun firstMost(candidates: List<SetEntity>, amount: (SetEntity) -> Int): SetEntity? =
+        candidates.fold(null as SetEntity?) { best, set -> if (best == null || amount(set) > amount(best)) set else best }
+
+    return when (tracking) {
+        Tracking.WEIGHT_REPS -> weightRepsRecords(eligible, repTargets)
+        Tracking.REPS_ONLY -> ExerciseRecords(null, null, null, null, firstMost(eligible) { it.reps ?: 0 }, emptyList())
+        Tracking.DURATION ->
+            ExerciseRecords(null, null, null, null, null, emptyList(), longestSet = firstMost(eligible) { it.durationSec ?: 0 })
+        Tracking.WEIGHTED_BODYWEIGHT -> ExerciseRecords(
+            maxWeightSet = bestLoadSet(eligible.filter { it.isWeighted() }),
+            bestE1RmKg = null,
+            bestE1RmSet = null,
+            bestVolumeSet = null,
+            maxRepsSet = firstMost(eligible.filterNot { it.isWeighted() }) { it.reps ?: 0 },
+            repMaxes = emptyList(),
+        )
+        Tracking.ASSISTED_BODYWEIGHT -> ExerciseRecords(bestLoadSet(eligible), null, null, null, null, emptyList())
+    }
+}
+
+/** The set that holds the [LoadRecord] over [ordered] (completion order): the one that last beat it. */
+private fun bestLoadSet(ordered: List<SetEntity>): SetEntity? {
+    val record = LoadRecord()
+    var holder: SetEntity? = null
+    for (set in ordered) {
+        val load = set.weightKg ?: 0.0
+        val reps = set.reps ?: continue
+        if (record.beats(load, reps)) holder = set
+        record.record(load, reps)
+    }
+    return holder
+}
+
+private fun weightRepsRecords(eligible: List<SetEntity>, repTargets: List<Int>): ExerciseRecords {
     val weighted = eligible.filter { it.isWeighted() }
 
     var maxWeightSet: SetEntity? = null

@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.analytics
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.ui.Format
 import kotlin.random.Random
 import kotlin.test.Test
@@ -14,9 +15,9 @@ class RecordsTest {
 
     private var nextId = 1L
 
-    private fun logged(weightKg: Double?, reps: Int?, at: Long, type: String = "normal") = SetEntity(
+    private fun logged(weightKg: Double?, reps: Int?, at: Long, type: String = "normal", durationSec: Int? = null) = SetEntity(
         id = nextId++, workoutExerciseId = 1, position = 0, type = type,
-        weightKg = weightKg, reps = reps, completedAt = at,
+        weightKg = weightKg, reps = reps, durationSec = durationSec, completedAt = at,
     )
 
     private fun pending(weightKg: Double?, reps: Int?, type: String = "normal") =
@@ -156,5 +157,133 @@ class RecordsTest {
     @Test
     fun noEligibleSetsMeansNoRecords() {
         assertNull(exerciseRecords(listOf(logged(100.0, 0, at = 1), logged(80.0, 5, at = 2, type = "warmup"))))
+    }
+
+    // --- by tracking type ---
+
+    @Test
+    fun repsOnlyCompetesOnRepsAndIgnoresWeight() {
+        val reps = Tracking.REPS_ONLY
+        val history = listOf(logged(null, 10, at = 1), logged(20.0, 8, at = 2))
+        assertTrue(isPr(pending(null, 11), history, reps))
+        assertFalse(isPr(pending(null, 10), history, reps))
+        assertFalse(isPr(pending(40.0, 9), history, reps), "a weight on a reps-only set is no record")
+        assertEquals(12, exerciseRecords(history + logged(null, 12, at = 3), tracking = reps)?.maxRepsSet?.reps)
+    }
+
+    @Test
+    fun holdsCompeteOnSeconds() {
+        val hold = Tracking.DURATION
+        val history = listOf(logged(null, null, at = 1, durationSec = 45), logged(null, null, at = 2, durationSec = 60))
+        assertTrue(isPr(pending(null, null).copy(durationSec = 61), history, hold))
+        assertFalse(isPr(pending(null, null).copy(durationSec = 60), history, hold))
+        assertFalse(isPr(pending(null, 30), history, hold), "reps on a hold measure nothing")
+        assertFalse(recordEligible(logged(null, null, at = 3, durationSec = 0), hold), "0 s is nothing held")
+        val records = exerciseRecords(history, tracking = hold)!!
+        assertEquals(60, records.longestSet?.durationSec)
+        assertNull(records.maxWeightSet)
+        assertTrue(records.repMaxes.isEmpty())
+    }
+
+    @Test
+    fun weightedBodyweightRanksAddedWeightThenReps() {
+        val added = Tracking.WEIGHTED_BODYWEIGHT
+        val history = listOf(logged(9.0, 8, at = 1))
+        assertTrue(isPr(pending(11.3, 5), history, added), "more on the belt, even for fewer reps")
+        val after = history + logged(11.3, 5, at = 2)
+        assertFalse(isPr(pending(9.0, 9), after, added), "more reps with less on the belt is no record")
+        assertTrue(isPr(pending(11.3, 6), after, added), "the same load for one more rep is")
+        assertFalse(isPr(pending(11.3, 5), after, added))
+        // Bodyweight sets keep their own reps record beside the weighted one.
+        assertTrue(isPr(pending(null, 12), after, added))
+        val withBodyweight = after + logged(null, 12, at = 3)
+        assertFalse(isPr(pending(0.0, 12), withBodyweight, added))
+        assertTrue(isPr(pending(null, 13), withBodyweight, added))
+        val records = exerciseRecords(withBodyweight + logged(11.3, 7, at = 4), tracking = added)!!
+        assertEquals(7, records.maxWeightSet?.reps, "the heaviest load, and the most reps at it")
+        assertEquals(12, records.maxRepsSet?.reps)
+        assertNull(records.bestE1RmKg, "no e1RM of a belt")
+    }
+
+    @Test
+    fun assistedRanksLessHelpThenReps() {
+        val assisted = Tracking.ASSISTED_BODYWEIGHT
+        val history = listOf(logged(-18.0, 8, at = 1))
+        assertTrue(isPr(pending(-13.5, 6), history, assisted), "less assistance")
+        assertFalse(isPr(pending(-22.5, 12), history, assisted), "more assistance is easier, whatever the reps")
+        assertTrue(isPr(pending(-18.0, 9), history, assisted), "the same help for one more rep")
+        assertFalse(isPr(pending(-18.05, 8), history, assisted), "within the rounding tolerance is the same help")
+        assertTrue(isPr(pending(null, 3), history, assisted), "the first unassisted set beats any help")
+        val records = exerciseRecords(history + logged(-13.5, 6, at = 2) + logged(-22.5, 12, at = 3), tracking = assisted)!!
+        assertEquals(-13.5, records.maxWeightSet?.weightKg)
+        assertNull(records.maxRepsSet)
+    }
+
+    @Test
+    fun trackingPerExerciseInTheMultiExerciseReplay() {
+        val bench = listOf(logged(100.0, 5, at = 1), logged(90.0, 13, at = 2))
+        val pullups = listOf(logged(-20.0, 8, at = 1), logged(-15.0, 5, at = 2))
+        val ids = chronologicalPrSetIds(
+            mapOf("bench" to bench, "pullup" to pullups),
+            mapOf("pullup" to Tracking.ASSISTED_BODYWEIGHT),
+        )
+        // Bench as weight x reps: 90x13 has no e1RM (none past 12 reps), so only the first. Pull-ups by help.
+        assertEquals(setOf(bench[0].id, pullups[0].id, pullups[1].id), ids)
+    }
+
+    @Test
+    fun loadRecordsMatchTheirRulesOnRandomHistories() {
+        val random = Random(20260929)
+        for (tracking in listOf(Tracking.WEIGHTED_BODYWEIGHT, Tracking.ASSISTED_BODYWEIGHT)) {
+            repeat(400) { round ->
+                val sets = List(random.nextInt(1, 20)) { i ->
+                    val weight = when (random.nextInt(5)) {
+                        0 -> null
+                        1 -> 0.0
+                        else -> (random.nextInt(-8, 9) * 2.5) + random.nextDouble(-0.1, 0.1)
+                    }
+                    val reps = if (random.nextInt(8) == 0) 0 else random.nextInt(1, 16)
+                    val type = if (random.nextInt(6) == 0) "warmup" else "normal"
+                    logged(weight, reps, at = 1000L + i * 10 + random.nextInt(0, 5), type = type)
+                }
+                val ordered = sets.sortedWith(compareBy({ it.completedAt }, { it.id }))
+                val expected = ordered.filterIndexed { i, set -> referenceLoadPr(set, ordered.take(i), tracking) }
+                    .mapTo(HashSet()) { it.id }
+                assertEquals(expected, chronologicalPrSetIds(sets, tracking), "$tracking round $round")
+            }
+        }
+    }
+
+    /**
+     * The bodyweight kinds' rules written out over the earlier sets: the best load so far (added
+     * weight, or signed help; weighted bodyweight splits off its sets without added weight, which go
+     * by reps), then the most reps at that load, both within the tolerance.
+     */
+    private fun referenceLoadPr(set: SetEntity, earlier: List<SetEntity>, tracking: Tracking): Boolean {
+        val reps = set.reps ?: return false
+        if (set.type == "warmup" || reps < 1) return false
+        val eligible = earlier.filter { it.type != "warmup" && (it.reps ?: 0) >= 1 }
+        val split = tracking == Tracking.WEIGHTED_BODYWEIGHT
+        val weighted = { s: SetEntity -> (s.weightKg ?: 0.0) > 0.0 }
+        if (split && !weighted(set)) {
+            val best = eligible.filterNot(weighted).maxOfOrNull { it.reps!! } ?: return true
+            return reps > best
+        }
+        val track = if (split) eligible.filter(weighted) else eligible
+        if (track.isEmpty()) return true
+        // Replay the best load and the reps at it, as a lifter would read the log.
+        var best = track.first().weightKg ?: 0.0
+        var repsAtBest = track.first().reps!!
+        for (s in track.drop(1)) {
+            val load = s.weightKg ?: 0.0
+            if (load > best + 0.12) {
+                best = load
+                repsAtBest = s.reps!!
+            } else if (load >= best - 0.12) {
+                repsAtBest = maxOf(repsAtBest, s.reps!!)
+            }
+        }
+        val load = set.weightKg ?: 0.0
+        return load > best + 0.12 || (load >= best - 0.12 && reps > repsAtBest)
     }
 }
