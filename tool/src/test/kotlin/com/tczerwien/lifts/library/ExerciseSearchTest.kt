@@ -142,6 +142,8 @@ class ExerciseSearchTest {
     @Test
     fun `a long query nothing answers offers the names that miss one word`() {
         assertEquals("dumbbell-shoulder-press", search("seated db shoulder press").first())
+        // A near miss by term too, so multi-word shorthand still bridges: neutral grip is the V-bar.
+        assertEquals("v-bar-pulldown", search("seated neutral-grip lat pulldown").firstOrNull())
         // A typed word keeps its shorthand in a near miss: db is also dumbbell.
         assertTrue("seated-dumbbell-press" in search("seated db shoulder press"))
         assertEquals("hanging-leg-raise", search("hanging knee raise").first())

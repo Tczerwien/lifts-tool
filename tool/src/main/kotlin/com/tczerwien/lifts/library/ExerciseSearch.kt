@@ -307,10 +307,16 @@ fun searchExercises(
     val query = parseQuery(raw)
     if (query.terms.isEmpty()) return emptyList()
     var ranked = entries.mapNotNull { entry -> rank(entry, query)?.let { entry to it } }
-    // Counted in the words he typed: shorthand would join two of them into one term ("reverse cable fly").
-    val typedTerms = wordTerms(raw)
-    if (ranked.isEmpty() && typedTerms.size >= NEAR_MISS_MIN_TERMS) {
-        ranked = entries.filter { nearMiss(it, typedTerms) }.map { it to NEAR_MISS_RANK }
+    // One missed term of three or more, or one missed word of three or more typed: shorthand can join two
+    // typed words into one term ("reverse cable fly"), and splitting it loses what it bridges ("neutral grip").
+    if (ranked.isEmpty()) {
+        val typedTerms = wordTerms(raw)
+        ranked = entries
+            .filter { entry ->
+                (query.terms.size >= NEAR_MISS_MIN_TERMS && nearMiss(entry, query.terms)) ||
+                    (typedTerms.size >= NEAR_MISS_MIN_TERMS && nearMiss(entry, typedTerms))
+            }
+            .map { it to NEAR_MISS_RANK }
     }
     val recency = recentIds.withIndex().associate { (index, id) -> id to index }
     return ranked
