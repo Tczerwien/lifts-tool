@@ -29,6 +29,7 @@ import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
+import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
@@ -410,11 +411,7 @@ class TemplateEditorScreen(
                         onClick = { viewModel.openEdit(row.id) },
                         left = {
                             Column(modifier = Modifier.fillMaxWidth(ROW_LEFT_WIDTH_FRACTION)) {
-                                LightText(
-                                    text = row.name,
-                                    variant = LightTextVariant.Copy,
-                                    maxLines = 1,
-                                )
+                                RowName(row.name)
                                 LightText(
                                     text = exerciseDetail(row),
                                     variant = LightTextVariant.Detail,

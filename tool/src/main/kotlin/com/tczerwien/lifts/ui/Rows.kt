@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
@@ -26,9 +28,14 @@ private const val LIST_ROW_HEIGHT_UNITS = 3f
 private const val TAB_ROW_HEIGHT_UNITS = 2f
 private const val DIVIDER_ALPHA = 0.3f
 
+/** The gap kept between a row's left and right slots. */
+private const val ROW_SLOT_GAP_UNITS = 0.5f
+
 /**
  * Uniform 3gu list row with left/right slots and 1gu horizontal padding
  * (tokens.css .listrow). Safe inside LightLazyScrollView(uniformItemHeightGridUnits = 3f).
+ * The right slot is measured first and keeps its full width; the left takes what is left, less a
+ * 0.5gu gap, so a long name is cut ([RowName]) instead of pushing "5 exercises" off the row.
  */
 @Composable
 fun LiftsListRow(
@@ -46,11 +53,28 @@ fun LiftsListRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Box(contentAlignment = Alignment.CenterStart) { left() }
+        Box(modifier = Modifier.weight(1f, fill = false), contentAlignment = Alignment.CenterStart) { left() }
         if (right != null) {
+            Spacer(modifier = Modifier.width(ROW_SLOT_GAP_UNITS.gridUnitsAsDp()))
             Box(contentAlignment = Alignment.CenterEnd) { right() }
         }
     }
+}
+
+/**
+ * A name in a list row: one line of Copy, cut with an ellipsis. The SDK's LightText clips at a word
+ * by default, so a cut name looked whole ("Barbell Bench Press -"); the ellipsis shows it was cut.
+ */
+@Composable
+fun RowName(text: String, modifier: Modifier = Modifier, lighten: Boolean = false) {
+    LightText(
+        text = text,
+        variant = LightTextVariant.Copy,
+        lighten = lighten,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier,
+    )
 }
 
 /** 1px contentSecondary divider at 30% alpha, inset 1gu on both sides (tokens.css .rowdivider). */
@@ -101,6 +125,7 @@ fun LiftsFieldRow(
                     text = value,
                     variant = LightTextVariant.Copy,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (chevron) {

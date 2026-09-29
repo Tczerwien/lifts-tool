@@ -29,6 +29,7 @@ import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
+import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightScreen
@@ -269,11 +270,7 @@ class BarWeightsScreen(
                     LiftsListRow(
                         onClick = { viewModel.startEdit(bar) },
                         left = {
-                            LightText(
-                                text = bar.name,
-                                variant = LightTextVariant.Copy,
-                                maxLines = 1,
-                            )
+                            RowName(bar.name)
                         },
                         right = {
                             Row(verticalAlignment = Alignment.CenterVertically) {

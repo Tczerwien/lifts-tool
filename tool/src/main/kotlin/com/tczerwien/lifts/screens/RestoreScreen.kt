@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.backup.RestorePlan
 import com.tczerwien.lifts.backup.Restorer
@@ -234,6 +235,8 @@ class RestoreScreen(
                             variant = LightTextVariant.Copy,
                             monospace = true,
                             maxLines = 1,
+                            // Cut in the middle: the date and extension at the end tell uploads apart.
+                            overflow = TextOverflow.MiddleEllipsis,
                         )
                         if (uiState.fileDetail.isNotEmpty()) {
                             LightText(text = uiState.fileDetail, variant = LightTextVariant.Detail, lighten = true)

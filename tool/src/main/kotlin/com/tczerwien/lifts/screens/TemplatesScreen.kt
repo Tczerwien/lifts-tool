@@ -23,6 +23,7 @@ import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
+import com.tczerwien.lifts.ui.RowName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -301,11 +302,7 @@ class TemplatesScreen(
                         },
                         left = {
                             Column(modifier = Modifier.fillMaxWidth(ROW_LEFT_WIDTH_FRACTION)) {
-                                LightText(
-                                    text = row.name,
-                                    variant = LightTextVariant.Copy,
-                                    maxLines = 1,
-                                )
+                                RowName(row.name)
                                 LightText(
                                     text = templateDetail(row),
                                     variant = LightTextVariant.Detail,

@@ -28,6 +28,7 @@ import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
+import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.rememberBarChartIconPainter
 import com.tczerwien.lifts.ui.rememberScaleIconPainter
@@ -327,6 +328,8 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                                     variant = LightTextVariant.Copy,
                                     monospace = true,
                                     maxLines = 1,
+                                    // Cut in the middle: the date and extension at the end tell uploads apart.
+                                    overflow = TextOverflow.MiddleEllipsis,
                                 )
                             },
                             right = {
@@ -348,11 +351,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                                 if (uiState.ready) navigateTo({ ActiveWorkoutScreen(it, workoutId = unfinished.workoutId) })
                             },
                             left = {
-                                LightText(
-                                    text = unfinished.name,
-                                    variant = LightTextVariant.Copy,
-                                    maxLines = 1,
-                                )
+                                RowName(unfinished.name)
                             },
                             right = {
                                 LightText(
@@ -371,11 +370,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                         LiftsListRow(
                             onClick = { start(template.id) },
                             left = {
-                                LightText(
-                                    text = template.name,
-                                    variant = LightTextVariant.Copy,
-                                    maxLines = 1,
-                                )
+                                RowName(template.name)
                             },
                             right = {
                                 LightText(
@@ -413,11 +408,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                                     if (uiState.ready) navigateTo({ WorkoutDetailScreen(it, workoutId = recent.workoutId) })
                                 },
                                 left = {
-                                    LightText(
-                                        text = recent.name,
-                                        variant = LightTextVariant.Copy,
-                                        maxLines = 1,
-                                    )
+                                    RowName(recent.name)
                                 },
                                 right = {
                                     LightText(

@@ -279,12 +279,15 @@ class PlateCalculatorScreen(
                 BarChevron(icon = LightIcons.BACK, description = "previous bar") {
                     viewModel.cycleBar(-1)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(modifier = Modifier.weight(1f, fill = false), verticalAlignment = Alignment.CenterVertically) {
+                    // A long bar name is cut, not the weight after it or the chevrons.
                     LightText(
                         text = "${bar.name} · ",
                         variant = LightTextVariant.Detail,
                         lighten = true,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
                     LightText(
                         text = Format.plate(bar.weightKg, uiState.units),
