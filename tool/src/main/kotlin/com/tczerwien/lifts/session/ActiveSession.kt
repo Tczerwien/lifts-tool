@@ -247,12 +247,15 @@ class ActiveSession(
         return discardWorkout(workoutId)
     }
 
+    /** What Home's cleanup left: the workout still open, if any, and how many it closed (they are history now). */
+    data class Tidied(val open: WorkoutEntity?, val closed: Int)
+
     /**
      * Home's cleanup ([planOpenWorkouts]), run whenever Home shows: deletes untouched open workouts,
      * closes stale or superseded ones at their last logged set, and returns the one left open, if
      * any. It never touches the rest timer, which belongs to the newest workout.
      */
-    fun tidyOpenWorkouts(now: Long = System.currentTimeMillis()): WorkoutEntity? {
+    fun tidyOpenWorkouts(now: Long = System.currentTimeMillis()): Tidied {
         val open = repository.listOpenWorkouts()
         val setsById = open.associate { it.id to repository.setsForWorkout(it.id) }
         val plan = planOpenWorkouts(
@@ -263,20 +266,22 @@ class ActiveSession(
             now,
         )
         var kept: WorkoutEntity? = null
+        var closed = 0
         for (workout in open) {
             when (val action = plan.getValue(workout.id)) {
                 OpenWorkoutAction.Keep -> kept = workout
-                is OpenWorkoutAction.CloseAt -> repository.updateWorkout(workout.copy(endedAt = action.endedAt))
+                is OpenWorkoutAction.CloseAt -> if (repository.updateWorkout(workout.copy(endedAt = action.endedAt))) closed++
                 OpenWorkoutAction.Delete -> repository.deleteWorkout(workout.id)
             }
         }
-        return kept
+        return Tidied(kept, closed)
     }
 
     /**
      * Home's stale rule ([staleAction]) for one open workout, for a lifter who comes back to Active
      * Workout itself hours later: closed at its last logged set, or deleted with nothing logged.
-     * Returns true when it closed or deleted the workout.
+     * Returns true when it closed or deleted the workout (a closed one is history now; the caller
+     * lets the exports catch up).
      */
     fun closeIfStale(workoutId: Long, now: Long = System.currentTimeMillis()): Boolean {
         val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return false

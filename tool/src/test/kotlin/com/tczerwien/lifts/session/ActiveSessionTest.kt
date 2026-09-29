@@ -298,7 +298,7 @@ class ActiveSessionTest {
         session.completeSet(stale, store.setById(setId)!!, 60.0, 5, n, now = 600_000)
         val untouched = session.startEmpty(now = 20_000_000)
 
-        assertNull(session.tidyOpenWorkouts(now = 20_060_000))
+        assertEquals(ActiveSession.Tidied(open = null, closed = 1), session.tidyOpenWorkouts(now = 20_060_000))
         assertNull(store.workoutById(untouched))
         assertEquals(600_000L, store.workoutById(stale)?.endedAt)
     }

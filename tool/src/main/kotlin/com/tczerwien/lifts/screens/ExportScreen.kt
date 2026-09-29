@@ -102,7 +102,8 @@ class ExportViewModel(
 /**
  * Export (design/screens/export.html): one row per export file, then where to get them. The files
  * live in files/shared/exports, which Tool Manager serves as Lifts › Exports; they are rewritten
- * after every workout, and REGENERATE rewrites them now.
+ * whenever something in them changes (a workout, a weigh-in, a name, notes, a template, the unit),
+ * and REGENERATE rewrites them now.
  */
 class ExportScreen(
     private val sealedActivity: SealedLightActivity,
@@ -163,7 +164,7 @@ class ExportScreen(
                     SectionLabel("Tool Manager")
                     LightText(
                         text = "Download them on a computer: Tool Manager › Lifts › Exports. " +
-                            "They are rewritten after every workout.",
+                            "They are rewritten whenever your log changes.",
                         variant = LightTextVariant.Detail,
                         lighten = true,
                         modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp()),

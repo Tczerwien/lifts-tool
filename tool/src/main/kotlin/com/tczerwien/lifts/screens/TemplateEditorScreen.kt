@@ -22,13 +22,15 @@ import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
-import com.tczerwien.lifts.ui.displayName
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.Stepper
+import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -76,6 +78,7 @@ private const val LIST_ROW_HEIGHT_UNITS = 3f
 class TemplateEditorViewModel(
     private val repository: LiftsRepository,
     private val settingsStore: SettingsStore,
+    private val share: LiftsShare,
     private val templateId: Long,
 ) : LightViewModel<Unit>() {
 
@@ -236,6 +239,7 @@ class TemplateEditorViewModel(
         }
         _uiState.update { it.copy(deleteArmed = false) }
         LiftsIo.write({ repository.deleteTemplate(templateId) }) {
+            share.logChanged()
             // The delete survives Back, but the callback must not: if the editor is already gone,
             // goBack() would pop whatever screen is now on top.
             withContext(Dispatchers.Main) { if (!cleared) onDeleted() }
@@ -279,10 +283,13 @@ class TemplateEditorViewModel(
     /**
      * Runs [block] and then a refresh together on the app-wide write queue (serial, survives Back),
      * so read-modify-writes never interleave and an older refresh can never land after a newer one.
+     * workouts.json holds the templates, so the exports catch up (a burst of edits folds into one or
+     * two rewrites).
      */
     private fun mutate(block: () -> Unit) {
         LiftsIo.write {
             block()
+            share.logChanged()
             refresh()
         }
     }
@@ -325,7 +332,7 @@ class TemplateEditorScreen(
         get() = TemplateEditorViewModel::class.java
 
     override fun createViewModel() =
-        TemplateEditorViewModel(repository, settingsStore, templateId)
+        TemplateEditorViewModel(repository, settingsStore, lightContext.liftsShare(), templateId)
 
     @Composable
     override fun Content() {

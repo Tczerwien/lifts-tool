@@ -16,7 +16,10 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -65,6 +68,7 @@ private const val DEFAULT_START_KG = 70.0
 class BodyweightViewModel(
     private val repository: LiftsRepository,
     private val settings: SettingsStore,
+    private val share: LiftsShare,
 ) : LightViewModel<Unit>() {
 
     data class RecentRow(val dateText: String, val valueText: String)
@@ -101,15 +105,20 @@ class BodyweightViewModel(
         }
     }
 
-    /** Upserts today's entry (one per epoch day, local calendar) with the stepper value. */
+    /**
+     * Upserts today's entry (one per epoch day, local calendar) with the stepper value, on the write
+     * lane so Back can't drop it; then the exports catch up.
+     */
     fun logToday() {
         val state = _uiState.value
         if (!state.loaded) return
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write({
             repository.upsertBodyweight(
                 epochDay = LocalDate.now().toEpochDay(),
                 weightKg = Format.displayToKg(state.valueDisplay, state.unit),
             )
+        }) {
+            share.logChanged()
             refresh()
         }
     }
@@ -170,7 +179,7 @@ class BodyweightScreen(
         get() = BodyweightViewModel::class.java
 
     override fun createViewModel() =
-        BodyweightViewModel(repository, SettingsStore(lightContext.dataStore))
+        BodyweightViewModel(repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare())
 
     @Composable
     override fun Content() {

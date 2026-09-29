@@ -206,7 +206,10 @@ class HomeViewModel(
     private fun load(): UiState {
         repository.seedIfEmpty()
         val now = System.currentTimeMillis()
-        val open = session.tidyOpenWorkouts(now)
+        val tidied = session.tidyOpenWorkouts(now)
+        // A stale workout it closed is history now: the exports take it in.
+        if (tidied.closed > 0) share.logChanged()
+        val open = tidied.open
         val autoResume = firstLoad && open != null && shouldAutoResume(session.lastActivity(open), now)
         firstLoad = false
         val templates = repository.listTemplates().map { template ->

@@ -59,7 +59,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class WorkoutDetailViewModel(
@@ -147,11 +146,14 @@ class WorkoutDetailViewModel(
         _uiState.update { it.copy(editingNotes = false) }
     }
 
+    /** On the write lane, so Back can't drop it; the notes are in every export file, so they catch up. */
     fun saveNotes(text: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.workoutById(workoutId)?.let { workout ->
-                repository.updateWorkout(workout.copy(notes = text.trim().ifEmpty { null }))
-            }
+        LiftsIo.write({
+            val workout = repository.workoutById(workoutId) ?: return@write false
+            val notes = text.trim().ifEmpty { null }
+            notes != workout.notes && repository.updateWorkout(workout.copy(notes = notes))
+        }) { changed ->
+            if (changed) share.logChanged()
             _uiState.update { it.copy(editingNotes = false) }
             refresh()
         }

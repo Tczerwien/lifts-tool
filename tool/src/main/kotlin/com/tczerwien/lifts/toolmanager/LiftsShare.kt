@@ -55,6 +55,15 @@ class LiftsShare private constructor(
         exports.request()
     }
 
+    /**
+     * Something else the export files show was saved: a weigh-in, an exercise's name or cue, a new
+     * custom exercise, a workout's notes, a template, a bar, the weight unit, or a workout reopened
+     * (RESUME) or closed as stale. The exports catch up. Call it once the save has landed.
+     */
+    fun logChanged() {
+        exports.request()
+    }
+
     /** The file waiting in Restore (uploaded through Tool Manager) that Home offers ([RestoreInbox]), or null. Blocking. */
     fun waitingRestore(now: Long = System.currentTimeMillis()): File? {
         val uploads = restoreDir.listFiles().orEmpty().filter { it.isFile }

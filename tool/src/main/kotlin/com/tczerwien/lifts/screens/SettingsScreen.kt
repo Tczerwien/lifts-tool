@@ -20,6 +20,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFieldRow
@@ -51,8 +52,10 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val repository: LiftsRepository,
     private val settingsStore: SettingsStore,
-    private val backups: BackupManager,
+    private val share: LiftsShare,
 ) : LightViewModel<Unit>() {
+
+    private val backups: BackupManager = share.backups
 
     enum class RestField { DEFAULT, WARMUP }
 
@@ -101,7 +104,8 @@ class SettingsViewModel(
             WeightUnit.KG -> WeightUnit.LB
         }
         _uiState.update { it.copy(settings = settings.copy(units = next)) }
-        LiftsIo.write { settingsStore.setUnits(next) }
+        // training-log.md and the CSVs are in this unit, so they are rewritten in the new one.
+        LiftsIo.write({ settingsStore.setUnits(next) }) { share.logChanged() }
     }
 
     /** The rest-over beep on or off; the flash and keep-awake stay either way. */
@@ -200,7 +204,7 @@ class SettingsScreen(
     override val viewModelClass: Class<SettingsViewModel>
         get() = SettingsViewModel::class.java
 
-    override fun createViewModel() = SettingsViewModel(repository, settingsStore, lightContext.liftsShare().backups)
+    override fun createViewModel() = SettingsViewModel(repository, settingsStore, lightContext.liftsShare())
 
     @Composable
     override fun Content() {

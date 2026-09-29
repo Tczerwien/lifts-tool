@@ -23,6 +23,8 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -56,6 +58,7 @@ import kotlinx.coroutines.launch
 class BarWeightsViewModel(
     private val repository: LiftsRepository,
     private val settingsStore: SettingsStore,
+    private val share: LiftsShare,
 ) : LightViewModel<Unit>() {
 
     sealed interface Mode {
@@ -150,6 +153,8 @@ class BarWeightsViewModel(
                 val position = (state.bars.maxOfOrNull { it.position } ?: -1) + 1
                 repository.addBar(BarEntity(name = mode.name, weightKg = weightKg, position = position))
             }
+            // workouts.json lists the bars.
+            share.logChanged()
             val bars = repository.listBars()
             _uiState.update { it.copy(bars = bars) }
         }
@@ -161,6 +166,7 @@ class BarWeightsViewModel(
         _uiState.update { it.copy(mode = Mode.BarList) }
         LiftsIo.write {
             repository.deleteBar(barId)
+            share.logChanged()
             val bars = repository.listBars()
             _uiState.update { it.copy(bars = bars) }
         }
@@ -202,7 +208,7 @@ class BarWeightsScreen(
     override val viewModelClass: Class<BarWeightsViewModel>
         get() = BarWeightsViewModel::class.java
 
-    override fun createViewModel() = BarWeightsViewModel(repository, settingsStore)
+    override fun createViewModel() = BarWeightsViewModel(repository, settingsStore, lightContext.liftsShare())
 
     @Composable
     override fun Content() {

@@ -164,7 +164,10 @@ class ActiveWorkoutViewModel(
         // Back after a while (the phone may have slept on this screen overnight): a workout idle past
         // four hours closes at its last logged set, as Home would close it, and refresh then leaves.
         // Otherwise a late tick in the morning would make it look active and Finish would stamp now.
-        LiftsIo.write({ resolvedWorkoutId?.let { session.closeIfStale(it) } }) { refresh() }
+        LiftsIo.write({ resolvedWorkoutId?.let { session.closeIfStale(it) } == true }) { closed ->
+            if (closed) share.logChanged()
+            refresh()
+        }
     }
 
     /**
@@ -512,11 +515,16 @@ class ActiveWorkoutViewModel(
         _uiState.update { it.copy(pendingCompleteWorkoutId = null, completeOpen = true) }
     }
 
-    /** RESUME on Workout Complete: the workout is open again and logging carries on. */
+    /**
+     * RESUME on Workout Complete: the workout is open again and logging carries on. Unfinished
+     * workouts are in no export file, so the exports drop it until the next Finish (or a Discard,
+     * which then has nothing to take out).
+     */
     fun resumeAfterComplete() {
         val workoutId = resolvedWorkoutId ?: return
         _uiState.update { it.copy(completeOpen = false) }
         LiftsIo.write({ session.reopenWorkout(workoutId) }) {
+            share.logChanged()
             refresh()
             _uiState.update { it.copy(finishing = false) }
         }

@@ -18,6 +18,8 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.RowDivider
@@ -65,6 +67,7 @@ private const val REORDER_DISABLED_ALPHA = 0.4f
 
 class TemplatesViewModel(
     private val repository: LiftsRepository,
+    private val share: LiftsShare,
 ) : LightViewModel<Unit>() {
 
     sealed interface Mode {
@@ -120,6 +123,7 @@ class TemplatesViewModel(
             val id = mutationMutex.withLock {
                 val position = (repository.listTemplates().maxOfOrNull { it.position } ?: -1) + 1
                 val newId = repository.addTemplate(TemplateEntity(name = name, position = position))
+                share.logChanged()
                 refresh()
                 newId
             }
@@ -151,11 +155,15 @@ class TemplatesViewModel(
         return false
     }
 
-    /** Runs [block] then a refresh serially on IO so read-modify-writes never interleave. */
+    /**
+     * Runs [block] then a refresh serially on IO so read-modify-writes never interleave. workouts.json
+     * lists the templates, so the exports catch up.
+     */
     private fun mutate(block: () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             mutationMutex.withLock {
                 block()
+                share.logChanged()
                 refresh()
             }
         }
@@ -200,7 +208,7 @@ class TemplatesScreen(
     override val viewModelClass: Class<TemplatesViewModel>
         get() = TemplatesViewModel::class.java
 
-    override fun createViewModel() = TemplatesViewModel(repository)
+    override fun createViewModel() = TemplatesViewModel(repository, lightContext.liftsShare())
 
     @Composable
     override fun Content() {

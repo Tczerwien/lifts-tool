@@ -33,6 +33,8 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.seed.SeedParser
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -71,6 +73,7 @@ class ExerciseDetailViewModel(
     private val exerciseId: String,
     private val repository: LiftsRepository,
     private val settings: SettingsStore,
+    private val share: LiftsShare,
 ) : LightViewModel<Unit>() {
 
     data class HistoryRow(
@@ -145,15 +148,17 @@ class ExerciseDetailViewModel(
         _uiState.value = _uiState.value.copy(editing = null)
     }
 
-    /** Blank input clears the pinned note. */
+    /** Blank input clears the pinned note. workouts.json carries the cue, so the exports catch up. */
     fun saveNote(raw: String) {
         _uiState.value = _uiState.value.copy(editing = null)
         LiftsIo.write({
-            val exercise = repository.exerciseById(exerciseId)
-            if (exercise != null) {
-                repository.updateExercise(exercise.copy(pinnedNote = raw.trim().takeIf { it.isNotEmpty() }))
-            }
-        }) { refresh() }
+            val exercise = repository.exerciseById(exerciseId) ?: return@write false
+            val note = raw.trim().takeIf { it.isNotEmpty() }
+            note != exercise.pinnedNote && repository.updateExercise(exercise.copy(pinnedNote = note))
+        }) { changed ->
+            if (changed) share.logChanged()
+            refresh()
+        }
     }
 
     /**
@@ -165,12 +170,15 @@ class ExerciseDetailViewModel(
         val shown = _uiState.value.nameAtOpen
         _uiState.value = _uiState.value.copy(editing = null)
         LiftsIo.write({
-            val exercise = repository.exerciseById(exerciseId) ?: return@write
+            val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val name = renameTarget(exercise, raw, shown) {
                 knownCatalogName(exercise.id) ?: SeedParser.catalogName(exercise.id)
-            } ?: return@write
+            } ?: return@write false
             repository.updateExercise(exercise.copy(name = name))
-        }) { refresh() }
+        }) { changed ->
+            if (changed) share.logChanged()
+            refresh()
+        }
     }
 
     private fun refresh() {
@@ -291,7 +299,7 @@ class ExerciseDetailScreen(
         get() = ExerciseDetailViewModel::class.java
 
     override fun createViewModel() =
-        ExerciseDetailViewModel(exerciseId, repository, SettingsStore(lightContext.dataStore))
+        ExerciseDetailViewModel(exerciseId, repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare())
 
     @Composable
     override fun Content() {

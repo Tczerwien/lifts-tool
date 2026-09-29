@@ -19,6 +19,8 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -49,6 +51,7 @@ import kotlinx.coroutines.launch
 
 class CustomExerciseViewModel(
     private val repository: LiftsRepository,
+    private val share: LiftsShare,
 ) : LightViewModel<String>() {
 
     enum class Mode { FORM, NAME_EDITOR, PRIMARY_PICKER, SECONDARY_PICKER, EQUIPMENT_PICKER, CATEGORY_PICKER }
@@ -154,6 +157,8 @@ class CustomExerciseViewModel(
                     isCustom = true,
                 ),
             )
+            // workouts.json lists every custom exercise, used or not.
+            share.logChanged()
             _uiState.value = _uiState.value.copy(createdId = id)
         }
     }
@@ -192,6 +197,7 @@ class CustomExerciseScreen(
 
     override fun createViewModel() = CustomExerciseViewModel(
         lightContext.liftsRepository(),
+        lightContext.liftsShare(),
     )
 
     @Composable
