@@ -106,5 +106,8 @@ class SeedParserTest {
     fun `catalog name lookup finds a lift by its app id`() {
         assertEquals("Barbell Bench Press - Medium Grip", SeedParser.catalogName("barbell-bench-press-medium-grip"))
         assertEquals(null, SeedParser.catalogName("no-such-lift"))
+        // One map for the whole catalog, the same one each time: parsed once per process.
+        assertEquals(SeedParser.parse().size, SeedParser.catalogNames.size)
+        assertTrue(SeedParser.catalogNames === SeedParser.catalogNames)
     }
 }

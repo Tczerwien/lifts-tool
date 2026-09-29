@@ -30,17 +30,13 @@ fun catalogEntry(exercise: ExerciseSummary, catalogName: String? = null): Catalo
 
 /**
  * [summaries] as the search and the name checks see them, by shown name. A lift he renamed also
- * answers to its catalog name; the seed is parsed for that only when one of them has no short name.
- * Blocking when it parses: call it off the main thread.
+ * answers to its catalog name; the seed is read for that ([SeedParser.catalogNames], once per
+ * process) only when one of them has no short name. Blocking then: call it off the main thread.
  */
 fun catalogEntries(summaries: List<ExerciseSummary>): List<CatalogEntry> {
-    val seedNames = if (summaries.any { isRenamed(it) && knownCatalogName(it.id) == null }) {
-        SeedParser.parse().associate { it.id to it.name }
-    } else {
-        emptyMap()
-    }
+    val needSeed = summaries.any { isRenamed(it) && knownCatalogName(it.id) == null }
     return summaries
-        .map { catalogEntry(it, knownCatalogName(it.id) ?: seedNames[it.id]) }
+        .map { catalogEntry(it, knownCatalogName(it.id) ?: if (needSeed) SeedParser.catalogName(it.id) else null) }
         .sortedWith(compareBy({ it.shown.lowercase() }, { it.id }))
 }
 

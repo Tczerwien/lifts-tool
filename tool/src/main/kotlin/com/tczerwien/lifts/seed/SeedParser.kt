@@ -56,10 +56,16 @@ internal object SeedParser {
 
     /**
      * The catalog's own name for exercise [id] (an app id, as [parse] makes them); null for none.
-     * Parses the whole catalog: call it off the main thread, and only when [com.tczerwien.lifts.ui.knownCatalogName] can't
-     * answer.
+     * The first call parses the whole catalog: make it off the main thread, and only when
+     * [com.tczerwien.lifts.ui.knownCatalogName] can't answer.
      */
-    fun catalogName(id: String): String? = parse().firstOrNull { it.id == id }?.name
+    fun catalogName(id: String): String? = catalogNames[id]
+
+    /**
+     * Every catalog name by app id, parsed once per process (the catalog is in the APK and never
+     * changes), so a renamed lift doesn't cost a 0.8 MB parse on every picker, form and rename.
+     */
+    val catalogNames: Map<String, String> by lazy { parse().associate { it.id to it.name } }
 
     /**
      * Which numbers a seeded exercise records by default. The dataset has no such field, so this
