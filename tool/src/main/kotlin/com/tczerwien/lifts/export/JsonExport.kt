@@ -81,6 +81,7 @@ object JsonExport {
                         bestSet = setNotation(it.bestSetWeightKg, it.bestSetReps, snapshot.unit, NotationStyle.EXPORT).orEmpty(),
                     )
                 },
+                weekStarts = snapshot.weekStarts,
                 weeklySetsPerMuscle = snapshot.weeklySetsPerMuscle,
                 bodyweight = snapshot.bodyweightTrend?.let {
                     JsonBodyweightSummary(
@@ -174,6 +175,9 @@ data class JsonSet(
 @Serializable
 data class JsonSummary(
     val prs: List<JsonPr>,
+    /** The Mondays of the summary weeks, oldest first; the last is the current week, still in progress. */
+    @SerialName("week_starts") val weekStarts: List<String>,
+    /** One count per [weekStarts] week, oldest first: 1 per working set for primary muscles, 0.5 for secondary. */
     @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Double>>,
     val bodyweight: JsonBodyweightSummary? = null,
 )
@@ -183,7 +187,7 @@ data class JsonBodyweightSummary(
     @SerialName("current_kg") val currentKg: Double,
     @SerialName("current_date") val currentDate: String,
     @SerialName("rate_kg_per_week_4w") val rateKgPerWeek4w: Double? = null,
-    /** Oldest first; null for weeks with no entry. */
+    /** One per week_starts week, oldest first; null for weeks with no entry. */
     @SerialName("weekly_avg_kg") val weeklyAvgKg: List<Double?>,
 )
 

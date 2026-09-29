@@ -35,6 +35,10 @@ class MarkdownExportTest {
         assertContains(lines, "## Summary")
         // 102.5 * (1 + 5/30) = 119.583… -> 119.5 on the 0.5 kg grid the screens use.
         assertContains(lines, "- Bench Press (Barbell): e1RM 119.5 kg (2026-07-13) — best set 102.5x5")
+        // Labelled: which way the series runs, which weeks, and that the last one is partial (#069).
+        assertContains(lines, "### Weekly sets per muscle (last 8 weeks, oldest → newest)")
+        assertContains(lines, "Weeks start Monday 2026-05-25 … 2026-07-13; the last is this week, still in progress.")
+        assertTrue(lines.any { it.startsWith("Counting: each working set (warm-ups excluded) adds 1") }, "the counting rule (#126)")
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
         assertContains(lines, "- triceps: 0, 0, 0, 0, 0, 0, 1, 1")
     }
@@ -46,7 +50,7 @@ class MarkdownExportTest {
         // Least-squares over the five entries of 2026-06-17..07-14: -0.3034 kg/week.
         assertContains(lines, "- Rate: -0.30 kg/week over last 4 weeks")
         // Em-dash for the three empty leading weeks and the 2026-06-29 gap week.
-        assertContains(lines, "- 8-week avg: —, —, —, 81.9, 81.6, —, 81.1, 80.5")
+        assertContains(lines, "- Weekly average, the same 8 weeks (oldest → newest): —, —, —, 81.9, 81.6, —, 81.1, 80.5")
     }
 
     @Test
@@ -88,8 +92,29 @@ class MarkdownExportTest {
         assertTrue(newer >= 0, "newest workout heading missing")
         assertTrue(older >= 0, "oldest workout heading missing")
         assertTrue(newer < older, "workouts must be newest-first")
-        assertContains(lines, "Notes: Felt strong")
-        assertContains(lines, "  Notes: ${ExportFixtures.INSTANCE_NOTES}")
+        assertContains(lines, "> Felt strong")
+        assertContains(lines, "  > ${ExportFixtures.INSTANCE_NOTES}")
+    }
+
+    @Test
+    fun aLegendExplainsTheNotation() {
+        val legend = lines.single { it.startsWith("How to read this:") }
+        for (term in listOf("`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)")) {
+            assertTrue(term in legend, "legend lacks $term: $legend")
+        }
+    }
+
+    @Test
+    fun multiLineNotesStayQuoted() {
+        // A note whose lines would otherwise start a heading and a list item (#070).
+        val notes = "Felt tired\n# of sets cut short\n- left early"
+        val quoted = MarkdownExport.render(
+            ExportFixtures.snapshot(workouts = listOf(ExportFixtures.workout1, ExportFixtures.workout2.copy(notes = notes))),
+        ).split("\n")
+        assertContains(quoted, "> Felt tired")
+        assertContains(quoted, "> # of sets cut short")
+        assertContains(quoted, "> - left early")
+        assertTrue(quoted.none { it.startsWith("# of") || it == "- left early" }, "no raw heading or list item")
     }
 
     @Test

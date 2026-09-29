@@ -17,6 +17,7 @@ object MarkdownExport {
     fun render(snapshot: ExportSnapshot): String = buildString {
         appendFrontMatter(snapshot)
         appendTitle(snapshot)
+        appendLegend(snapshot)
         appendSummary(snapshot)
         appendWorkouts(snapshot)
     }
@@ -53,6 +54,18 @@ object MarkdownExport {
         append('\n')
     }
 
+    /** How to read the file: the set notation, notes and dates, so an AI never has to guess. */
+    private fun StringBuilder.appendLegend(snapshot: ExportSnapshot) {
+        val unit = snapshot.unit.suffix
+        val example = if (snapshot.unit == WeightUnit.LB) "225" else "100"
+        append("\nHow to read this: `").append(example).append("x5` is ").append(example).append(' ').append(unit)
+        append(" for 5 reps; `x12` is 12 reps with no weight; `45s` is seconds. A `w` before a set marks a warm-up,")
+        append(" an `F` after it a set to failure, a `D` a drop set. `@8` is RPE. `r150` is the seconds since the")
+        append(" previous set was ticked (the rest plus the set itself; none after a break over 15 minutes).")
+        append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
+        append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
+    }
+
     private fun StringBuilder.appendSummary(snapshot: ExportSnapshot) {
         val unit = snapshot.unit
         append("\n## Summary\n")
@@ -74,8 +87,11 @@ object MarkdownExport {
             }
         }
         if (snapshot.weeklySetsPerMuscle.isNotEmpty()) {
-            val weeks = snapshot.weeklySetsPerMuscle.values.first().size
-            append("\n### Weekly sets per muscle (last ").append(weeks).append(" weeks)\n\n")
+            append("\n### Weekly sets per muscle (last ").append(snapshot.weekStarts.size).append(" weeks, oldest → newest)\n\n")
+            appendWeeks(snapshot)
+            append("Counting: each working set (warm-ups excluded) adds 1 to its exercise's primary muscles and 0.5")
+            append(" to each secondary muscle. The muscles are free-exercise-db's 17 groups: shoulders = front, side")
+            append(" and rear delts; most rows count as middle back, with half credit to lats.\n\n")
             for ((muscle, values) in snapshot.weeklySetsPerMuscle) {
                 append("- ").append(muscle).append(": ")
                 append(values.joinToString(", ") { ExportFormat.number(it) })
@@ -91,7 +107,7 @@ object MarkdownExport {
                 append("- Rate: ").append(ExportFormat.signed2(Format.kgToDisplay(it, unit)))
                 append(' ').append(unit.suffix).append("/week over last 4 weeks\n")
             }
-            append("- ").append(trend.weeklyAvgKg.size).append("-week avg: ")
+            append("- Weekly average, the same ").append(trend.weeklyAvgKg.size).append(" weeks (oldest → newest): ")
             append(trend.weeklyAvgKg.joinToString(", ") { avg -> avg?.let { Format.bodyweight(it, unit) } ?: "—" })
             append('\n')
         }
@@ -108,16 +124,29 @@ object MarkdownExport {
             }
             if (parts.isNotEmpty()) append(" (").append(parts.joinToString(", ")).append(')')
             append('\n')
-            workout.notes?.let { append("\nNotes: ").append(it).append('\n') }
+            workout.notes?.let { append('\n').append(quote(it, indent = "")) }
             for (exercise in workout.exercises) {
                 append("\n- **").append(exercise.name).append("**")
                 muscleTag(exercise)?.let { append(' ').append(it) }
                 append('\n')
                 append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit) }).append('\n')
-                exercise.notes?.let { append("  Notes: ").append(it).append('\n') }
+                exercise.notes?.let { append(quote(it, indent = "  ")) }
             }
         }
     }
+
+    /** "Weeks start Monday 2026-05-25 … 2026-07-13; the last is this week, still in progress." */
+    private fun StringBuilder.appendWeeks(snapshot: ExportSnapshot) {
+        append("Weeks start Monday ").append(snapshot.weekStarts.first()).append(" … ").append(snapshot.weekStarts.last())
+        append("; the last is this week, still in progress.\n")
+    }
+
+    /**
+     * [text] as a blockquote, every line prefixed "> " after [indent], so a note's own lines can't
+     * start a heading ("# …") or a list item ("- …") in the middle of the log.
+     */
+    private fun quote(text: String, indent: String): String =
+        text.lines().joinToString("") { line -> indent + (if (line.isBlank()) ">" else "> ${line.trimEnd()}") + "\n" }
 
     /** "[chest; triceps, shoulders]", "[chest]", or null when no muscles are known. */
     private fun muscleTag(exercise: SnapshotWorkoutExercise): String? {

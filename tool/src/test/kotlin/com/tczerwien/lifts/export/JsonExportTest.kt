@@ -105,6 +105,9 @@ class JsonExportTest {
         assertEquals("2026-07-13", pr.bestE1RmDate)
         assertEquals("102.5x5", pr.bestSet)
 
+        assertEquals("2026-05-25", decoded.summary.weekStarts.first())
+        assertEquals("2026-07-13", decoded.summary.weekStarts.last())
+        assertEquals(8, decoded.summary.weekStarts.size)
         val chest = decoded.summary.weeklySetsPerMuscle.getValue("chest")
         assertEquals(8, chest.size)
         assertEquals(listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0), chest)

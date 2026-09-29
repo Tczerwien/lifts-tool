@@ -52,7 +52,9 @@ data class ExportSnapshot(
     val workouts: List<SnapshotWorkout>,
     /** Sorted by exercise name. */
     val prs: List<SnapshotPr>,
-    /** Muscle -> per-week set counts, newest week last ([WEEKLY_SUMMARY_WEEKS] entries). */
+    /** The Mondays (yyyy-MM-dd) of the [WEEKLY_SUMMARY_WEEKS] summary weeks, oldest first; the last is this week. */
+    val weekStarts: List<String>,
+    /** Muscle -> per-week set counts, one per [weekStarts] entry, newest week last. */
     val weeklySetsPerMuscle: Map<String, List<Double>>,
 )
 
@@ -272,7 +274,12 @@ fun buildSnapshot(
         .map { BodyweightPoint(LocalDate.ofEpochDay(it.epochDay).toString(), it.weightKg) }
 
     // Bodyweight is logged by local day, so "today" is local too.
-    val todayEpochDay = Instant.ofEpochMilli(exportedAtMillis).atZone(zone).toLocalDate().toEpochDay()
+    val today = Instant.ofEpochMilli(exportedAtMillis).atZone(zone).toLocalDate()
+    val todayEpochDay = today.toEpochDay()
+    val currentMonday = today.minusDays((today.dayOfWeek.value - 1).toLong())
+    val weekStarts = List(WEEKLY_SUMMARY_WEEKS) { i ->
+        currentMonday.minusWeeks((WEEKLY_SUMMARY_WEEKS - 1 - i).toLong()).toString()
+    }
     val trend = bodyweightTrend(bodyweight, weeks = WEEKLY_SUMMARY_WEEKS, todayEpochDay = todayEpochDay)
         ?.let {
             SnapshotBodyweightTrend(
@@ -296,6 +303,7 @@ fun buildSnapshot(
         exercises = snapshotExercises,
         workouts = snapshotWorkouts,
         prs = prs,
+        weekStarts = weekStarts,
         weeklySetsPerMuscle = weekly,
     )
 }
