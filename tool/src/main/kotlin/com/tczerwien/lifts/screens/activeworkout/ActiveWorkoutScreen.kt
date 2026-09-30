@@ -117,7 +117,10 @@ class ActiveWorkoutScreen(
             }
         }
         LaunchedEffect(uiState.leave) {
-            if (uiState.leave) goBack()
+            if (uiState.leave) {
+                // Finished: a result, as DONE gives, so a Start Again's Workout Detail leaves too.
+                if (uiState.leaveFinished) goBack(Unit) else goBack()
+            }
         }
 
         val current = uiState.exercises.getOrNull(uiState.currentIndex)

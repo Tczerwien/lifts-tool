@@ -141,6 +141,11 @@ class ActiveWorkoutViewModel(
         val completeOpen: Boolean = false,
         /** Nothing left to show (discarded, finished, or gone): Content leaves the screen. */
         val leave: Boolean = false,
+        /**
+         * It leaves because the workout finished (Workout Complete left by the system Back): it leaves as
+         * DONE does, with a result, so a Start Again's Workout Detail goes too.
+         */
+        val leaveFinished: Boolean = false,
         /** A tick on a row with nothing to log: "SET WEIGHT OR REPS FIRST" (or reps, or time) shows for a moment. */
         val emptyTickHint: String? = null,
         /** The weight's number entry, while it is open. */
@@ -217,7 +222,7 @@ class ActiveWorkoutViewModel(
             // Back from Workout Complete. Its result (DONE or RESUME) is delivered right after this
             // returns; with none (the system Back) the workout stays finished and this screen leaves.
             viewModelScope.launch(Dispatchers.Main) {
-                if (_uiState.value.completeOpen) _uiState.update { it.copy(completeOpen = false, leave = true) }
+                if (_uiState.value.completeOpen) _uiState.update { it.copy(completeOpen = false, leave = true, leaveFinished = true) }
             }
             return
         }
