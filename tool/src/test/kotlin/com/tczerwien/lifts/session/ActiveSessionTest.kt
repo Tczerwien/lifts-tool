@@ -464,6 +464,25 @@ class ActiveSessionTest {
         assertEquals(listOf("bench" to 1), store.exercisesForTemplate(template).map { it.exerciseId to it.targetSets })
     }
 
+    @Test
+    fun `an exercise he removed comes back in neither a start again nor a template`() {
+        val source = store.addFinishedWorkout(
+            startedAt = 1_000_000,
+            "bench" to listOf(Triple(n, 80.0, 5)),
+            "sled" to listOf(Triple(n, 90.0, 10)),
+        )
+        // His own sled push, removed since: hidden, kept for its history.
+        store.exercises["sled"] = com.tczerwien.lifts.data.ExerciseEntity(
+            id = "sled", name = "Sled Push", equipment = null, primaryMuscles = emptyList(), secondaryMuscles = emptyList(),
+            category = "strength", level = null, instructions = emptyList(), isCustom = true, hidden = true,
+        )
+        val again = assertNotNull(session.startFromWorkout(source, now = 2_000_000))
+        assertEquals(listOf("bench"), store.exercisesForWorkout(again).map { it.exerciseId })
+        session.discardWorkout(again)
+        val template = assertNotNull(session.saveAsTemplate(source, "Push"))
+        assertEquals(listOf("bench"), store.exercisesForTemplate(template).map { it.exerciseId })
+    }
+
     /** What DataStore holds as the workout a Start Again copied ("workoutId:sourceId"), or null. */
     private fun startedFrom(): String? = runBlocking {
         dataStore.data.first()[stringPreferencesKey("lifts_started_from")]

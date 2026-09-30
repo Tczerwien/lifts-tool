@@ -136,9 +136,14 @@ class ActiveSession(
         saved[1].toLongOrNull()
     }
 
-    /** What [planFromWorkout] makes of stored workout [workoutId]. */
+    /**
+     * What [planFromWorkout] makes of stored workout [workoutId], without the exercises he removed
+     * (hidden, kept only for their history): removing one took it out of his templates, so neither a
+     * Start Again nor a Save as Template brings it back.
+     */
     private fun planOf(workoutId: Long): List<PlannedSlot> =
         planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
+            .filterNot { repository.exerciseById(it.exerciseId)?.hidden == true }
 
     /**
      * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
