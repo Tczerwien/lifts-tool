@@ -534,7 +534,8 @@ class WorkoutDetailScreen(
                                 LiftsListRow(
                                     onClick = {
                                         viewModel.tapStartAgain {
-                                            navigateTo({ ActiveWorkoutScreen(it, fromWorkoutId = workoutId) })
+                                            // Finished (DONE): this old workout has done its job; back to where he came from.
+                                            navigateTo({ ActiveWorkoutScreen(it, fromWorkoutId = workoutId) }) { goBack() }
                                         }
                                     },
                                     right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },

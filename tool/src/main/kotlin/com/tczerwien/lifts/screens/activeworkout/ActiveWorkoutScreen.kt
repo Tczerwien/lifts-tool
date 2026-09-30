@@ -108,7 +108,9 @@ class ActiveWorkoutScreen(
                     // Delivered as Complete pops. DONE leaves straight away, so the finished workout is
                     // never drawn; with no result (system Back) the view model leaves instead.
                     when (result) {
-                        WorkoutCompleteResult.DONE -> goBack()
+                        // A result, so a screen that opened this one (Workout Detail's Start Again) can
+                        // leave too: DONE means back to where the day started, not to the old workout.
+                        WorkoutCompleteResult.DONE -> goBack(Unit)
                         WorkoutCompleteResult.RESUME -> viewModel.resumeAfterComplete()
                     }
                 }

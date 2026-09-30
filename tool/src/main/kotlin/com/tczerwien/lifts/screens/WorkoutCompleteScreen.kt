@@ -50,7 +50,7 @@ import kotlinx.coroutines.launch
 
 /** How the lifter leaves Workout Complete. */
 enum class WorkoutCompleteResult {
-    /** Back to Home. */
+    /** Back to where the workout was started: Home, or past the Workout Detail a Start Again came from. */
     DONE,
 
     /** The Finish was a mistake: reopen the workout and carry on logging. */
@@ -93,7 +93,8 @@ class WorkoutCompleteViewModel(
  * Post-finish summary (design/screens/workout-complete.html): duration, completed sets +
  * volume in display units, the New Records list (star per line), and the bodyweight line
  * when there is a weigh-in for the workout (that day's, else one from the days before). No back
- * chevron. DONE returns to Active Workout, which pops straight on to Home; RESUME has Active Workout
+ * chevron. DONE returns to Active Workout, which pops straight on to where the workout was started
+ * (Home; for a Start Again, past the old workout's Workout Detail too); RESUME has Active Workout
  * reopen the workout for more sets.
  */
 class WorkoutCompleteScreen(
