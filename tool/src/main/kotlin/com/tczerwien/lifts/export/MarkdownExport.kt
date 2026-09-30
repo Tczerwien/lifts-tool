@@ -2,6 +2,7 @@ package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
+import com.tczerwien.lifts.session.repRangeText
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 
@@ -66,6 +67,7 @@ object MarkdownExport {
         append(" On bodyweight exercises the weight is what was added to the body, and a negative weight is")
         append(" help (`-30x8` is an assisted pull-up with 30 ").append(unit).append(" of assistance).")
         append(" `x10/side` is 10 reps on each side, one side at a time (a split squat); a dumbbell weight is one dumbbell's.")
+        append(" `(target 6–12 reps, RIR 1)` after an exercise is what its template asked for that day.")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }
@@ -152,6 +154,7 @@ object MarkdownExport {
             for (exercise in workout.exercises) {
                 append("\n- **").append(exercise.name).append("**")
                 muscleTag(exercise)?.let { append(' ').append(it) }
+                targetTag(exercise)?.let { append(' ').append(it) }
                 append('\n')
                 if (exercise.sets.isNotEmpty()) {
                     append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit, exercise.perSide) }).append('\n')
@@ -173,6 +176,15 @@ object MarkdownExport {
      */
     private fun quote(text: String, indent: String): String =
         text.lines().joinToString("") { line -> indent + (if (line.isBlank()) ">" else "> ${line.trimEnd()}") + "\n" }
+
+    /** "(target 6–12 reps, RIR 1)", "(target 10–12 reps/side)" from its template, or null without one. */
+    private fun targetTag(exercise: SnapshotWorkoutExercise): String? {
+        val parts = listOfNotNull(
+            repRangeText(exercise.targetRepMin, exercise.targetRepMax)?.let { "$it reps" + if (exercise.perSide) "/side" else "" },
+            exercise.targetRir?.let { "RIR $it" },
+        )
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "(target ", postfix = ")")
+    }
 
     /** "[chest; triceps, shoulders]", "[chest]", or null when no muscles are known. */
     private fun muscleTag(exercise: SnapshotWorkoutExercise): String? {

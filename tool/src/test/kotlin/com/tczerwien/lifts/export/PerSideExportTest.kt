@@ -17,7 +17,8 @@ import kotlin.test.assertTrue
 
 /**
  * An exercise done one side at a time (B10, #154): its reps count one side in every file, so a split
- * squat's "10" is never read as 5 a leg, and its sets stay one row each (not doubled).
+ * squat's "10" is never read as 5 a leg, and its sets stay one row each (not doubled). And a template's
+ * target copied onto the workout (#054) reaches the files beside it.
  */
 class PerSideExportTest {
 
@@ -77,6 +78,24 @@ class PerSideExportTest {
         assertEquals(3, rows.size, "one row per set, not one per side")
         assertContains(rows[0], ",10,0,0,Per side. left knee fine,")
         assertContains(rows[2], ",12,0,0,,")
+    }
+
+    @Test
+    fun aTemplatesTargetRidesAlongWithTheWorkout() {
+        val targeted = ExportFixtures.snapshot(
+            exercises = listOf(splitSquat, gobletSquat),
+            workouts = listOf(workout),
+            slots = listOf(slots[0].copy(targetRepMin = 10, targetRepMax = 12, targetRir = 2), slots[1]),
+            sets = listOf(set(1, 1, 0, 25.0, 10, "2026-07-13T10:05:00Z"), set(3, 2, 0, 50.0, 12, "2026-07-13T10:15:00Z")),
+            unit = WeightUnit.LB,
+        )
+        val markdown = MarkdownExport.render(targeted)
+        assertTrue(markdown.contains("- **Bulgarian Split Squat** [quadriceps] (target 10–12 reps/side, RIR 2)\n"), markdown)
+        assertTrue(markdown.contains("- **Goblet Squat** [quadriceps]\n"), "no target, no tag")
+        val exercises = Json.parseToJsonElement(JsonExport.render(targeted)).jsonObject.getValue("workouts").jsonArray
+            .single().jsonObject.getValue("exercises").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("10", "12", "2"), listOf("rep_min", "rep_max", "target_rir").map { exercises[0].getValue(it).jsonPrimitive.content })
+        assertEquals(null, exercises[1]["rep_min"], "absent without one")
     }
 
     private fun at(iso: String): Long = ExportFixtures.millis(iso)

@@ -162,6 +162,10 @@ data class SnapshotWorkoutExercise(
     val notes: String?,
     /** Its reps (or seconds) count one side ([SnapshotExercise.perSide]). */
     val perSide: Boolean = false,
+    /** The template's target copied onto this slot when the workout started: rep range and RIR. */
+    val targetRepMin: Int? = null,
+    val targetRepMax: Int? = null,
+    val targetRir: Int? = null,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
     val sets: List<SnapshotSet>,
 )
@@ -291,6 +295,9 @@ fun buildSnapshot(
                         secondaryMuscles = exercise?.secondaryMuscles ?: emptyList(),
                         notes = slot.notes,
                         perSide = exercise?.perSide == true,
+                        targetRepMin = slot.targetRepMin,
+                        targetRepMax = slot.targetRepMax,
+                        targetRir = slot.targetRir,
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,

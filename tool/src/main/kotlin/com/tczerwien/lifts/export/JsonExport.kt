@@ -30,8 +30,8 @@ import kotlinx.serialization.json.Json
  * negative) and duration (duration_seconds). An RPE is logged as reps in reserve: rpe = 10 − RIR.
  *
  * 2.3 (B10) added summary.bodyweight.rate_span_days (the rate now needs 3 weigh-ins 14+ days apart
- * in the last 28 days, and says how many days it covers) and exercises[].per_side (reps and seconds
- * count one side).
+ * in the last 28 days, and says how many days it covers), exercises[].per_side (reps and seconds
+ * count one side) and each workout exercise's target from its template: rep_min, rep_max, target_rir.
  */
 object JsonExport {
 
@@ -97,6 +97,9 @@ object JsonExport {
                             exerciseId = exercise.exerciseId,
                             name = exercise.name,
                             notes = exercise.notes,
+                            repMin = exercise.targetRepMin,
+                            repMax = exercise.targetRepMax,
+                            targetRir = exercise.targetRir,
                             sets = exercise.sets.map { set ->
                                 JsonSet(
                                     index = set.index,
@@ -258,6 +261,10 @@ data class JsonWorkoutExercise(
     @SerialName("exercise_id") val exerciseId: String,
     val name: String,
     val notes: String? = null,
+    /** The template's target when the workout started (as templates[].exercises[] name them); absent without one. */
+    @SerialName("rep_min") val repMin: Int? = null,
+    @SerialName("rep_max") val repMax: Int? = null,
+    @SerialName("target_rir") val targetRir: Int? = null,
     val sets: List<JsonSet>,
 )
 
