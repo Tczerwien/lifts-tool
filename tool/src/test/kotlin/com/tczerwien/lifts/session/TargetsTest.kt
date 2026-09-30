@@ -174,7 +174,8 @@ class TargetsTest {
     fun `a template exercise in one line`() {
         assertEquals("3 × 8–12 · RIR 1 · rest 3:00", templateSlotSummary(3, null, 8, 12, 1, 180))
         assertEquals("2W + 4 × 6–12 · rest 2:30", templateSlotSummary(4, 2, 6, 12, null, 150))
-        assertEquals("1 set · rest 1:00", templateSlotSummary(1, 0, null, null, null, 60))
+        assertEquals("0W + 1 set · rest 1:00", templateSlotSummary(1, 0, null, null, null, 60), "no warm-ups, on purpose")
+        assertEquals("1 set · rest 1:00", templateSlotSummary(1, null, null, null, null, 60), "last session's")
         assertEquals("3 sets · RIR 2 · rest 3:00", templateSlotSummary(3, null, null, null, 2, 180))
     }
 }

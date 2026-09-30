@@ -138,12 +138,12 @@ private const val WEIGHT_EPSILON_KG = 0.01
 
 /**
  * A template exercise in one line for the Template Editor's list: "2W + 3 × 8–12 · RIR 1 · rest 3:00".
- * Warm-ups show only when the template asks for some (not for none, nor last session's); without a
+ * Warm-ups show when the template sets a number, "0W +" included (nothing: last session's); without a
  * range it is "3 sets"; [restSec] is the rest in effect (the slot's or Settings').
  */
 fun templateSlotSummary(targetSets: Int, warmupSets: Int?, repMin: Int?, repMax: Int?, targetRir: Int?, restSec: Int): String {
     val range = repRangeText(repMin, repMax)
     val sets = if (range != null) "$targetSets × $range" else "$targetSets ${if (targetSets == 1) "set" else "sets"}"
-    val warmups = warmupSets?.takeIf { it > 0 }?.let { "${it}W + " }.orEmpty()
+    val warmups = warmupSets?.let { "${it}W + " }.orEmpty()
     return listOfNotNull(warmups + sets, targetRir?.let { "RIR $it" }, "rest ${Format.clock(restSec)}").joinToString(" · ")
 }
