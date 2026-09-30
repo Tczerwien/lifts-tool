@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.library
 
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.Tracking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -23,8 +24,36 @@ class CustomExerciseTest {
     }
 
     @Test
-    fun `an exercise in use is hidden, one nothing uses is deleted`() {
-        assertEquals(Removal.HIDE, removalFor(inUse = true))
-        assertEquals(Removal.DELETE, removalFor(inUse = false))
+    fun `an exercise a workout has is hidden, one only templates ask for is deleted`() {
+        assertEquals(Removal.HIDE, removalFor(inWorkouts = true))
+        assertEquals(Removal.DELETE, removalFor(inWorkouts = false))
+    }
+
+    private fun row(id: Long, templateId: Long, exerciseId: String, position: Int) =
+        TemplateExerciseEntity(id = id, templateId = templateId, exerciseId = exerciseId, position = position, targetSets = 3)
+
+    @Test
+    fun `a removed exercise leaves every template and the rest close up`() {
+        val rows = listOf(
+            row(1, templateId = 1, "bench", 0),
+            row(2, templateId = 1, "y-raise", 1),
+            row(3, templateId = 1, "curl", 2),
+            row(4, templateId = 1, "y-raise", 3),
+            row(5, templateId = 1, "pushdown", 4),
+            row(6, templateId = 2, "y-raise", 0),
+            row(7, templateId = 2, "squat", 1),
+            row(8, templateId = 3, "y-raise", 0),
+        )
+        val out = withoutExercise(rows.shuffled(kotlin.random.Random(3)), "y-raise")
+        assertEquals(listOf(2L, 4L, 6L, 8L), out.deleteIds.sorted(), "twice in one template: both rows go")
+        val moved = out.moves.associate { (row, position) -> row.id to position }
+        assertEquals(mapOf(3L to 1, 5L to 2, 7L to 0), moved, "positions 0..n-1 in each template, in the order they had")
+        assertEquals(null, moved[1L], "a row already in place isn't written")
+    }
+
+    @Test
+    fun `an exercise no template asks for changes no template`() {
+        val rows = listOf(row(1, templateId = 1, "bench", 0), row(2, templateId = 1, "curl", 1))
+        assertEquals(TemplateRemoval(emptyList(), emptyList()), withoutExercise(rows, "y-raise"))
     }
 }

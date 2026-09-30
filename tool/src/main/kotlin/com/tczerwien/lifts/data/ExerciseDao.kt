@@ -38,13 +38,6 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE id IN (:ids)")
     fun byIds(ids: List<String>): List<ExerciseEntity>
 
-    /** A workout slot or a template exercise refers to [id]: deleting it would orphan them. */
-    @Query(
-        "SELECT EXISTS(SELECT 1 FROM workout_exercises WHERE exerciseId = :id) " +
-            "OR EXISTS(SELECT 1 FROM template_exercises WHERE exerciseId = :id)"
-    )
-    fun isReferenced(id: String): Boolean
-
     /** A workout slot refers to [id], ticked or not, finished or not. */
     @Query("SELECT EXISTS(SELECT 1 FROM workout_exercises WHERE exerciseId = :id)")
     fun inWorkouts(id: String): Boolean

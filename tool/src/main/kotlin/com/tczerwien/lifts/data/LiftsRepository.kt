@@ -2,6 +2,7 @@ package com.tczerwien.lifts.data
 
 import com.tczerwien.lifts.library.Removal
 import com.tczerwien.lifts.library.removalFor
+import com.tczerwien.lifts.library.withoutExercise
 import com.tczerwien.lifts.seed.Seeder
 
 /**
@@ -97,20 +98,25 @@ class LiftsRepository private constructor(
     }
 
     /**
-     * Removes custom exercise [id] ([removalFor]): deleted when no workout or template refers to it,
-     * otherwise hidden from the picker so history keeps it. One transaction, so a workout can't start
-     * using it between the check and the delete. Null when it isn't a custom exercise.
+     * Removes custom exercise [id]: first out of every template, the rest of each closing up
+     * ([withoutExercise]), then deleted when no workout refers to it, else hidden from the picker so
+     * history keeps it ([removalFor]). One transaction, so a workout can't start using it between the
+     * check and the delete. Null when it isn't a custom exercise.
      */
     fun removeCustomExercise(id: String): Removal? = inTransaction {
         db.exerciseDao.byId(id)?.takeIf { it.isCustom } ?: return@inTransaction null
-        when (removalFor(inUse = db.exerciseDao.isReferenced(id))) {
+        val rows = db.templateDao.templateIdsWith(id).flatMap { db.templateDao.exercisesForTemplate(it) }
+        val out = withoutExercise(rows, id)
+        out.deleteIds.forEach { db.templateDao.deleteTemplateExercise(it) }
+        out.moves.forEach { (row, position) -> db.templateDao.updateTemplateExercise(row.copy(position = position)) }
+        when (removalFor(inWorkouts = db.exerciseDao.inWorkouts(id))) {
             Removal.HIDE -> Removal.HIDE.also { db.exerciseDao.setHidden(id, true) }
             Removal.DELETE -> Removal.DELETE.also { db.exerciseDao.deleteCustom(id) }
         }
     }
 
-    /** A workout or template refers to exercise [id] ([removeCustomExercise] would hide it, not delete it). */
-    fun isExerciseInUse(id: String): Boolean = db.exerciseDao.isReferenced(id)
+    /** How many templates ask for exercise [id]: removing it takes it out of them ([removeCustomExercise]). */
+    fun templatesWithExercise(id: String): Int = db.templateDao.templateIdsWith(id).size
 
     /** A workout has exercise [id], ticked or not; one in use without this is only in templates. */
     fun exerciseInWorkouts(id: String): Boolean = db.exerciseDao.inWorkouts(id)

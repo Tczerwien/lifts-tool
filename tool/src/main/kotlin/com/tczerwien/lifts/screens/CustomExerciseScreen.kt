@@ -33,6 +33,7 @@ import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.ArmedHint
+import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -93,12 +94,12 @@ class CustomExerciseViewModel(
         val editorSession: Int = 0,
         /** Another exercise already answers to [name] ([nameClash]); a new one can use it instead. */
         val nameTaken: Taken? = null,
-        /** The edited exercise is in a workout or template, so removing it hides it ([Removal.HIDE]). */
-        val inUse: Boolean = false,
+        /** Templates that ask for the edited exercise: removing it takes it out of them. */
+        val inTemplates: Int = 0,
+        /** A workout has the edited exercise, so removing it hides it ([Removal.HIDE]); otherwise it is deleted. */
+        val inWorkouts: Boolean = false,
         /** ...and a finished workout has a ticked set of it: history the hide keeps. */
         val hasHistory: Boolean = false,
-        /** ...or a workout has it, with nothing ticked (skipped, or the open one). Neither: only templates. */
-        val inWorkouts: Boolean = false,
         /**
          * Leaving with this result, via goBack: the new exercise once the insert succeeded, the existing
          * one he chose over a taken name, the edited one once saved or hidden, or "" once deleted.
@@ -304,8 +305,8 @@ class CustomExerciseViewModel(
 
     /**
      * The trash, while editing: the first tap arms, the second removes the exercise
-     * ([LiftsRepository.removeCustomExercise]): deleted when nothing uses it, else hidden from the
-     * picker with its history kept. The screen then leaves.
+     * ([LiftsRepository.removeCustomExercise]): out of every template, then deleted when no workout
+     * has it, else hidden from the picker with its history kept. The screen then leaves.
      */
     fun tapRemove() {
         val id = editId ?: return
@@ -327,7 +328,7 @@ class CustomExerciseViewModel(
         names = catalogEntries(summaries)
         hiddenIds = summaries.filter { it.hidden }.mapTo(HashSet()) { it.id }
         val edited = editId?.let { repository.exerciseById(it) }
-        val inUse = editId?.let { repository.isExerciseInUse(it) } ?: false
+        val inTemplates = editId?.let { repository.templatesWithExercise(it) } ?: 0
         val hasHistory = editId?.let { repository.exerciseHasHistory(it) } ?: false
         val inWorkouts = editId?.let { repository.exerciseInWorkouts(it) } ?: false
         _uiState.update { state ->
@@ -344,7 +345,7 @@ class CustomExerciseViewModel(
             } else {
                 state
             }
-            filled.copy(inUse = inUse, hasHistory = hasHistory, inWorkouts = inWorkouts).withClash()
+            filled.copy(inTemplates = inTemplates, hasHistory = hasHistory, inWorkouts = inWorkouts).withClash()
         }
         val all = repository.listExercises()
         val muscles = (all.flatMap { it.primaryMuscles } + all.flatMap { it.secondaryMuscles })
@@ -562,15 +563,18 @@ class CustomExerciseScreen(
 
             if (uiState.editing) {
                 if (removeArmed) {
-                    // In use, it leaves the picker and stays where it is used; otherwise it is gone.
+                    // In a workout, it leaves the picker and stays in the workouts; otherwise it is gone.
                     ArmedHint(
                         text = when {
-                            !uiState.inUse -> "TAP AGAIN TO DELETE"
+                            !uiState.inWorkouts -> "TAP AGAIN TO DELETE"
                             uiState.hasHistory -> "TAP AGAIN TO HIDE · HISTORY KEPT"
-                            uiState.inWorkouts -> "TAP AGAIN TO HIDE · IT'S IN A WORKOUT"
-                            else -> "TAP AGAIN TO HIDE · IT'S IN A TEMPLATE"
+                            else -> "TAP AGAIN TO HIDE · IT'S IN A WORKOUT"
                         },
                     )
+                    // Either way it leaves his templates: say so before he confirms.
+                    if (uiState.inTemplates > 0) {
+                        ArmedHint(text = "IT LEAVES ${Format.count(uiState.inTemplates, "TEMPLATE")}")
+                    }
                 }
                 LightBottomBar(
                     items = listOf(

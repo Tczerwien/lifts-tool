@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.library
 
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.seed.SeedParser
 
@@ -20,17 +21,36 @@ fun customTrackingDefault(category: String, equipment: String?): Tracking =
 fun formTracking(chosen: Tracking?, category: String, equipment: String?): Tracking =
     chosen ?: customTrackingDefault(category, equipment)
 
-/** What removing a custom exercise does. */
+/**
+ * What removing a custom exercise does, once it has left every template ([withoutExercise]; B10: a
+ * template that still asked for an exercise he removed would be a trap).
+ */
 enum class Removal {
-    /** Nothing refers to it: it goes. */
+    /** No workout refers to it: it goes. */
     DELETE,
 
     /**
-     * A workout or template uses it: it stays, so that history keeps its name and numbers, but leaves
-     * the picker. A new exercise given its name offers it back ("Restore").
+     * A workout has it (logged, skipped, or the open one): it stays, so that history keeps its name
+     * and numbers, but leaves the picker. A new exercise given its name offers it back ("Restore").
      */
     HIDE,
 }
 
-/** [Removal] for a custom exercise a workout or template refers to ([inUse]) or not. */
-fun removalFor(inUse: Boolean): Removal = if (inUse) Removal.HIDE else Removal.DELETE
+/** [Removal] for a custom exercise some workout refers to ([inWorkouts]) or none. */
+fun removalFor(inWorkouts: Boolean): Removal = if (inWorkouts) Removal.HIDE else Removal.DELETE
+
+/** Taking an exercise out of templates: the rows to delete, and the rows left with their new positions. */
+data class TemplateRemoval(val deleteIds: List<Long>, val moves: List<Pair<TemplateExerciseEntity, Int>>)
+
+/**
+ * [exerciseId] out of the templates [rows] come from (every row of each, any order): its rows go, and
+ * each template's other exercises close up to positions 0..n-1 in the order they had ([renumber]).
+ * A template left with nothing stays, empty.
+ */
+fun withoutExercise(rows: List<TemplateExerciseEntity>, exerciseId: String): TemplateRemoval {
+    val (removed, kept) = rows.partition { it.exerciseId == exerciseId }
+    val moves = kept.groupBy { it.templateId }.values.flatMap { template ->
+        renumber(template.sortedWith(compareBy({ it.position }, { it.id }))) { it.position }
+    }
+    return TemplateRemoval(removed.map { it.id }, moves)
+}

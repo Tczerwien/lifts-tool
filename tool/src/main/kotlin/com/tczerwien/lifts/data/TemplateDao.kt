@@ -37,4 +37,8 @@ interface TemplateDao {
 
     @Query("SELECT * FROM template_exercises WHERE templateId = :templateId ORDER BY position")
     fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity>
+
+    /** The templates that ask for [exerciseId], each once. */
+    @Query("SELECT DISTINCT templateId FROM template_exercises WHERE exerciseId = :exerciseId ORDER BY templateId")
+    fun templateIdsWith(exerciseId: String): List<Long>
 }
