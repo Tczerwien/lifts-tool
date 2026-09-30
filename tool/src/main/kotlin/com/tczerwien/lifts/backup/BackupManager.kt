@@ -10,10 +10,12 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /**
  * Backups of the whole log and the settings, in [dir] (files/shared/backups, which Tool Manager
@@ -77,16 +79,27 @@ class BackupManager(
         }
     }
 
+    /** One Home check waiting at a time: Home shows often, and each check would read the folder again. */
+    private val dueCheck = QueuedOnce()
+
     /**
      * Home: a dated backup if the newest is a day old ([BackupPolicy.isDue]) or the latest attempt
-     * failed, decided when its turn comes. A check that finds nothing due leaves the status alone.
+     * failed, decided when its turn comes. It waits [HOME_CHECK_DELAY_MS] before it queues: queued as
+     * Home shows, the first Start of the day waited behind the whole backup (VACUUM INTO, a check, two
+     * copies flushed to disk), which grows with the log. A check that finds nothing due leaves the
+     * status alone.
      */
     fun requestIfDue() {
-        LiftsIo.write({
-            if (lastFailure != null || BackupPolicy.isDue(lastBackupMillis(), System.currentTimeMillis())) {
-                runCatching { backUp(BackupPolicy.Kind.DATED) }
-            }
-        }) { publish() }
+        if (!dueCheck.tryQueue()) return
+        LiftsIo.scope.launch {
+            delay(HOME_CHECK_DELAY_MS)
+            LiftsIo.write({
+                dueCheck.started()
+                if (lastFailure != null || BackupPolicy.isDue(lastBackupMillis(), System.currentTimeMillis())) {
+                    runCatching { backUp(BackupPolicy.Kind.DATED) }
+                }
+            }) { publish() }
+        }
     }
 
     @Synchronized
@@ -181,6 +194,9 @@ class BackupManager(
 
     private companion object {
         const val TAG = "LiftsBackup"
+
+        /** How long after Home shows its backup check queues: past the first taps on Home. */
+        const val HOME_CHECK_DELAY_MS = 5_000L
 
         /** Dot-prefixed, so a listing that hides dot files (Tool Manager's default) never offers one. */
         const val TEMP_NAME = ".backup.tmp"
