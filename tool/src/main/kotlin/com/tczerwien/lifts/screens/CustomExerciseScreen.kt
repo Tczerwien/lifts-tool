@@ -19,13 +19,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.CatalogEntry
+import com.tczerwien.lifts.library.Removal
 import com.tczerwien.lifts.library.catalogEntries
+import com.tczerwien.lifts.library.formTracking
 import com.tczerwien.lifts.library.nameClash
+import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
+import com.tczerwien.lifts.ui.ArmedAction
+import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -37,6 +44,7 @@ import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
+import com.thelightphone.sdk.ui.LightBottomBar
 import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightLazyScrollView
@@ -60,12 +68,18 @@ class CustomExerciseViewModel(
     private val repository: LiftsRepository,
     private val share: LiftsShare,
     initialName: String = "",
+    /** Editing this custom exercise; null makes a new one. */
+    private val editId: String? = null,
 ) : LightViewModel<String>() {
 
-    enum class Mode { FORM, NAME_EDITOR, PRIMARY_PICKER, SECONDARY_PICKER, EQUIPMENT_PICKER, CATEGORY_PICKER }
+    enum class Mode { FORM, NAME_EDITOR, PRIMARY_PICKER, SECONDARY_PICKER, EQUIPMENT_PICKER, CATEGORY_PICKER, TYPE_PICKER }
 
     data class UiState(
         val mode: Mode = Mode.FORM,
+        /** Editing an exercise he made, rather than making one. */
+        val editing: Boolean = false,
+        /** The form holds what it should: always for a new one; an edited one once it has loaded. */
+        val loaded: Boolean = true,
         val name: String = "",
         /** Raw dataset value ("chest", "middle back"); required for save. */
         val primaryMuscle: String? = null,
@@ -73,29 +87,44 @@ class CustomExerciseViewModel(
         /** Raw dataset value; null = no equipment. */
         val equipment: String? = null,
         val category: String = DEFAULT_CATEGORY,
+        /** The Type he picked; until then it follows the form ([formTracking]). */
+        val chosenTracking: Tracking? = null,
         val muscleOptions: List<String> = emptyList(),
         val equipmentOptions: List<String> = emptyList(),
         val categoryOptions: List<String> = emptyList(),
         val editorSession: Int = 0,
-        /** Another exercise already answers to [name] ([nameClash]); he can use it instead. */
+        /** Another exercise already answers to [name] ([nameClash]); a new one can use it instead. */
         val nameTaken: Taken? = null,
+        /** The edited exercise is in a workout or template, so removing it hides it ([Removal.HIDE]). */
+        val inUse: Boolean = false,
         /**
-         * The pick, returned via goBack: the new exercise once the insert succeeded, or the existing one
-         * he chose over a taken name.
+         * Leaving with this result, via goBack: the new exercise once the insert succeeded, the existing
+         * one he chose over a taken name, the edited one once saved or hidden, or "" once deleted.
          */
         val createdId: String? = null,
     ) {
+        /** How the exercise is measured: his pick, else the default for its category and equipment. */
+        val tracking: Tracking get() = formTracking(chosenTracking, category, equipment)
+
         val valid: Boolean
-            get() = name.isNotBlank() && primaryMuscle != null && nameTaken == null
+            get() = loaded && name.isNotBlank() && primaryMuscle != null && nameTaken == null
     }
 
-    /** The exercise that has the name: its id, and the name Lifts shows for it. */
-    data class Taken(val id: String, val shown: String)
+    /**
+     * The exercise that has the name: its id, the name Lifts shows for it, and whether he took it out of
+     * the picker ([hidden]: offering it brings it back).
+     */
+    data class Taken(val id: String, val shown: String, val hidden: Boolean = false)
 
-    private val _uiState = MutableStateFlow(UiState(name = initialName.trim()))
+    private val _uiState = MutableStateFlow(
+        UiState(name = initialName.trim(), editing = editId != null, loaded = editId == null),
+    )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** A save is on its way; set on Main, cleared on the lane when the name turned out taken. */
+    /** The trash, while editing, takes two taps. */
+    val removeArm = ArmedAction(viewModelScope)
+
+    /** A save, restore or removal is on its way; set on Main, cleared on the lane when the name turned out taken. */
     @Volatile
     private var saving = false
 
@@ -103,29 +132,39 @@ class CustomExerciseViewModel(
     @Volatile
     private var names: List<CatalogEntry> = emptyList()
 
+    /** The ids of exercises he took out of the picker. */
+    @Volatile
+    private var hiddenIds: Set<String> = emptySet()
+
     /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
     override fun onScreenShow(screen: SimpleLightScreen<String>) {
         viewModelScope.launch(Dispatchers.IO) { loadOptions() }
     }
 
     /**
-     * Back from any editor or picker mode returns to the form. Only the in-app back button reaches this: the SDK routes the
-     * system Back key straight to the activity.
+     * Back from any editor or picker mode returns to the form, and an armed trash disarms. Only the
+     * in-app back button reaches this: the SDK routes the system Back key straight to the activity.
      */
     override fun onBackPressed(): Boolean {
-        // Saved: the goBack that hands the new id to the picker must not be taken for closing a mode.
+        // Saved: the goBack that hands the result back must not be taken for closing a mode.
         if (_uiState.value.createdId != null) return false
-        if (_uiState.value.mode == Mode.FORM) return false
+        if (_uiState.value.mode == Mode.FORM) {
+            if (!removeArm.armed.value) return false
+            removeArm.disarm()
+            return true
+        }
         closeMode()
         return true
     }
 
     fun openNameEditor() {
+        removeArm.disarm()
         val state = _uiState.value
         _uiState.value = state.copy(mode = Mode.NAME_EDITOR, editorSession = state.editorSession + 1)
     }
 
     fun openMode(mode: Mode) {
+        removeArm.disarm()
         _uiState.value = _uiState.value.copy(mode = mode)
     }
 
@@ -137,14 +176,28 @@ class CustomExerciseViewModel(
         _uiState.update { it.copy(name = raw.replace(Regex("\\s+"), " ").trim(), mode = Mode.FORM).withClash() }
     }
 
-    /** He takes the exercise that already has the name: it becomes the pick, and nothing is created. */
+    /**
+     * He takes the exercise that already has the name: it becomes the pick, and nothing is created. One
+     * he had taken out of the picker comes back into it first.
+     */
     fun useExisting() {
-        val taken = _uiState.value.nameTaken ?: return
-        _uiState.update { it.copy(createdId = taken.id) }
+        val state = _uiState.value
+        val taken = state.nameTaken ?: return
+        if (state.editing || saving) return
+        if (!taken.hidden) {
+            _uiState.update { it.copy(createdId = taken.id) }
+            return
+        }
+        saving = true
+        LiftsIo.write({ repository.setExerciseHidden(taken.id, hidden = false) }) { changed ->
+            // workouts.json marks hidden exercises.
+            if (changed) share.logChanged()
+            _uiState.update { it.copy(createdId = taken.id) }
+        }
     }
 
     private fun UiState.withClash(): UiState =
-        copy(nameTaken = nameClash(name, names)?.let { Taken(it.id, it.shown) })
+        copy(nameTaken = nameClash(name, names, selfId = editId)?.let { Taken(it.id, it.shown, hidden = it.id in hiddenIds) })
 
     /** The primary muscle leaves the secondaries, so the form shows what save will store. */
     fun selectPrimaryMuscle(muscle: String) {
@@ -172,68 +225,131 @@ class CustomExerciseViewModel(
         _uiState.value = _uiState.value.copy(category = category, mode = Mode.FORM)
     }
 
+    /** The Type row's list, by its label: his pick stands from now on. */
+    fun selectTracking(label: String) {
+        val tracking = Tracking.entries.firstOrNull { it.label == label } ?: return
+        _uiState.update { it.copy(chosenTracking = tracking, mode = Mode.FORM) }
+    }
+
     /**
-     * Inserts the exercise as "custom-<uuid>"; the primary muscle is dropped from secondaries. The name
-     * is checked again on the lane, against the catalog as it is then: a name taken meanwhile creates
-     * nothing and shows the clash instead.
+     * A new exercise is inserted as "custom-<uuid>", measured as the form's Type says; an edited one is
+     * saved in place ([LiftsRepository.updateCustomExercise]: history keeps it, by id). The primary muscle
+     * is dropped from the secondaries. The name is checked again on the lane, against the catalog as it
+     * is then: a name taken meanwhile saves nothing and shows the clash instead.
      */
     fun save() {
         val state = _uiState.value
         val primaryMuscle = state.primaryMuscle
         if (!state.valid || primaryMuscle == null || saving) return
         saving = true
-        val id = "custom-${UUID.randomUUID()}"
+        val id = editId ?: "custom-${UUID.randomUUID()}"
+        val exercise = ExerciseEntity(
+            id = id,
+            name = state.name.trim(),
+            equipment = state.equipment,
+            primaryMuscles = listOf(primaryMuscle),
+            secondaryMuscles = state.secondaryMuscles.filterNot { it == primaryMuscle },
+            category = state.category,
+            level = null,
+            instructions = emptyList(),
+            isCustom = true,
+            trackingType = state.tracking.stored,
+        )
         // On the write lane, so Back can't drop it half-way.
         LiftsIo.write({
             val current = catalogEntries(repository.exerciseSummaries())
             names = current
-            val clash = nameClash(state.name, current)
-            if (clash == null) {
-                repository.addExercise(
-                    ExerciseEntity(
-                        id = id,
-                        name = state.name.trim(),
-                        equipment = state.equipment,
-                        primaryMuscles = listOf(primaryMuscle),
-                        secondaryMuscles = state.secondaryMuscles.filterNot { it == primaryMuscle },
-                        category = state.category,
-                        level = null,
-                        instructions = emptyList(),
-                        isCustom = true,
-                    ),
-                )
+            val clash = nameClash(state.name, current, selfId = editId)
+            when {
+                clash != null -> SaveResult.Taken
+                editId == null -> {
+                    repository.addExercise(exercise)
+                    SaveResult.Saved(changed = true, typeChanged = false)
+                }
+                else -> {
+                    val before = repository.exerciseById(editId)?.tracking
+                    val changed = repository.updateCustomExercise(exercise, state.tracking)
+                    SaveResult.Saved(changed, typeChanged = before != null && before != state.tracking)
+                }
             }
-            clash
-        }) { clash ->
-            if (clash != null) {
-                saving = false
-                _uiState.update { it.withClash() }
-            } else {
-                // workouts.json lists every custom exercise, used or not.
-                share.logChanged()
-                // Atomic: a mode tap on Main in the same instant must not write createdId back to null.
-                _uiState.update { it.copy(createdId = id) }
+        }) { result ->
+            when (result) {
+                SaveResult.Taken -> {
+                    saving = false
+                    _uiState.update { it.withClash() }
+                }
+                is SaveResult.Saved -> {
+                    // workouts.json lists every custom exercise, used or not.
+                    if (result.changed) share.logChanged()
+                    // Its logged weights may have changed sign: an open workout's cached history goes.
+                    if (result.typeChanged) HistoryVersion.bump()
+                    // Atomic: a mode tap on Main in the same instant must not write createdId back to null.
+                    _uiState.update { it.copy(createdId = id) }
+                }
             }
+        }
+    }
+
+    private sealed interface SaveResult {
+        data object Taken : SaveResult
+
+        data class Saved(val changed: Boolean, val typeChanged: Boolean) : SaveResult
+    }
+
+    /**
+     * The trash, while editing: the first tap arms, the second removes the exercise
+     * ([LiftsRepository.removeCustomExercise]): deleted when nothing uses it, else hidden from the
+     * picker with its history kept. The screen then leaves.
+     */
+    fun tapRemove() {
+        val id = editId ?: return
+        if (saving || !_uiState.value.loaded || !removeArm.tap()) return
+        saving = true
+        LiftsIo.write({ repository.removeCustomExercise(id) }) { removal ->
+            if (removal != null) share.logChanged()
+            _uiState.update { it.copy(createdId = if (removal == Removal.HIDE) id else "") }
         }
     }
 
     /**
      * Option lists derive from the live catalog so custom values stay dataset-consistent; the names
      * load for the duplicate check (a name filled in by the picker is checked as soon as they land).
+     * An exercise being edited fills the form from what is stored.
      */
     private fun loadOptions() {
-        names = catalogEntries(repository.exerciseSummaries())
-        _uiState.update { it.withClash() }
+        val summaries = repository.exerciseSummaries()
+        names = catalogEntries(summaries)
+        hiddenIds = summaries.filter { it.hidden }.mapTo(HashSet()) { it.id }
+        val edited = editId?.let { repository.exerciseById(it) }
+        val inUse = editId?.let { repository.isExerciseInUse(it) } ?: false
+        _uiState.update { state ->
+            val filled = if (edited != null && !state.loaded) {
+                state.copy(
+                    loaded = true,
+                    name = edited.name,
+                    primaryMuscle = edited.primaryMuscles.firstOrNull(),
+                    secondaryMuscles = edited.secondaryMuscles,
+                    equipment = edited.equipment,
+                    category = edited.category,
+                    chosenTracking = edited.tracking,
+                )
+            } else {
+                state
+            }
+            filled.copy(inUse = inUse).withClash()
+        }
         val all = repository.listExercises()
         val muscles = (all.flatMap { it.primaryMuscles } + all.flatMap { it.secondaryMuscles })
             .distinct()
             .sorted()
-        _uiState.value = _uiState.value.copy(
-            muscleOptions = muscles,
-            equipmentOptions = all.mapNotNull { it.equipment }.distinct().sorted(),
-            categoryOptions = all.map { it.category }.distinct().sorted()
-                .ifEmpty { listOf(DEFAULT_CATEGORY) },
-        )
+        _uiState.update {
+            it.copy(
+                muscleOptions = muscles,
+                equipmentOptions = all.mapNotNull { exercise -> exercise.equipment }.distinct().sorted(),
+                categoryOptions = all.map { exercise -> exercise.category }.distinct().sorted()
+                    .ifEmpty { listOf(DEFAULT_CATEGORY) },
+            )
+        }
     }
 
     companion object {
@@ -242,15 +358,18 @@ class CustomExerciseViewModel(
 }
 
 /**
- * Custom exercise form (design/screens/custom-exercise.html): five field rows — name via
- * the SDK editor, the rest via inline picker-list modes fed from the live catalog values.
- * The top-bar checkmark appears once name + primary muscle are set; save inserts and
- * returns the new exerciseId via goBack. [initialName] fills the name (the picker's
- * Create row passes what he searched for).
+ * Custom exercise form (design/screens/custom-exercise.html): six field rows — name via
+ * the SDK editor, the rest via inline picker-list modes fed from the live catalog values, Type last
+ * (it follows category and equipment until he picks one). The top-bar checkmark appears once name +
+ * primary muscle are set; save inserts and returns the new exerciseId via goBack. [initialName]
+ * fills the name (the picker's Create row passes what he searched for). With [editId] it edits one
+ * he made ("Edit Exercise"), and its trash deletes it, or hides it once a workout or template uses
+ * it; the result is its id, or "" once deleted.
  */
 class CustomExerciseScreen(
     private val sealedActivity: SealedLightActivity,
     private val initialName: String = "",
+    private val editId: String? = null,
 ) : LightScreen<String, CustomExerciseViewModel>(sealedActivity) {
 
     override val viewModelClass: Class<CustomExerciseViewModel>
@@ -260,6 +379,7 @@ class CustomExerciseScreen(
         lightContext.liftsRepository(),
         lightContext.liftsShare(),
         initialName,
+        editId,
     )
 
     @Composable
@@ -328,12 +448,21 @@ class CustomExerciseScreen(
                     onSelect = { it?.let(viewModel::selectCategory) },
                     onBack = viewModel::closeMode,
                 )
+
+                CustomExerciseViewModel.Mode.TYPE_PICKER -> OptionPicker(
+                    title = "Type",
+                    options = Tracking.entries.map { it.label },
+                    isSelected = { it == uiState.tracking.label },
+                    onSelect = { it?.let(viewModel::selectTracking) },
+                    onBack = viewModel::closeMode,
+                )
             }
         }
     }
 
     @Composable
     private fun FormContent(uiState: CustomExerciseViewModel.UiState) {
+        val removeArmed by viewModel.removeArm.armed.collectAsState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -344,7 +473,7 @@ class CustomExerciseScreen(
                     icon = LightIcons.BACK,
                     onClick = { goBack() },
                 ),
-                center = LightTopBarCenter.Text("New Exercise"),
+                center = LightTopBarCenter.Text(if (uiState.editing) "Edit Exercise" else "New Exercise"),
                 rightButton = if (uiState.valid) {
                     LightBarButton.LightIcon(
                         icon = LightIcons.ACCEPT,
@@ -368,20 +497,23 @@ class CustomExerciseScreen(
                     chevron = true,
                 )
                 uiState.nameTaken?.let { taken ->
-                    // Two exercises with one name would split his history: offer the one he has.
-                    SectionLabel("Name in use")
-                    LiftsListRow(
-                        onClick = viewModel::useExisting,
-                        left = {
-                            LightText(
-                                text = "Use ${taken.shown}",
-                                variant = LightTextVariant.Copy,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        },
-                        right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },
-                    )
+                    // Two exercises with one name would split his history: offer the one he has (and
+                    // one he took out of the picker comes back). Editing, the name just can't be used.
+                    SectionLabel(if (uiState.editing) "Name in use: ${taken.shown}" else "Name in use")
+                    if (!uiState.editing) {
+                        LiftsListRow(
+                            onClick = viewModel::useExisting,
+                            left = {
+                                LightText(
+                                    text = if (taken.hidden) "Restore ${taken.shown}" else "Use ${taken.shown}",
+                                    variant = LightTextVariant.Copy,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },
+                        )
+                    }
                 }
                 LiftsFieldRow(
                     label = "Primary Muscle",
@@ -410,6 +542,29 @@ class CustomExerciseScreen(
                     value = titleCaseLabel(uiState.category),
                     onClick = { viewModel.openMode(CustomExerciseViewModel.Mode.CATEGORY_PICKER) },
                     chevron = true,
+                )
+                // How its sets are measured: which numbers the rows take, and what a record is.
+                LiftsFieldRow(
+                    label = "Type",
+                    value = uiState.tracking.label,
+                    onClick = { viewModel.openMode(CustomExerciseViewModel.Mode.TYPE_PICKER) },
+                    chevron = true,
+                )
+            }
+
+            if (uiState.editing) {
+                if (removeArmed) {
+                    // In use, it leaves the picker but stays in his history; otherwise it is gone.
+                    ArmedHint(text = if (uiState.inUse) "TAP AGAIN TO HIDE · HISTORY KEPT" else "TAP AGAIN TO DELETE")
+                }
+                LightBottomBar(
+                    items = listOf(
+                        LightBarButton.LightIcon(
+                            icon = LightIcons.TRASH,
+                            contentDescription = "remove exercise",
+                            onClick = viewModel::tapRemove,
+                        ),
+                    ),
                 )
             }
         }

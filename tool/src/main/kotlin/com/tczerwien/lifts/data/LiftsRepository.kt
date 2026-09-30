@@ -109,6 +109,9 @@ class LiftsRepository private constructor(
         }
     }
 
+    /** A workout or template refers to exercise [id] ([removeCustomExercise] would hide it, not delete it). */
+    fun isExerciseInUse(id: String): Boolean = db.exerciseDao.isReferenced(id)
+
     /** Takes a hidden exercise back into the picker (or out); true when it changed. */
     fun setExerciseHidden(id: String, hidden: Boolean): Boolean = db.exerciseDao.setHidden(id, hidden) > 0
 
