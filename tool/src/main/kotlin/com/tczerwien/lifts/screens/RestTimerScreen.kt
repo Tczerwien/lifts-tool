@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -15,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
@@ -82,9 +85,14 @@ class RestTimerViewModel(
         val endMillis: Long = 0,
         /** "NEXT · 165 × 5 @ 8": what a tick on the upcoming set would log, or an end-of-workout note. */
         val nextLine: String? = null,
-        /** "Bench Press · Set 3 of 4", counting work sets only. */
+        /** "Bench Press", the exercise of [nextContext]; cut short before the set's number is. */
+        val nextExercise: String? = null,
+        /** "Set 3 of 4", counting work sets only, or what to do when there is no next set ("Add a set"). */
         val nextContext: String? = null,
     )
+
+    /** The NEXT lines ([loadNextContext]). */
+    private data class NextLines(val line: String? = null, val exercise: String? = null, val context: String? = null)
 
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
@@ -123,13 +131,14 @@ class RestTimerViewModel(
                     else -> _uiState.value.endMillis
                 }
                 initialized = true
-                val (nextLine, nextContext) = loadNextContext()
+                val next = loadNextContext()
                 _uiState.update {
                     it.copy(
                         loaded = true,
                         endMillis = endMillis,
-                        nextLine = nextLine,
-                        nextContext = nextContext,
+                        nextLine = next.line,
+                        nextExercise = next.exercise,
+                        nextContext = next.context,
                     )
                 }
             }
@@ -167,16 +176,16 @@ class RestTimerViewModel(
      * values a tick on it would log ([seedFor]) and its number among work sets ([nextSetLabel]).
      * A workout with no exercises, or with every set ticked, says so instead of showing nothing.
      */
-    private fun loadNextContext(): Pair<String?, String?> {
+    private fun loadNextContext(): NextLines {
         val workout = workoutId?.let { repository.workoutById(it) }
             ?: repository.listOpenWorkouts().firstOrNull()
-            ?: return null to null
+            ?: return NextLines()
         val slots = repository.exercisesForWorkout(workout.id)
         val sets = repository.setsForWorkout(workout.id)
         val next = when (val context = restNextContext(slots, sets, slotId)) {
-            RestNext.NoExercises -> return "NO EXERCISES YET" to "Add an exercise"
-            RestNext.NoSets -> return "NO SETS YET" to "Add a set"
-            RestNext.AllDone -> return "ALL SETS DONE" to "Finish or add an exercise"
+            RestNext.NoExercises -> return NextLines("NO EXERCISES YET", context = "Add an exercise")
+            RestNext.NoSets -> return NextLines("NO SETS YET", context = "Add a set")
+            RestNext.AllDone -> return NextLines("ALL SETS DONE", context = "Finish or add an exercise")
             is RestNext.Next -> context
         }
         val exerciseId = next.slot.exerciseId
@@ -192,7 +201,7 @@ class RestTimerViewModel(
             durationSec = seed.durationSec, rpe = rpe, perSide = exercise?.perSide == true,
         )
         val exerciseName = exercise?.let { displayName(it) } ?: exerciseId
-        return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
+        return NextLines(summary?.let { "NEXT · $it" }, exerciseName, nextSetLabel(next.rows, next.index))
     }
 }
 
@@ -316,12 +325,7 @@ class RestTimerScreen(
                                     )
                                 }
                                 uiState.nextContext?.let { context ->
-                                    LightText(
-                                        text = context.uppercase(),
-                                        variant = LightTextVariant.Superfine,
-                                        lighten = true,
-                                        maxLines = 1,
-                                    )
+                                    NextContextLine(exercise = uiState.nextExercise, context = context)
                                 }
                             }
                         }
@@ -355,5 +359,34 @@ class RestTimerScreen(
 
     private companion object {
         const val ADJUST_STEP_SEC = 30
+    }
+}
+
+/**
+ * "BENCH PRESS · SET 3 OF 4" on one line: a name too long for it is cut short with an ellipsis, so
+ * the set's number always shows whole.
+ */
+@Composable
+private fun NextContextLine(exercise: String?, context: String) {
+    Row(
+        modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (exercise != null) {
+            LightText(
+                text = exercise.uppercase(),
+                variant = LightTextVariant.Superfine,
+                modifier = Modifier.weight(1f, fill = false),
+                lighten = true,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        LightText(
+            text = (if (exercise != null) " · $context" else context).uppercase(),
+            variant = LightTextVariant.Superfine,
+            lighten = true,
+            maxLines = 1,
+        )
     }
 }
