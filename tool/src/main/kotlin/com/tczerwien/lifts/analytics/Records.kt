@@ -75,6 +75,11 @@ private class LoadRecord {
             loadKg >= best - WEIGHT_TOLERANCE_KG -> repsAtBest = maxOf(repsAtBest, reps)
         }
     }
+
+    fun copy(): LoadRecord = LoadRecord().also {
+        it.bestLoadKg = bestLoadKg
+        it.repsAtBest = repsAtBest
+    }
 }
 
 /**
@@ -93,7 +98,16 @@ class RecordTracker(private val tracking: Tracking = Tracking.WEIGHT_REPS) {
     private var bestAmount: Int? = null
 
     /** The bodyweight kinds' load record ([LoadRecord]). */
-    private val load = LoadRecord()
+    private var load = LoadRecord()
+
+    /** A tracker in the same state, to go on from without changing this one. */
+    fun copy(): RecordTracker = RecordTracker(tracking).also {
+        it.maxWeightKg = maxWeightKg
+        it.bestE1RmKg = bestE1RmKg
+        it.maxRepsWeightless = maxRepsWeightless
+        it.bestAmount = bestAmount
+        it.load = load.copy()
+    }
 
     /**
      * Whether [set] beats every set recorded so far. [set] need not be completed yet (the UI
@@ -187,6 +201,54 @@ fun chronologicalPrSetIds(
     tracking: Map<String, Tracking> = emptyMap(),
 ): Set<Long> = setsByExercise.flatMapTo(HashSet()) { (exerciseId, sets) ->
     chronologicalPrSetIds(sets, tracking[exerciseId] ?: Tracking.WEIGHT_REPS)
+}
+
+/**
+ * One exercise's completed sets from other workouts, replayed through the records engine once, so
+ * starring today's sets costs a pass over today's sets, not over years of history: Active Workout
+ * works the stars out again on every tap, on the main thread. The replay is done the first time a
+ * [tracking] is asked for and kept.
+ */
+class PriorHistory(sets: List<SetEntity>) {
+    /** The completed sets, in completion order. */
+    val ordered: List<SetEntity> = sets.filter { it.completedAt != null }.sortedWith(COMPLETION_ORDER)
+
+    private val replayed = HashMap<Tracking, RecordTracker>()
+
+    /** The record state after every set in [ordered], as a copy to go on from. */
+    fun after(tracking: Tracking): RecordTracker = synchronized(replayed) {
+        replayed.getOrPut(tracking) { RecordTracker(tracking).also { tracker -> ordered.forEach(tracker::record) } }
+    }.copy()
+
+    /** Whether [set] comes after every set in [ordered] in completion order (it can go on from [after]). */
+    fun isBefore(set: SetEntity): Boolean = ordered.lastOrNull()?.let { COMPLETION_ORDER.compare(it, set) < 0 } ?: true
+
+    companion object {
+        val NONE = PriorHistory(emptyList())
+    }
+}
+
+/**
+ * Ids of [sets] (ONE exercise's sets of one workout, any order, unticked ones ignored) that were PRs
+ * when they were completed, measured by [tracking] against [prior] and each other: the same answer as
+ * [chronologicalPrSetIds] over [prior]'s sets and [sets] together. When every ticked set of [sets]
+ * comes after all of [prior] (always, but for a workout resumed after a later one or a clock set back)
+ * it goes on from [prior]'s replayed state; otherwise it replays everything.
+ */
+fun prSetIdsAfter(sets: List<SetEntity>, prior: PriorHistory, tracking: Tracking = Tracking.WEIGHT_REPS): Set<Long> {
+    val ticked = sets.filter { it.completedAt != null }.sortedWith(COMPLETION_ORDER)
+    if (ticked.isEmpty()) return emptySet()
+    if (!prior.isBefore(ticked.first())) {
+        val ids = ticked.mapTo(HashSet()) { it.id }
+        return chronologicalPrSetIds(ticked + prior.ordered.filter { it.id !in ids }, tracking).filterTo(HashSet()) { it in ids }
+    }
+    val tracker = prior.after(tracking)
+    val result = HashSet<Long>()
+    for (set in ticked) {
+        if (recordEligible(set, tracking) && tracker.wouldBePr(set)) result.add(set.id)
+        tracker.record(set)
+    }
+    return result
 }
 
 /** A rep-max row: the heaviest weight for [reps] reps, actual or [estimated] from the best e1RM. */

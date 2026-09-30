@@ -2,6 +2,7 @@ package com.tczerwien.lifts.screens.activeworkout
 
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.Perf
+import com.tczerwien.lifts.analytics.PriorHistory
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
@@ -12,7 +13,7 @@ import com.tczerwien.lifts.screens.WorkoutMenuContent
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.session.DURATION_STEP_SEC
-import com.tczerwien.lifts.session.HistoryVersion
+import com.tczerwien.lifts.session.HistoryCache
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
@@ -184,22 +185,18 @@ class ActiveWorkoutViewModel(
     private var resolvedWorkoutId: Long? = null
 
     /**
-     * Per exercise, from other workouts, fetched once for the life of this screen: other workouts
-     * don't change while this one is open, except by a delete (Workout Detail, reached through
-     * Exercise Detail) or a restore, which bump [HistoryVersion] and so empty these.
-     * [lastTimeByExercise] is previousPerformance (for PREVIOUS and starting values);
-     * [priorHistoryByExercise] is every completed set (for PR stars). With these cached, a reload is
-     * four queries, not a scan of the whole history.
+     * Per exercise, from other workouts, read once for the life of this screen and again after a
+     * delete or restore ([HistoryCache]): last session (for PREVIOUS and starting values) and every
+     * completed set, replayed once through the records engine, so the PR stars a tap works out on the
+     * main thread cost a pass over today's sets, not over years of history. With these cached, a
+     * reload is four queries, not a scan of the whole history.
      */
-    @Volatile
-    private var lastTimeByExercise: Map<String, List<List<SetEntity>>> = emptyMap()
-
-    @Volatile
-    private var priorHistoryByExercise: Map<String, List<SetEntity>> = emptyMap()
-
-    /** The [HistoryVersion] the two caches above were filled at. */
-    @Volatile
-    private var cachedHistoryVersion: Long = HistoryVersion.current
+    private val history = HistoryCache { missing ->
+        HistoryCache.Snapshot(
+            lastTime = session.previousGroupsByExercise(missing),
+            prior = session.priorHistory(missing, resolvedWorkoutId ?: -1).mapValues { PriorHistory(it.value) },
+        )
+    }
 
     private var emptyTickHintJob: Job? = null
 
@@ -940,7 +937,7 @@ class ActiveWorkoutViewModel(
                     prSetIds = prSetIds(
                         slots = exercises.map { it.slot },
                         workoutSets = exercises.flatMap { it.sets },
-                        priorHistory = priorHistoryByExercise,
+                        priorHistory = history.snapshot.prior,
                         tracking = trackingOf(exercises),
                     ),
                 )
@@ -1006,33 +1003,6 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * Last session and PR history for exercises not seen yet on this screen: two queries per new
-     * exercise plus one history query for all of them. Merged under [refreshLock], so two reloads
-     * running at once can't drop each other's additions.
-     */
-    private fun cacheHistory(exerciseIds: List<String>, workoutId: Long) {
-        val version = HistoryVersion.current
-        synchronized(refreshLock) {
-            if (version != cachedHistoryVersion) {
-                lastTimeByExercise = emptyMap()
-                priorHistoryByExercise = emptyMap()
-                cachedHistoryVersion = version
-            }
-        }
-        val missing = exerciseIds.filterNot { it in lastTimeByExercise }
-        if (missing.isEmpty()) return
-        val lastTime = session.previousGroupsByExercise(missing)
-        val history = session.priorHistory(missing, workoutId)
-        synchronized(refreshLock) {
-            // A delete or restore that landed while these were read makes them stale: the next
-            // reload fetches them again.
-            if (cachedHistoryVersion != version) return
-            lastTimeByExercise = lastTimeByExercise + lastTime
-            priorHistoryByExercise = priorHistoryByExercise + history
-        }
-    }
-
-    /**
      * Full reload from the database, call from Dispatchers.IO: the workout, its slots, its sets and
      * their catalog rows (four queries), plus history for any exercise new to this screen.
      */
@@ -1053,8 +1023,9 @@ class ActiveWorkoutViewModel(
         val loadedSets = repository.setsForWorkout(workoutId)
         val exerciseIds = slots.map { it.exerciseId }.distinct()
         val catalog = repository.exercisesByIds(exerciseIds)
-        cacheHistory(exerciseIds, workoutId)
-        val lastTimeBySlot = previousForSlots(slots, lastTimeByExercise)
+        history.ensure(exerciseIds)
+        val cached = history.snapshot
+        val lastTimeBySlot = previousForSlots(slots, cached.lastTime)
         // Only the first load picks the exercise; after that the lifter's choice stands.
         val savedSlotId = if (_uiState.value.loaded) null else session.currentSlotSnapshot(workoutId)
         applyRefresh(ticket) {
@@ -1075,7 +1046,7 @@ class ActiveWorkoutViewModel(
                     perSide = exercise?.perSide == true,
                 )
             }
-            val prIds = prSetIds(slots, sets, priorHistoryByExercise, trackingOf(blocks))
+            val prIds = prSetIds(slots, sets, cached.prior, trackingOf(blocks))
             _uiState.update { state ->
                 val lastIndex = (blocks.size - 1).coerceAtLeast(0)
                 val currentIndex = when {

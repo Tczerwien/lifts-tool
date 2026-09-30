@@ -1,7 +1,8 @@
 package com.tczerwien.lifts.session
 
+import com.tczerwien.lifts.analytics.PriorHistory
 import com.tczerwien.lifts.analytics.WorkoutBodyweight
-import com.tczerwien.lifts.analytics.chronologicalPrSetIds
+import com.tczerwien.lifts.analytics.prSetIdsAfter
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
@@ -136,29 +137,40 @@ fun totalVolumeKg(sets: List<SetEntity>): Double =
 
 /**
  * Ids of sets in [workoutSets] that were PRs at the moment they were completed. Each exercise's
- * completed sets from this workout and from [priorHistory] (sets of the same exercises from other
- * workouts, keyed by exerciseId) are replayed together in completion order, so a set is only
- * compared with sets completed before it. Later or abandoned workouts in [priorHistory] can't
- * steal a star. Rules are those of the shared records engine, by each exercise's [tracking]
- * (weight × reps where it has none).
+ * completed sets from this workout are measured against [priorHistory] (its sets from other
+ * workouts, keyed by exerciseId, replayed once: [PriorHistory]) and each other in completion order,
+ * so a set is only compared with sets completed before it. Later or abandoned workouts in
+ * [priorHistory] can't steal a star. Rules are those of the shared records engine, by each
+ * exercise's [tracking] (weight × reps where it has none). Cheap enough for every tap: it goes over
+ * today's sets, not the history ([prSetIdsAfter]).
  */
+fun prSetIds(
+    slots: List<WorkoutExerciseEntity>,
+    workoutSets: List<SetEntity>,
+    priorHistory: Map<String, PriorHistory>,
+    tracking: Map<String, Tracking> = emptyMap(),
+): Set<Long> {
+    val slotById = slots.associateBy { it.id }
+    val byExercise = HashMap<String, MutableList<SetEntity>>()
+    for (set in workoutSets) {
+        val exerciseId = slotById[set.workoutExerciseId]?.exerciseId ?: continue
+        byExercise.getOrPut(exerciseId) { mutableListOf() }.add(set)
+    }
+    return byExercise.flatMapTo(HashSet()) { (exerciseId, sets) ->
+        prSetIdsAfter(sets, priorHistory[exerciseId] ?: PriorHistory.NONE, tracking[exerciseId] ?: Tracking.WEIGHT_REPS)
+    }
+}
+
+/** [prSetIds] against raw lists of each exercise's sets from other workouts, replayed here (a one-off: Workout Complete). */
+@JvmName("prSetIdsFromLists")
 fun prSetIds(
     slots: List<WorkoutExerciseEntity>,
     workoutSets: List<SetEntity>,
     priorHistory: Map<String, List<SetEntity>>,
     tracking: Map<String, Tracking> = emptyMap(),
 ): Set<Long> {
-    val slotById = slots.associateBy { it.id }
-    val workoutSetIds = workoutSets.mapTo(HashSet()) { it.id }
-    val byExercise = HashMap<String, MutableList<SetEntity>>()
-    for (set in workoutSets) {
-        val exerciseId = slotById[set.workoutExerciseId]?.exerciseId ?: continue
-        byExercise.getOrPut(exerciseId) { mutableListOf() }.add(set)
-    }
-    for ((exerciseId, sets) in byExercise) {
-        sets += priorHistory[exerciseId].orEmpty().filter { it.id !in workoutSetIds }
-    }
-    return chronologicalPrSetIds(byExercise, tracking).filterTo(HashSet()) { it in workoutSetIds }
+    val replayed: Map<String, PriorHistory> = priorHistory.mapValues { PriorHistory(it.value) }
+    return prSetIds(slots, workoutSets, replayed, tracking)
 }
 
 /**

@@ -291,4 +291,65 @@ class RecordsTest {
         val load = loadOf(set)
         return load > best + 0.12 || (load >= best - 0.12 && reps > repsAtBest)
     }
+
+    // --- replaying the history once (PriorHistory) ---
+
+    /** A random set: weightless, weighted, heavy or light, warm-up or not, some with no reps. */
+    private fun randomSet(random: Random, at: Long, id: Long, workoutExerciseId: Long) = SetEntity(
+        id = id,
+        workoutExerciseId = workoutExerciseId,
+        position = 0,
+        type = if (random.nextInt(8) == 0) "warmup" else "normal",
+        weightKg = when (random.nextInt(5)) {
+            0 -> null
+            1 -> -random.nextInt(0, 40).toDouble()
+            else -> random.nextInt(0, 30) * 2.5
+        },
+        reps = if (random.nextInt(10) == 0) null else random.nextInt(0, 15),
+        durationSec = if (random.nextInt(4) == 0) null else random.nextInt(0, 90),
+        completedAt = at,
+    )
+
+    @Test
+    fun goingOnFromTheReplayedHistoryStarsWhatReplayingEverythingStars() {
+        val random = Random(20260929)
+        repeat(400) { trial ->
+            val tracking = Tracking.entries[trial % Tracking.entries.size]
+            var id = 1L
+            // Completion times collide now and then, so the id breaks the tie as the engine orders them.
+            val prior = List(random.nextInt(0, 40)) { randomSet(random, at = random.nextLong(0, 1_000), id = id++, workoutExerciseId = 1) }
+            // Today mostly comes after the history; one trial in four doesn't (a workout resumed after a later one).
+            val start = if (trial % 4 == 0) random.nextLong(0, 1_000) else 1_000L
+            val today = List(random.nextInt(1, 12)) { i ->
+                val set = randomSet(random, at = start + random.nextLong(0, 200), id = id++, workoutExerciseId = 2)
+                if (i % 5 == 4) set.copy(completedAt = null) else set
+            }
+            val expected = chronologicalPrSetIds(prior + today, tracking).filterTo(HashSet()) { star -> today.any { it.id == star } }
+            val history = PriorHistory(prior.shuffled(random))
+            assertEquals(expected, prSetIdsAfter(today.shuffled(random), history, tracking), "trial $trial, $tracking")
+            // Asked again (the next tap), it gives the same: the replayed state isn't used up.
+            assertEquals(expected, prSetIdsAfter(today, history, tracking), "trial $trial again")
+        }
+    }
+
+    @Test
+    fun theReplayedStateIsACopyEachTime() {
+        val history = PriorHistory(listOf(logged(100.0, 5, at = 1)))
+        val first = history.after(Tracking.WEIGHT_REPS)
+        first.record(logged(140.0, 5, at = 2))
+        assertEquals(100.0, history.after(Tracking.WEIGHT_REPS).maxWeightKg, "a tap's replay must not move the history's")
+        assertFalse(history.after(Tracking.WEIGHT_REPS).wouldBePr(pending(95.0, 5)))
+        assertTrue(history.after(Tracking.WEIGHT_REPS).wouldBePr(pending(105.0, 5)))
+    }
+
+    @Test
+    fun aHistorySetCompletedAfterTodaysFirstMeansReplayingEverything() {
+        // Resumed yesterday's workout after today's finished one: today's 100×5 at t=5 was a record
+        // then, though a 110×5 at t=9 is in the history now.
+        val history = PriorHistory(listOf(logged(90.0, 5, at = 1), logged(110.0, 5, at = 9)))
+        val resumed = logged(100.0, 5, at = 5)
+        assertEquals(setOf(resumed.id), prSetIdsAfter(listOf(resumed), history))
+        val later = logged(105.0, 5, at = 12)
+        assertEquals(setOf(resumed.id), prSetIdsAfter(listOf(resumed, later), history), "105 after 110 is none")
+    }
 }

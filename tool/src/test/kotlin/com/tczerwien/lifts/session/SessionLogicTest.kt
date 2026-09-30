@@ -163,7 +163,7 @@ class SessionLogicTest {
     fun `first ever working set is a PR`() {
         val slots = listOf(slot(id = 1))
         val sets = listOf(set(id = 10, weightKg = 100.0, reps = 5, completedAt = 1L))
-        assertEquals(setOf(10L), prSetIds(slots, sets, emptyMap()))
+        assertEquals(setOf(10L), prSetIds(slots, sets, emptyMap<String, List<SetEntity>>()))
     }
 
     @Test
@@ -197,7 +197,7 @@ class SessionLogicTest {
         val sets = listOf(
             set(id = 10, type = SET_TYPE_WARMUP, weightKg = 200.0, reps = 1, completedAt = 1L),
         )
-        assertTrue(prSetIds(slots, sets, emptyMap()).isEmpty())
+        assertTrue(prSetIds(slots, sets, emptyMap<String, List<SetEntity>>()).isEmpty())
     }
 
     @Test
@@ -221,7 +221,7 @@ class SessionLogicTest {
             set(id = 11, slotId = 1, weightKg = null, reps = 15, completedAt = 2L),
             set(id = 12, slotId = 2, weightKg = 0.0, reps = 12, completedAt = 3L),
         )
-        val ids = prSetIds(slots, sets, emptyMap())
+        val ids = prSetIds(slots, sets, emptyMap<String, List<SetEntity>>())
         assertEquals(setOf(10L, 11L, 12L), ids, "weighted and weightless firsts are both PRs")
         val records = prRecords(slots, sets, ids, emptyMap())
         assertEquals(listOf("dips" to 20.0, "pullups" to null), records.map { it.exerciseId to it.weightKg })
