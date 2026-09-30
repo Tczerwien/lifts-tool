@@ -24,6 +24,7 @@ import com.tczerwien.lifts.session.autoAdvanceAt
 import com.tczerwien.lifts.session.autoAdvanceSlotId
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.nextExerciseSlotId
+import com.tczerwien.lifts.session.nextRowOf
 import com.tczerwien.lifts.session.nextRir
 import com.tczerwien.lifts.session.nextSetType
 import com.tczerwien.lifts.session.openingSlotId
@@ -633,7 +634,7 @@ class ActiveWorkoutViewModel(
         nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
     }
 
-    /** Result of the exercise list: that exercise, on its first unticked set. */
+    /** Result of the exercise list: that exercise, on the row he is on in it ([nextRowOf]). */
     fun jumpTo(slotId: Long) {
         if (!beginAction()) return
         // Even back to the same exercise: a bounce aimed at the list must not tick a row, which is
@@ -662,17 +663,17 @@ class ActiveWorkoutViewModel(
      */
     fun rowsScrolled() = rowsMovedUnderFinger()
 
-    /** Puts exercise [slotId] on screen with the steppers on its first unticked row, and saves it as the one on screen. */
+    /**
+     * Puts exercise [slotId] on screen with the steppers on the row he is on in it ([nextRowOf]: after
+     * his last tick there, else its first), and saves it as the one on screen.
+     */
     private fun showExercise(slotId: Long) {
         _uiState.update { state ->
             val index = state.exercises.indexOfFirst { it.slot.id == slotId }
             if (index < 0) {
                 state
             } else {
-                state.copy(
-                    currentIndex = index,
-                    activeSetId = state.exercises[index].sets.firstOrNull { it.completedAt == null }?.id,
-                )
+                state.copy(currentIndex = index, activeSetId = nextRowOf(state.exercises[index].sets))
             }
         }
         rememberCurrentSlot()
@@ -1068,9 +1069,11 @@ class ActiveWorkoutViewModel(
                     else -> blocks.indexOfFirst { it.slot.id == openingSlotId(slots, sets, savedSlotId) }.coerceAtLeast(0)
                 }
                 val currentBlock = blocks.getOrNull(currentIndex)
+                // The first load (Resume, a reopen after a kill) and an active row removed or gone take
+                // the row he is on, after his last tick: not a warm-up he skipped above it.
                 val activeSetId = state.activeSetId
                     ?.takeIf { id -> currentBlock?.sets?.any { it.id == id } == true }
-                    ?: currentBlock?.sets?.firstOrNull { it.completedAt == null }?.id
+                    ?: currentBlock?.sets?.let(::nextRowOf)
                 // Menu edits whose save this reload may have read before are put back on top.
                 overlayMeta(
                     ticket,

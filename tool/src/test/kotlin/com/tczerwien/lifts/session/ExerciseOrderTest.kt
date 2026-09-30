@@ -100,6 +100,25 @@ class ExerciseOrderTest {
         assertNull(activeRowAfterTick(rows.map { it.copy(completedAt = 9L) }, tickedSetId = 13), "all done: the move to the next exercise")
     }
 
+    @Test
+    fun `an exercise opens on the row after his last tick, not on a warm-up he skipped`() {
+        // W1 ticked, W2 skipped, sets 1 and 2 ticked: Resume or a jump back lands on set 3.
+        val rows = listOf(
+            row(11, 1, done = true, at = 10L), row(12, 1), row(13, 1, done = true, at = 20L),
+            row(14, 1, done = true, at = 30L), row(15, 1),
+        )
+        assertEquals(15L, nextRowOf(rows))
+        // Set 3 ticked before set 1: after the last tick in time (set 1), so set 2, not round to W2.
+        val outOfOrder = listOf(
+            row(11, 1, done = true, at = 10L), row(12, 1), row(13, 1, done = true, at = 30L),
+            row(14, 1), row(15, 1, done = true, at = 20L),
+        )
+        assertEquals(14L, nextRowOf(outOfOrder))
+        // Nothing ticked yet: the first row; everything ticked: none.
+        assertEquals(11L, nextRowOf(rows.map { it.copy(completedAt = null) }))
+        assertNull(nextRowOf(rows.map { it.copy(completedAt = 9L) }))
+    }
+
     private fun slot(id: Long, position: Int) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position)
 

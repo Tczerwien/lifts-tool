@@ -42,6 +42,18 @@ fun activeRowAfterTick(rows: List<SetEntity>, tickedSetId: Long): Long? {
     return (after.firstOrNull { it.completedAt == null } ?: rows.firstOrNull { it.completedAt == null })?.id
 }
 
+/**
+ * The row he is on in one exercise ([rows], in order): the one [activeRowAfterTick] gives after the
+ * row he ticked last, so opening it (Resume, the exercise list, the move to the next exercise) and
+ * the Rest Timer's NEXT find the set he was about to do, not a warm-up he skipped above it; the first
+ * row while none is ticked. Null once every row is ticked.
+ */
+fun nextRowOf(rows: List<SetEntity>): Long? {
+    val lastTicked = rows.filter { it.completedAt != null }.maxWithOrNull(compareBy({ it.completedAt }, { it.id }))
+        ?: return rows.firstOrNull { it.completedAt == null }?.id
+    return activeRowAfterTick(rows, lastTicked.id)
+}
+
 /** [slots] in order starting just after [currentSlotId] and wrapping round, without it; all of them when it isn't one. */
 private fun slotsAfter(slots: List<WorkoutExerciseEntity>, currentSlotId: Long?): List<WorkoutExerciseEntity> {
     val ordered = slots.sortedBy { it.position }
