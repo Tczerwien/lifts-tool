@@ -274,6 +274,9 @@ class LiftsRepository private constructor(
             .groupBy(keySelector = { it.exerciseId }, valueTransform = { it.set })
     }
 
+    /** When the last finished workout ended (its [WorkoutEntity.endedAt]), or null with none finished. */
+    fun lastWorkoutEndedAt(): Long? = db.workoutDao.lastEndedAt()
+
     /** [completedSetsByExercise] of every workout, only the sets completed at or before [until]. */
     fun completedSetsByExerciseUntil(exerciseIds: Collection<String>, until: Long): Map<String, List<SetEntity>> {
         if (exerciseIds.isEmpty()) return emptyMap()

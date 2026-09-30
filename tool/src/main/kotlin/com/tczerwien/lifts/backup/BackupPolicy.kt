@@ -135,4 +135,11 @@ object BackupPolicy {
 
     /** Whether Home should back up now, given [lastDated]. */
     fun isDue(lastMillis: Long?, now: Long): Boolean = lastMillis == null || now - lastMillis >= DUE_AFTER_MS
+
+    /**
+     * Whether the newest dated backup ([lastMillis]) is older than the last finished workout's end
+     * ([lastWorkoutEnd]): a Finish since, not yet copied. Home's check then backs up too.
+     */
+    fun behindLog(lastMillis: Long?, lastWorkoutEnd: Long?): Boolean =
+        lastWorkoutEnd != null && (lastMillis == null || lastMillis < lastWorkoutEnd)
 }

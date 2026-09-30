@@ -222,6 +222,10 @@ interface WorkoutDao {
             "ORDER BY sets.completedAt, sets.id"
     )
     fun completedSetsForExercisesUntil(exerciseIds: List<String>, until: Long): List<SetWithExercise>
+
+    /** When the last finished workout ended, or null with none finished. */
+    @Query("SELECT MAX(endedAt) FROM workouts")
+    fun lastEndedAt(): Long?
 }
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */

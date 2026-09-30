@@ -180,4 +180,12 @@ class BackupPolicyTest {
         assertFalse(BackupPolicy.isDue(now - day + 1, now))
         assertTrue(BackupPolicy.isDue(now - day, now))
     }
+
+    @Test
+    fun `a Finish since the newest backup makes Home back up, whatever the day`() {
+        assertTrue(BackupPolicy.behindLog(lastMillis = 1_000, lastWorkoutEnd = 2_000), "finished after the last copy")
+        assertFalse(BackupPolicy.behindLog(lastMillis = 3_000, lastWorkoutEnd = 2_000), "copied since")
+        assertTrue(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = 2_000), "no copy yet")
+        assertFalse(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = null), "nothing finished")
+    }
 }
