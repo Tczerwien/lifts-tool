@@ -402,7 +402,13 @@ class ExerciseDetailViewModel(
 
         // Records count finished workouts only: a mistaken tick in today's workout isn't a record until
         // the workout is done. Today's row and its live stars stay, as Active Workout shows them.
-        val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit, tracking, perSide)
+        val finished = perWorkout.filterNot { it.inProgress }
+        // A record is dated by its workout's day, as the History tab dates it: a PR ticked after
+        // midnight in an evening workout is on that evening's row.
+        val startedAtBySet = finished.flatMap { entry -> entry.sets.map { it.id to entry.dateMillis } }.toMap()
+        val records = recordsFor(finished.flatMap { it.sets }, unit, tracking, perSide) { set ->
+            startedAtBySet[set.id] ?: set.completedAt ?: 0L
+        }
         // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
         _uiState.update { state ->
             // A Type, Per Side or Show tapped while this read stands until its save is read back.
@@ -428,10 +434,20 @@ class ExerciseDetailViewModel(
     private fun SetEntity.toToken(unit: WeightUnit, pr: Boolean, perSide: Boolean) =
         SetToken(setNotation(this, unit, NotationStyle.LIST, perSide = perSide) ?: "-", pr)
 
-    /** The Records tab, formatted from the shared records engine, as the exercise is measured ([perSide]: "× 10/side"). */
-    private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit, tracking: Tracking, perSide: Boolean): Records? {
+    /**
+     * The Records tab, formatted from the shared records engine, as the exercise is measured ([perSide]:
+     * "× 10/side"); each record dated by [dayOf] its set.
+     */
+    private fun recordsFor(
+        sets: List<SetEntity>,
+        unit: WeightUnit,
+        tracking: Tracking,
+        perSide: Boolean,
+        dayOf: (SetEntity) -> Long,
+    ): Records? {
         val records = exerciseRecords(sets, REP_MAX_TARGETS, tracking) ?: return null
         fun weightLabel(kg: Double) = "${Format.weight(kg, unit)} ${unit.suffix}"
+        fun dated(set: SetEntity) = Format.dateWithYear(dayOf(set))
         val stats = buildList {
             records.maxWeightSet?.let { set ->
                 val label = when (tracking) {
@@ -446,27 +462,27 @@ class ExerciseDetailViewModel(
                     Tracking.ASSISTED_BODYWEIGHT -> "Least Assistance"
                     else -> "Max Weight"
                 }
-                add(Stat(title, label, Format.dateWithYear(set.completedAt ?: 0L)))
+                add(Stat(title, label, dated(set)))
             }
             records.longestSet?.let { set ->
-                add(Stat("Longest", "${set.durationSec ?: 0}s${if (perSide) PER_SIDE else ""}", Format.dateWithYear(set.completedAt ?: 0L)))
+                add(Stat("Longest", "${set.durationSec ?: 0}s${if (perSide) PER_SIDE else ""}", dated(set)))
             }
             val bestE1Rm = records.bestE1RmKg
             val bestE1RmSet = records.bestE1RmSet
             if (bestE1Rm != null && bestE1RmSet != null) {
-                add(Stat("Best e1RM", weightLabel(bestE1Rm), Format.dateWithYear(bestE1RmSet.completedAt ?: 0L)))
+                add(Stat("Best e1RM", weightLabel(bestE1Rm), dated(bestE1RmSet)))
             }
             records.bestVolumeSet?.let { set ->
                 add(
                     Stat(
                         "Best Volume Set",
                         setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, perSide = perSide).orEmpty(),
-                        Format.dateWithYear(set.completedAt ?: 0L),
+                        dated(set),
                     ),
                 )
             }
             records.maxRepsSet?.let { set ->
-                add(Stat("Max Reps", "${set.reps ?: 0}${if (perSide) PER_SIDE else ""}", Format.dateWithYear(set.completedAt ?: 0L)))
+                add(Stat("Max Reps", "${set.reps ?: 0}${if (perSide) PER_SIDE else ""}", dated(set)))
             }
         }
         val repMaxes = records.repMaxes.map { repMax ->
