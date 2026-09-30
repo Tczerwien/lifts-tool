@@ -181,13 +181,23 @@ class BodyweightViewModel(
         }
     }
 
-    /** The trash, on a day with a weigh-in: the first tap arms, the second deletes it; then back to today. */
+    /** A confirmed delete on its way: the trash takes no taps until the screen is back on today. */
+    @Volatile
+    private var deleting = false
+
+    /**
+     * The trash, on a day with a weigh-in: the first tap arms, the second deletes it; then back to
+     * today. A bounce of the confirming tap must not arm it again against today's weigh-in.
+     */
     fun delete() {
         val state = _uiState.value
-        if (!state.loaded || !state.dayHasEntry || !deleteArm.tap()) return
+        if (deleting || !state.loaded || !state.dayHasEntry || !deleteArm.tap()) return
+        deleting = true
+        deleteArm.quiet()
         LiftsIo.write({ repository.deleteBodyweight(state.day) }) { deleted ->
             if (deleted) share.logChanged()
             refresh(Reset(held = null))
+            deleting = false
         }
     }
 
@@ -201,6 +211,8 @@ class BodyweightViewModel(
      * timing out. Weigh-ins are by local calendar day, so "today" is local too.
      */
     private fun refresh(reset: Reset? = null) {
+        // Back on today after a save or delete: nothing armed stays aimed at the day shown before.
+        if (reset != null) deleteArm.disarm()
         val unit = settings.snapshot().units
         val list = repository.listBodyweight() // epochDay ASC
         entries = list
