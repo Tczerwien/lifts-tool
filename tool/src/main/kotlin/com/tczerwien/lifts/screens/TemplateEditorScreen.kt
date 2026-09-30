@@ -5,18 +5,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
@@ -24,13 +24,25 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.renumber
 import com.tczerwien.lifts.library.reorderPositions
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.MAX_RIR
+import com.tczerwien.lifts.session.MAX_TARGET_REPS
+import com.tczerwien.lifts.session.MAX_TEMPLATE_WARMUPS
+import com.tczerwien.lifts.session.RepRange
+import com.tczerwien.lifts.session.restOverride
+import com.tczerwien.lifts.session.stepRepMax
+import com.tczerwien.lifts.session.stepRepMin
+import com.tczerwien.lifts.session.stepTargetRir
+import com.tczerwien.lifts.session.stepTemplateWarmups
+import com.tczerwien.lifts.session.templateSlotSummary
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
+import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.ReorderArrows
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
@@ -43,8 +55,6 @@ import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
-import com.thelightphone.sdk.ui.LightIcon
-import com.thelightphone.sdk.ui.LightIconConfiguration
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
@@ -60,7 +70,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val DEFAULT_TARGET_SETS = 3
@@ -69,11 +78,6 @@ private const val MAX_TARGET_SETS = 10
 private const val REST_STEP_SEC = 15
 private const val MIN_REST_SEC = 0
 private const val MAX_REST_SEC = 600
-
-private const val REORDER_TARGET_WIDTH_UNITS = 2f
-private const val REORDER_TARGET_HEIGHT_UNITS = 1.5f
-private const val REORDER_ICON_UNITS = 0.9f
-private const val REORDER_DISABLED_ALPHA = 0.4f
 
 private const val LIST_ROW_HEIGHT_UNITS = 3f
 
@@ -99,20 +103,24 @@ class TemplateEditorViewModel(
         val id: Long,
         val name: String,
         val targetSets: Int,
+        /** Warm-ups it asks for; null repeats last session's. */
+        val warmupSets: Int? = null,
+        val repMin: Int? = null,
+        val repMax: Int? = null,
+        val targetRir: Int? = null,
         /** Effective work rest — explicit value or the settings default. */
         val restSec: Int,
         /** Effective warmup rest — explicit value or the settings default. */
         val warmupRestSec: Int,
+        /** The work rest follows Settings' default (none stored). */
+        val restIsDefault: Boolean = true,
+        val warmupRestIsDefault: Boolean = true,
     )
 
     data class UiState(
         val name: String = "",
         val rows: List<ExerciseRow> = emptyList(),
         val mode: Mode = Mode.Overview,
-        /** Overview trash armed — next trash tap deletes the template. */
-        val deleteArmed: Boolean = false,
-        /** Edit-mode trash armed — next trash tap removes the exercise. */
-        val removeArmed: Boolean = false,
         /**
          * The delete is confirmed and waiting its turn on the lane: rows, rename and add are ignored, and
          * Back lets the editor go, so the delete's own exit can't be swallowed or pop another screen.
@@ -125,22 +133,34 @@ class TemplateEditorViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
+    /**
+     * The overview trash: two taps, the second 0.4 to 3 s after the first ([ArmedAction]), so a
+     * double-tap can't delete and an arm left over from before can't be confirmed later.
+     */
+    val deleteArm = ArmedAction(viewModelScope)
 
-    /** Queued behind any write still pending; only reads, so the exports are left alone. */
+    /** An exercise's trash in its overlay, the same way. */
+    val removeArm = ArmedAction(viewModelScope)
+
+    /**
+     * Queued behind any write still pending; only reads, so the exports are left alone. Back from the
+     * picker or the screen waking: an armed trash is forgotten, so it can't be confirmed by a tap meant
+     * for something else.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        disarm()
         LiftsIo.write { refresh() }
+    }
+
+    private fun disarm() {
+        deleteArm.disarm()
+        removeArm.disarm()
     }
 
     fun openRename() {
         if (_uiState.value.deleting) return
-        _uiState.update {
-            it.copy(
-                mode = Mode.Rename,
-                deleteArmed = false,
-                removeArmed = false,
-                editorSession = it.editorSession + 1,
-            )
-        }
+        disarm()
+        _uiState.update { it.copy(mode = Mode.Rename, editorSession = it.editorSession + 1) }
     }
 
     fun cancelRename() {
@@ -161,13 +181,15 @@ class TemplateEditorViewModel(
 
     fun openEdit(templateExerciseId: Long) {
         if (_uiState.value.deleting) return
-        _uiState.update {
-            it.copy(
-                mode = Mode.EditExercise(templateExerciseId),
-                deleteArmed = false,
-                removeArmed = false,
-            )
-        }
+        disarm()
+        _uiState.update { it.copy(mode = Mode.EditExercise(templateExerciseId)) }
+    }
+
+    /** "+ Add Exercise" row: the picker opens, unless the template is on its way out. */
+    fun canAddExercise(): Boolean {
+        if (_uiState.value.deleting) return false
+        disarm()
+        return true
     }
 
     /**
@@ -191,46 +213,76 @@ class TemplateEditorViewModel(
     }
 
     /** Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1 ([reorderPositions]). */
-    fun moveExercise(templateExerciseId: Long, delta: Int) = mutate {
-        val exercises = repository.exercisesForTemplate(templateId)
-        val index = exercises.indexOfFirst { it.id == templateExerciseId }
-        val moves = reorderPositions(exercises, index, delta) { it.position } ?: return@mutate
-        repository.inTransaction {
-            moves.forEach { (exercise, position) ->
-                repository.updateTemplateExercise(exercise.copy(position = position))
+    fun moveExercise(templateExerciseId: Long, delta: Int) {
+        disarm()
+        mutate {
+            val exercises = repository.exercisesForTemplate(templateId)
+            val index = exercises.indexOfFirst { it.id == templateExerciseId }
+            val moves = reorderPositions(exercises, index, delta) { it.position } ?: return@mutate
+            repository.inTransaction {
+                moves.forEach { (exercise, position) ->
+                    repository.updateTemplateExercise(exercise.copy(position = position))
+                }
             }
         }
     }
 
-    fun stepSets(templateExerciseId: Long, delta: Int) = mutate {
-        val exercise = templateExercise(templateExerciseId) ?: return@mutate
-        val targetSets = (exercise.targetSets + delta).coerceIn(MIN_TARGET_SETS, MAX_TARGET_SETS)
-        repository.updateTemplateExercise(exercise.copy(targetSets = targetSets))
+    fun stepSets(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        exercise.copy(targetSets = (exercise.targetSets + delta).coerceIn(MIN_TARGET_SETS, MAX_TARGET_SETS))
     }
 
-    /** ±15s; stepping from the settings default materializes an explicit per-exercise value. */
-    fun stepWorkRest(templateExerciseId: Long, delta: Int) = mutate {
-        val exercise = templateExercise(templateExerciseId) ?: return@mutate
-        val current = exercise.restSecWork ?: settingsStore.snapshot().defaultRestSec
-        val restSec = (current + delta * REST_STEP_SEC).coerceIn(MIN_REST_SEC, MAX_REST_SEC)
-        repository.updateTemplateExercise(exercise.copy(restSecWork = restSec))
+    /** Warm-ups: last session's (none stored), then 0 to 5 ([stepTemplateWarmups]). */
+    fun stepWarmups(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        exercise.copy(warmupSets = stepTemplateWarmups(exercise.warmupSets, delta))
     }
 
-    fun stepWarmupRest(templateExerciseId: Long, delta: Int) = mutate {
-        val exercise = templateExercise(templateExerciseId) ?: return@mutate
-        val current = exercise.restSecWarmup ?: settingsStore.snapshot().warmupRestSec
-        val restSec = (current + delta * REST_STEP_SEC).coerceIn(MIN_REST_SEC, MAX_REST_SEC)
-        repository.updateTemplateExercise(exercise.copy(restSecWarmup = restSec))
+    /** The rep range's low end ([stepRepMin]: 8 from none, never above the top). */
+    fun stepRepMin(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        val range = stepRepMin(RepRange(exercise.repMin, exercise.repMax), delta)
+        exercise.copy(repMin = range.min, repMax = range.max)
     }
 
-    /** First tap arms ("tap again to remove"); second removes and returns to the list. */
+    /** The rep range's top ([stepRepMax]: four above the low end from none, never below it). */
+    fun stepRepMax(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        val range = stepRepMax(RepRange(exercise.repMin, exercise.repMax), delta)
+        exercise.copy(repMin = range.min, repMax = range.max)
+    }
+
+    fun stepRir(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        exercise.copy(targetRir = stepTargetRir(exercise.targetRir, delta))
+    }
+
+    /**
+     * ±15 s from the rest in effect. A rest that lands on Settings' default is stored as none
+     * ([restOverride]), so the exercise follows the default again if that changes: + then − is no change.
+     */
+    fun stepWorkRest(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        val default = settingsStore.snapshot().defaultRestSec
+        val restSec = ((exercise.restSecWork ?: default) + delta * REST_STEP_SEC).coerceIn(MIN_REST_SEC, MAX_REST_SEC)
+        exercise.copy(restSecWork = restOverride(restSec, default))
+    }
+
+    fun stepWarmupRest(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
+        val default = settingsStore.snapshot().warmupRestSec
+        val restSec = ((exercise.restSecWarmup ?: default) + delta * REST_STEP_SEC).coerceIn(MIN_REST_SEC, MAX_REST_SEC)
+        exercise.copy(restSecWarmup = restOverride(restSec, default))
+    }
+
+    /** Reads the exercise as it is on the lane, and writes [change]'s result when it differs. */
+    private fun edit(templateExerciseId: Long, change: (TemplateExerciseEntity) -> TemplateExerciseEntity) {
+        removeArm.disarm()
+        mutate {
+            val exercise = templateExercise(templateExerciseId) ?: return@mutate
+            val changed = change(exercise)
+            if (changed != exercise) repository.updateTemplateExercise(changed)
+        }
+    }
+
+    /** First tap arms ("tap again to remove"); a second, 0.4 to 3 s later, removes and returns to the list. */
     fun tapRemoveExercise() {
         val mode = _uiState.value.mode as? Mode.EditExercise ?: return
-        if (!_uiState.value.removeArmed) {
-            _uiState.update { it.copy(removeArmed = true) }
-            return
-        }
-        _uiState.update { it.copy(removeArmed = false, mode = Mode.Overview) }
+        if (!removeArm.tap()) return
+        _uiState.update { it.copy(mode = Mode.Overview) }
         mutate {
             repository.inTransaction {
                 repository.deleteTemplateExercise(mode.templateExerciseId)
@@ -241,15 +293,11 @@ class TemplateEditorViewModel(
         }
     }
 
-    /** First tap arms ("tap again to delete"); second deletes and invokes [onDeleted] on Main. */
+    /** First tap arms ("tap again to delete"); a second, 0.4 to 3 s later, deletes and invokes [onDeleted] on Main. */
     fun tapDeleteTemplate(onDeleted: () -> Unit) {
         // A second delete would queue a second exit, which would pop the screen below.
-        if (_uiState.value.deleting) return
-        if (!_uiState.value.deleteArmed) {
-            _uiState.update { it.copy(deleteArmed = true) }
-            return
-        }
-        _uiState.update { it.copy(deleteArmed = false, deleting = true) }
+        if (_uiState.value.deleting || !deleteArm.tap()) return
+        _uiState.update { it.copy(deleting = true) }
         LiftsIo.write({ repository.deleteTemplate(templateId) }) {
             share.logChanged()
             // The delete survives Back, but the callback must not: if the editor is already gone,
@@ -273,18 +321,18 @@ class TemplateEditorViewModel(
             // The template is going: its exit (or his Back) leaves, whatever else is open.
             state.deleting -> false
 
-            state.removeArmed -> {
-                _uiState.update { it.copy(removeArmed = false) }
+            removeArm.armed.value -> {
+                removeArm.disarm()
                 true
             }
 
             state.mode != Mode.Overview -> {
-                _uiState.update { it.copy(mode = Mode.Overview, removeArmed = false) }
+                _uiState.update { it.copy(mode = Mode.Overview) }
                 true
             }
 
-            state.deleteArmed -> {
-                _uiState.update { it.copy(deleteArmed = false) }
+            deleteArm.armed.value -> {
+                deleteArm.disarm()
                 true
             }
 
@@ -317,8 +365,14 @@ class TemplateEditorViewModel(
                 id = exercise.id,
                 name = repository.exerciseById(exercise.exerciseId)?.let(::displayName) ?: exercise.exerciseId,
                 targetSets = exercise.targetSets,
+                warmupSets = exercise.warmupSets,
+                repMin = exercise.repMin,
+                repMax = exercise.repMax,
+                targetRir = exercise.targetRir,
                 restSec = exercise.restSecWork ?: settings.defaultRestSec,
                 warmupRestSec = exercise.restSecWarmup ?: settings.warmupRestSec,
+                restIsDefault = exercise.restSecWork == null,
+                warmupRestIsDefault = exercise.restSecWarmup == null,
             )
         }
         _uiState.update { it.copy(name = template?.name.orEmpty(), rows = rows) }
@@ -327,10 +381,10 @@ class TemplateEditorViewModel(
 
 /**
  * Template editor (design/screens/template-editor.html): uniform 4gu exercise rows
- * ("name" + "N sets · rest M:SS"), up/down reorder, "+ Add Exercise" via the picker,
+ * ("name" + "2W + 3 × 8–12 · RIR 1 · rest 3:00"), up/down reorder, "+ Add Exercise" via the picker,
  * rename via the tappable top-bar center, trash with a two-tap confirm. Tapping a row
- * opens the card's documented overlay as a full-screen MODE takeover (top bar + Sets /
- * Rest / Warmup Rest steppers) so list rows stay uniform.
+ * opens the card's documented overlay as a full-screen MODE takeover (top bar + steppers in pairs:
+ * Sets and Warm-ups, the rep range, RIR and Rest, Warm-up Rest) so list rows stay uniform.
  *
  * Constructor and result type are FROZEN (cross-referenced by other screens).
  */
@@ -388,7 +442,7 @@ class TemplateEditorScreen(
                     is TemplateEditorViewModel.Mode.EditExercise -> {
                         val row = uiState.rows.firstOrNull { it.id == mode.templateExerciseId }
                         if (row != null) {
-                            EditExercise(row = row, removeArmed = uiState.removeArmed)
+                            EditExercise(row = row)
                         } else {
                             // Row vanished mid-edit (removal just landed); show the list.
                             Overview(uiState)
@@ -401,15 +455,17 @@ class TemplateEditorScreen(
 
     @Composable
     private fun Overview(uiState: TemplateEditorViewModel.UiState) {
+        val deleteArmed by viewModel.deleteArm.armed.collectAsState()
         Column(modifier = Modifier.fillMaxSize()) {
             LightTopBar(
                 leftButton = LightBarButton.LightIcon(
                     icon = LightIcons.BACK,
                     onClick = { goBack() },
                 ),
+                // The SDK draws both lines alike; in lower case the hint no longer outshouts the name.
                 center = LightTopBarCenter.TwoLineDetail(
                     line1 = uiState.name,
-                    line2 = "TAP NAME TO RENAME",
+                    line2 = "tap to rename",
                     onClick = viewModel::openRename,
                 ),
                 rightButton = LightBarButton.LightIcon(
@@ -434,10 +490,13 @@ class TemplateEditorScreen(
                             Column {
                                 RowName(row.name)
                                 LightText(
-                                    text = exerciseDetail(row),
+                                    text = templateSlotSummary(
+                                        row.targetSets, row.warmupSets, row.repMin, row.repMax, row.targetRir, row.restSec,
+                                    ),
                                     variant = LightTextVariant.Detail,
                                     lighten = true,
                                     maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         },
@@ -456,14 +515,14 @@ class TemplateEditorScreen(
                 AddExerciseRow(
                     onClick = {
                         // The state as it is now, not as this frame drew it: the delete may be a moment old.
-                        if (!viewModel.uiState.value.deleting) {
+                        if (viewModel.canAddExercise()) {
                             navigateTo(::ExercisePickerScreen) { exerciseId -> viewModel.addExercise(exerciseId) }
                         }
                     },
                 )
             }
 
-            if (uiState.deleteArmed) {
+            if (deleteArmed) {
                 ArmedHint(text = "TAP AGAIN TO DELETE")
             }
             LightBottomBar(
@@ -479,7 +538,8 @@ class TemplateEditorScreen(
     }
 
     @Composable
-    private fun EditExercise(row: TemplateEditorViewModel.ExerciseRow, removeArmed: Boolean) {
+    private fun EditExercise(row: TemplateEditorViewModel.ExerciseRow) {
+        val removeArmed by viewModel.removeArm.armed.collectAsState()
         Column(modifier = Modifier.fillMaxSize()) {
             LightTopBar(
                 leftButton = LightBarButton.LightIcon(
@@ -494,51 +554,87 @@ class TemplateEditorScreen(
                 ),
             )
 
+            // Seven steppers in pairs, so the whole prescription fits one screen with nothing to scroll.
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 2f.gridUnitsAsDp(), vertical = 1f.gridUnitsAsDp()),
-                verticalArrangement = Arrangement.spacedBy(1f.gridUnitsAsDp()),
+                    .padding(horizontal = 1f.gridUnitsAsDp(), vertical = 0.5f.gridUnitsAsDp()),
+                verticalArrangement = Arrangement.spacedBy(0.5f.gridUnitsAsDp()),
             ) {
-                Stepper(
-                    onStep = { delta -> viewModel.stepSets(row.id, delta) },
-                    label = "Sets",
-                    decrementEnabled = row.targetSets > MIN_TARGET_SETS,
-                    incrementEnabled = row.targetSets < MAX_TARGET_SETS,
-                ) {
-                    LightText(
-                        text = row.targetSets.toString(),
-                        variant = LightTextVariant.Subtitle,
-                        monospace = true,
-                    )
-                }
-
-                Stepper(
-                    onStep = { delta -> viewModel.stepWorkRest(row.id, delta) },
-                    label = "Rest",
-                    decrementEnabled = row.restSec > MIN_REST_SEC,
-                    incrementEnabled = row.restSec < MAX_REST_SEC,
-                ) {
-                    LightText(
-                        text = Format.clock(row.restSec),
-                        variant = LightTextVariant.Subtitle,
-                        monospace = true,
-                    )
-                }
-
-                Stepper(
-                    onStep = { delta -> viewModel.stepWarmupRest(row.id, delta) },
-                    label = "Warmup Rest",
-                    decrementEnabled = row.warmupRestSec > MIN_REST_SEC,
-                    incrementEnabled = row.warmupRestSec < MAX_REST_SEC,
-                ) {
-                    LightText(
-                        text = Format.clock(row.warmupRestSec),
-                        variant = LightTextVariant.Subtitle,
-                        monospace = true,
-                    )
-                }
+                StepperPair(
+                    left = {
+                        TemplateStepper(
+                            label = "Sets",
+                            value = row.targetSets.toString(),
+                            decrementEnabled = row.targetSets > MIN_TARGET_SETS,
+                            incrementEnabled = row.targetSets < MAX_TARGET_SETS,
+                            onStep = { viewModel.stepSets(row.id, it) },
+                        )
+                    },
+                    right = {
+                        // None stored: as many warm-ups as last session had.
+                        TemplateStepper(
+                            label = "Warm-ups",
+                            value = row.warmupSets?.toString() ?: "Last",
+                            decrementEnabled = row.warmupSets != null,
+                            incrementEnabled = (row.warmupSets ?: -1) < MAX_TEMPLATE_WARMUPS,
+                            onStep = { viewModel.stepWarmups(row.id, it) },
+                        )
+                    },
+                )
+                StepperPair(
+                    left = {
+                        TemplateStepper(
+                            label = "Reps From",
+                            value = row.repMin?.toString() ?: "—",
+                            decrementEnabled = row.repMin != null,
+                            incrementEnabled = (row.repMin ?: 0) < MAX_TARGET_REPS,
+                            onStep = { viewModel.stepRepMin(row.id, it) },
+                        )
+                    },
+                    right = {
+                        TemplateStepper(
+                            label = "Reps To",
+                            value = row.repMax?.toString() ?: "—",
+                            decrementEnabled = row.repMax != null,
+                            incrementEnabled = (row.repMax ?: 0) < MAX_TARGET_REPS,
+                            onStep = { viewModel.stepRepMax(row.id, it) },
+                        )
+                    },
+                )
+                StepperPair(
+                    left = {
+                        TemplateStepper(
+                            label = "RIR",
+                            value = row.targetRir?.toString() ?: "—",
+                            decrementEnabled = row.targetRir != null,
+                            incrementEnabled = (row.targetRir ?: -1) < MAX_RIR,
+                            onStep = { viewModel.stepRir(row.id, it) },
+                        )
+                    },
+                    right = {
+                        TemplateStepper(
+                            label = if (row.restIsDefault) "Rest · Default" else "Rest",
+                            value = Format.clock(row.restSec),
+                            decrementEnabled = row.restSec > MIN_REST_SEC,
+                            incrementEnabled = row.restSec < MAX_REST_SEC,
+                            onStep = { viewModel.stepWorkRest(row.id, it) },
+                        )
+                    },
+                )
+                StepperPair(
+                    left = {
+                        TemplateStepper(
+                            label = if (row.warmupRestIsDefault) "Warm-up Rest · Default" else "Warm-up Rest",
+                            value = Format.clock(row.warmupRestSec),
+                            decrementEnabled = row.warmupRestSec > MIN_REST_SEC,
+                            incrementEnabled = row.warmupRestSec < MAX_REST_SEC,
+                            onStep = { viewModel.stepWarmupRest(row.id, it) },
+                        )
+                    },
+                    right = null,
+                )
             }
 
             if (removeArmed) {
@@ -557,10 +653,36 @@ class TemplateEditorScreen(
     }
 }
 
-/** "3 sets · rest 3:00" — rest shown is the effective work rest. */
-private fun exerciseDetail(row: TemplateEditorViewModel.ExerciseRow): String {
-    val noun = if (row.targetSets == 1) "set" else "sets"
-    return "${row.targetSets} $noun · rest ${Format.clock(row.restSec)}"
+/** Two steppers side by side, each half the width; [right] null leaves its half empty. */
+@Composable
+private fun StepperPair(left: @Composable () -> Unit, right: (@Composable () -> Unit)?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(1f.gridUnitsAsDp()),
+    ) {
+        Box(modifier = Modifier.weight(1f)) { left() }
+        Box(modifier = Modifier.weight(1f)) { right?.invoke() }
+    }
+}
+
+/** One of the overlay's steppers: its label above, the value in Copy mono between the 4gu targets. */
+@Composable
+private fun TemplateStepper(
+    label: String,
+    value: String,
+    decrementEnabled: Boolean,
+    incrementEnabled: Boolean,
+    onStep: (Int) -> Unit,
+) {
+    Stepper(
+        onStep = onStep,
+        label = label,
+        decrementEnabled = decrementEnabled,
+        incrementEnabled = incrementEnabled,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        LightText(text = value, variant = LightTextVariant.Copy, monospace = true, maxLines = 1)
+    }
 }
 
 /** Centered "+ ADD EXERCISE" 3gu row (design .listrow.add). */
@@ -579,35 +701,5 @@ private fun AddExerciseRow(onClick: () -> Unit) {
             lighten = true,
             maxLines = 1,
         )
-    }
-}
-
-/** Stacked up/down arrows (design .reorder cluster); disabled arrows dim to 40%. */
-@Composable
-private fun ReorderArrows(
-    upEnabled: Boolean,
-    downEnabled: Boolean,
-    onUp: () -> Unit,
-    onDown: () -> Unit,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ReorderArrow(icon = LightIcons.UP, enabled = upEnabled, onClick = onUp)
-        ReorderArrow(icon = LightIcons.DOWN, enabled = downEnabled, onClick = onDown)
-    }
-}
-
-@Composable
-private fun ReorderArrow(icon: LightIconConfiguration, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(
-                width = REORDER_TARGET_WIDTH_UNITS.gridUnitsAsDp(),
-                height = REORDER_TARGET_HEIGHT_UNITS.gridUnitsAsDp(),
-            )
-            .alpha(if (enabled) 1f else REORDER_DISABLED_ALPHA)
-            .lightClickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        LightIcon(icon = icon, size = REORDER_ICON_UNITS)
     }
 }
