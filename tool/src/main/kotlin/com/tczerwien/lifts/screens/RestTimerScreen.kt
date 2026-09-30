@@ -270,16 +270,20 @@ class RestTimerScreen(
         // clock read here, so only the countdown redraws each second ([Countdown]). Never one long
         // wait: delays count uptime, which stops while the phone sleeps, so a rest that ended with the
         // screen off is caught within a second of waking. Frames time it too: in the background it waits.
-        var done by remember { mutableStateOf(false) }
+        var latched by remember { mutableStateOf(false) }
         val loaded = uiState.loaded
         val endMillis = uiState.endMillis
         LaunchedEffect(loaded, endMillis) {
             if (!loaded) return@LaunchedEffect
-            while (!done) {
+            while (!latched) {
                 val now = withFrameMillis { System.currentTimeMillis() }
-                if (restRemainingSec(endMillis, now) == 0) done = true else delay(msUntilNextSecond(endMillis, now))
+                if (restRemainingSec(endMillis, now) == 0) latched = true else delay(msUntilNextSecond(endMillis, now))
             }
         }
+        // A rest already over as the timer loads (opened from the strip at 0:01) shows REST OVER on its
+        // first frame, not the running bars for a frame first: one clock read as it loads, not a clock.
+        val overAtLoad = remember(loaded, endMillis) { loaded && restRemainingSec(endMillis, System.currentTimeMillis()) == 0 }
+        val done = latched || overAtLoad
 
         LaunchedEffect(done) {
             if (done) {
