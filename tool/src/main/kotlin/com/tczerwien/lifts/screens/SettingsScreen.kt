@@ -347,6 +347,11 @@ class SettingsScreen(
                     label = "About",
                     value = ABOUT_VALUE,
                 )
+                // The catalog's source, credited though its public-domain licence asks for nothing.
+                LiftsFieldRow(
+                    label = "Exercise Data",
+                    value = "free-exercise-db",
+                )
             }
         }
     }

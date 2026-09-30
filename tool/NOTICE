@@ -1,0 +1,11 @@
+Lifts, a strength-training log for the Light Phone III
+Copyright (c) 2026 Thomas Czerwien
+
+Lifts is the `tool` module of this repository. Its own code (tool/) is under
+the MIT License in tool/LICENSE. Everything else in the repository (the Light
+SDK, its plugin, examples and docs) is The Light Phone's, under the MIT License
+in the repository's root LICENSE.
+
+Exercise data: tool/src/main/assets/exercises.json comes from free-exercise-db
+(https://github.com/yuhonas/free-exercise-db), released into the public domain
+under the Unlicense. Its `images` field is dropped; the text is as published.
