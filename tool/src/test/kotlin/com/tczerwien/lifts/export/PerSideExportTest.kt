@@ -2,18 +2,20 @@ package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * An exercise done one side at a time (B10, #154): its reps count one side in every file, so a split
@@ -113,6 +115,16 @@ class PerSideExportTest {
             .single().jsonObject.getValue("exercises").jsonArray.single().jsonObject
         assertEquals(null, exercise["rep_min"])
         assertEquals(null, exercise["target_rir"])
+        // The same in a template.
+        val templated = ExportFixtures.snapshot(
+            exercises = listOf(plank),
+            workouts = emptyList(),
+            templates = listOf(TemplateEntity(id = 1, name = "Core", position = 0)),
+            templateExercises = listOf(TemplateExerciseEntity(templateId = 1, exerciseId = "plank", position = 0, targetSets = 3, repMin = 30, repMax = 60, targetRir = 1)),
+        )
+        val slot = Json.parseToJsonElement(JsonExport.render(templated)).jsonObject.getValue("templates").jsonArray
+            .single().jsonObject.getValue("exercises").jsonArray.single().jsonObject
+        assertEquals(listOf(null, null, null), listOf("rep_min", "rep_max", "target_rir").map { slot[it] })
     }
 
     private fun at(iso: String): Long = ExportFixtures.millis(iso)
