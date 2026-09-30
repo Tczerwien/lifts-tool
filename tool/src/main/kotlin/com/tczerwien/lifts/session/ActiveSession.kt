@@ -208,7 +208,7 @@ class ActiveSession(
      */
     fun setSlotRest(workoutId: Long, slotId: Long, restSec: Int): Boolean = repository.inTransaction {
         val slot = openSlot(workoutId, slotId) ?: return@inTransaction false
-        val stored = restSec.coerceAtLeast(0).takeIf { it != settings.snapshot().defaultRestSec }
+        val stored = restOverride(restSec, settings.snapshot().defaultRestSec)
         stored != slot.restSecWork && repository.updateSlotRest(slotId, stored)
     }
 
