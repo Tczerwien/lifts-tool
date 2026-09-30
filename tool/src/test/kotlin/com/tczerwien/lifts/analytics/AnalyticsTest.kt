@@ -69,10 +69,27 @@ class AnalyticsTest {
         val pr = prs.single()
         assertEquals(bench.id, pr.exerciseId)
         assertEquals(102.5, pr.maxWeightKg)
-        assertEquals(millis("2026-07-06T10:20:00Z"), pr.maxWeightDate)
+        assertEquals(millis("2026-07-06T10:00:00Z"), pr.maxWeightDate, "dated by its workout")
         assertEquals(119.58333333333333, pr.bestE1RmKg!!, 1e-9)
-        assertEquals(millis("2026-07-06T10:20:00Z"), pr.bestE1RmDate)
+        assertEquals(millis("2026-07-06T10:00:00Z"), pr.bestE1RmDate)
         assertEquals(102.5 to 5, pr.bestSet.weightKg to pr.bestSet.reps)
+    }
+
+    @Test
+    fun computePrsDatesARecordAfterMidnightByItsWorkout() {
+        // An evening workout that runs past midnight: History lists it on the 6th, so its record is the 6th's.
+        val workout = WorkoutEntity(id = 1, name = "Push", startedAt = millis("2026-07-06T23:30:00Z"))
+        val slot = WorkoutExerciseEntity(id = 1, workoutId = 1, exerciseId = bench.id, position = 0)
+        val sets = listOf(
+            SetEntity(id = 1, workoutExerciseId = 1, position = 0, type = "normal", weightKg = 100.0, reps = 5, completedAt = millis("2026-07-06T23:50:00Z")),
+            SetEntity(id = 2, workoutExerciseId = 1, position = 1, type = "normal", weightKg = 105.0, reps = 5, completedAt = millis("2026-07-07T00:10:00Z")),
+        )
+
+        val pr = computePrs(listOf(bench), listOf(workout), listOf(slot), sets).single()
+
+        assertEquals(105.0, pr.maxWeightKg)
+        assertEquals(millis("2026-07-06T23:30:00Z"), pr.maxWeightDate)
+        assertEquals(millis("2026-07-06T23:30:00Z"), pr.bestE1RmDate)
     }
 
     @Test

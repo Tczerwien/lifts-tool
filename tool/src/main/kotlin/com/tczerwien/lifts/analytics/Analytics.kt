@@ -50,8 +50,10 @@ fun epleyE1RmKg(weightKg: Double, reps: Int): Double? {
 data class ExercisePr(
     val exerciseId: String,
     val maxWeightKg: Double,
+    /** When the record's workout started: a record is dated by its workout's day, as History dates it. */
     val maxWeightDate: Long,
     val bestE1RmKg: Double?,
+    /** As [maxWeightDate], for the best e1RM's set. */
     val bestE1RmDate: Long?,
     val bestSet: SetEntity,
 )
@@ -74,8 +76,10 @@ fun computePrs(
     sets: List<SetEntity>,
     tracking: Map<String, Tracking> = emptyMap(),
 ): List<ExercisePr> {
-    val workoutIds = workouts.mapTo(HashSet()) { it.id }
-    val weById = workoutExercises.filter { it.workoutId in workoutIds }.associateBy { it.id }
+    val startedAt = workouts.associate { it.id to it.startedAt }
+    val weById = workoutExercises.filter { it.workoutId in startedAt }.associateBy { it.id }
+    // A PR ticked after midnight in an evening workout is that evening's, as History lists it.
+    fun dayOf(set: SetEntity): Long = weById[set.workoutExerciseId]?.let { startedAt[it.workoutId] } ?: set.completedAt ?: 0L
 
     val setsByExercise = HashMap<String, MutableList<SetEntity>>()
     for (set in sets) {
@@ -96,9 +100,9 @@ fun computePrs(
             ExercisePr(
                 exerciseId = exerciseId,
                 maxWeightKg = recordLoadKg(maxWeightSet, kind),
-                maxWeightDate = maxWeightSet.completedAt ?: 0L,
+                maxWeightDate = dayOf(maxWeightSet),
                 bestE1RmKg = records.bestE1RmKg,
-                bestE1RmDate = records.bestE1RmSet?.completedAt,
+                bestE1RmDate = records.bestE1RmSet?.let(::dayOf),
                 bestSet = records.bestE1RmSet ?: maxWeightSet,
             ),
         )
