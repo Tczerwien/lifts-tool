@@ -32,7 +32,7 @@ import kotlin.math.roundToInt
  * its day. Tests pass a fixed zone.
  */
 
-/** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
+/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.3: B10). */
 const val EXPORT_SCHEMA_VERSION = "2.3"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
@@ -108,6 +108,8 @@ data class SnapshotExercise(
     val hidden: Boolean,
     /** His form cue, shown above the sets. */
     val pinnedNote: String?,
+    /** Done one side at a time: its reps (or seconds) count one side. */
+    val perSide: Boolean = false,
 )
 
 data class SnapshotTemplate(val name: String, val exercises: List<SnapshotTemplateExercise>)
@@ -158,6 +160,8 @@ data class SnapshotWorkoutExercise(
     val primaryMuscles: List<String>,
     val secondaryMuscles: List<String>,
     val notes: String?,
+    /** Its reps (or seconds) count one side ([SnapshotExercise.perSide]). */
+    val perSide: Boolean = false,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
     val sets: List<SnapshotSet>,
 )
@@ -201,6 +205,8 @@ data class SnapshotPr(
     /** The best-e1RM set (else the heaviest): its weight and reps. */
     val bestSetWeightKg: Double?,
     val bestSetReps: Int?,
+    /** Its reps count one side. */
+    val perSide: Boolean = false,
 )
 
 /**
@@ -284,6 +290,7 @@ fun buildSnapshot(
                         primaryMuscles = exercise?.primaryMuscles ?: emptyList(),
                         secondaryMuscles = exercise?.secondaryMuscles ?: emptyList(),
                         notes = slot.notes,
+                        perSide = exercise?.perSide == true,
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,
@@ -350,6 +357,7 @@ fun buildSnapshot(
                 tracking = it.tracking,
                 hidden = it.hidden,
                 pinnedNote = it.pinnedNote,
+                perSide = it.perSide,
             )
         }
         .sortedWith(compareBy({ it.name }, { it.id }))
@@ -365,6 +373,7 @@ fun buildSnapshot(
                 bestE1RmDateIso = pr.bestE1RmDate?.let { format.date(it) },
                 bestSetWeightKg = pr.bestSet.weightKg,
                 bestSetReps = pr.bestSet.reps,
+                perSide = exercisesById[pr.exerciseId]?.perSide == true,
             )
         }
         .sortedBy { it.exerciseName }

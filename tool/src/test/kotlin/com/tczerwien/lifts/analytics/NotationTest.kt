@@ -33,6 +33,19 @@ class NotationTest {
     }
 
     @Test
+    fun aCountDoneEachSideSaysSo() {
+        // Split squat with 25s, 10 reps each leg; a side plank held 30 s each side; a dead bug.
+        val splitSquat = set(lb = 25.0, reps = 10, rpe = 8.0)
+        assertEquals("25×10/side RIR2", setNotation(splitSquat, lb, NotationStyle.LIST, perSide = true))
+        assertEquals("25 × 10/side RIR 2", setNotation(splitSquat, lb, NotationStyle.SINGLE, perSide = true))
+        assertEquals("25x10/side @8 r90", setNotation(splitSquat, lb, NotationStyle.EXPORT, restSec = 90, perSide = true))
+        assertEquals("w30s/side", setNotation(set(type = "warmup", durationSec = 30), lb, NotationStyle.LIST, perSide = true))
+        assertEquals("×12/side", setNotation(set(reps = 12), lb, NotationStyle.LIST, perSide = true))
+        assertEquals("25", setNotation(set(lb = 25.0), lb, NotationStyle.LIST, perSide = true), "no count, nothing per side")
+        assertEquals("25×10", setNotation(splitSquat.copy(rpe = null), lb, NotationStyle.LIST), "both sides at once by default")
+    }
+
+    @Test
     fun kilogramsUseTheKilogramGrid() {
         val bench = SetEntity(workoutExerciseId = 1, position = 0, type = "normal", weightKg = 102.5, reps = 5)
         assertEquals("102.5×5", setNotation(bench, kg, NotationStyle.LIST))

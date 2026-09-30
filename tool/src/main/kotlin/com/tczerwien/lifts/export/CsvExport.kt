@@ -20,11 +20,15 @@ import com.tczerwien.lifts.ui.WeightUnit
  * - Set types are NOT exported (Strong limitation); warm-ups appear as plain rows.
  * - Distance is always 0 (no distance cardio in v1); Seconds is durationSec or 0.
  * - Weight is signed: the help on an assisted exercise is negative ("-30"); no weight is 0.
- * - Notes = exercise-instance notes, Workout Notes = workout notes, both repeated per row.
+ * - Notes = exercise-instance notes, Workout Notes = workout notes, both repeated per row. On an
+ *   exercise done one side at a time the Notes start "Per side" (the format has no such column).
  * - RFC-4180 quoting: fields containing comma, quote, or newline are quoted and embedded
  *   quotes doubled. Rows are separated by "\n".
  */
 object CsvExport {
+
+    /** What Notes say on an exercise done one side at a time. */
+    const val PER_SIDE_NOTE = "Per side"
 
     const val HEADER =
         "Date,Workout Name,Duration,Exercise Name,Set Order,Weight,Reps,Distance,Seconds,Notes,Workout Notes,RPE"
@@ -51,7 +55,7 @@ object CsvExport {
                         (set.reps ?: 0).toString(),
                         "0",
                         (set.durationSec ?: 0).toString(),
-                        exercise.notes ?: "",
+                        listOfNotNull(PER_SIDE_NOTE.takeIf { exercise.perSide }, exercise.notes).joinToString(". "),
                         workout.notes ?: "",
                         set.rpe?.let { plainNumber(it) } ?: "",
                     )

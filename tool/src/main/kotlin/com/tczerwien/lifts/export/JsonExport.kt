@@ -30,7 +30,8 @@ import kotlinx.serialization.json.Json
  * negative) and duration (duration_seconds). An RPE is logged as reps in reserve: rpe = 10 − RIR.
  *
  * 2.3 (B10) added summary.bodyweight.rate_span_days (the rate now needs 3 weigh-ins 14+ days apart
- * in the last 28 days, and says how many days it covers).
+ * in the last 28 days, and says how many days it covers) and exercises[].per_side (reps and seconds
+ * count one side).
  */
 object JsonExport {
 
@@ -61,6 +62,7 @@ object JsonExport {
                     type = hevyType(it.tracking),
                     hidden = it.hidden.takeIf { hidden -> hidden },
                     pinnedNote = it.pinnedNote,
+                    perSide = it.perSide.takeIf { perSide -> perSide },
                 )
             },
             templates = snapshot.templates.map { template ->
@@ -213,6 +215,8 @@ data class JsonExercise(
     val hidden: Boolean? = null,
     /** His form cue. */
     @SerialName("pinned_note") val pinnedNote: String? = null,
+    /** Only written (true) for one done a side at a time: its sets' reps and seconds count one side. */
+    @SerialName("per_side") val perSide: Boolean? = null,
 )
 
 @Serializable

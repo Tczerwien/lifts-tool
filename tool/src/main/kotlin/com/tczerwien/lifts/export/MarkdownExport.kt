@@ -65,6 +65,7 @@ object MarkdownExport {
         append(" previous set was ticked (the rest plus the set itself; none after a break over 15 minutes).")
         append(" On bodyweight exercises the weight is what was added to the body, and a negative weight is")
         append(" help (`-30x8` is an assisted pull-up with 30 ").append(unit).append(" of assistance).")
+        append(" `x10/side` is 10 reps on each side, one side at a time (a split squat); a dumbbell weight is one dumbbell's.")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }
@@ -88,7 +89,7 @@ object MarkdownExport {
                     append("max ").append(Format.weight(pr.maxWeightKg, unit))
                     append(' ').append(unit.suffix).append(" (").append(pr.maxWeightDateIso).append(')')
                 }
-                setNotation(pr.bestSetWeightKg, pr.bestSetReps, unit, NotationStyle.EXPORT)?.let {
+                setNotation(pr.bestSetWeightKg, pr.bestSetReps, unit, NotationStyle.EXPORT, perSide = pr.perSide)?.let {
                     append(" — best set ").append(it)
                 }
                 append('\n')
@@ -153,7 +154,7 @@ object MarkdownExport {
                 muscleTag(exercise)?.let { append(' ').append(it) }
                 append('\n')
                 if (exercise.sets.isNotEmpty()) {
-                    append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit) }).append('\n')
+                    append("  ").append(exercise.sets.joinToString("; ") { notation(it, snapshot.unit, exercise.perSide) }).append('\n')
                 }
                 exercise.notes?.let { append(quote(it, indent = "  ")) }
             }
@@ -183,8 +184,11 @@ object MarkdownExport {
         return groups.joinToString("; ", prefix = "[", postfix = "]")
     }
 
-    /** One set ([setNotation], with the rest gap) and " — **PR**" when it was a record when lifted. */
-    private fun notation(set: SnapshotSet, unit: WeightUnit): String {
+    /**
+     * One set ([setNotation], with the rest gap, "/side" on an exercise done one side at a time) and
+     * " — **PR**" when it was a record when lifted.
+     */
+    private fun notation(set: SnapshotSet, unit: WeightUnit, perSide: Boolean): String {
         val core = setNotation(
             weightKg = set.weightKg,
             reps = set.reps,
@@ -194,6 +198,7 @@ object MarkdownExport {
             durationSec = set.durationSec,
             rpe = set.rpe,
             restSec = set.restSec,
+            perSide = perSide,
         ) ?: "-"
         return if (set.isPr) "$core — **PR**" else core
     }

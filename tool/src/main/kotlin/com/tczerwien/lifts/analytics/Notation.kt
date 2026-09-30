@@ -9,7 +9,9 @@ import com.tczerwien.lifts.ui.WeightUnit
  * through here, so a set reads the same wherever it shows. Weights are in the display unit, rounded
  * as the steppers round ([Format.weight]); a weight that shows as 0 is no weight, so a pull-up nudged to
  * 0 (or a stray 0.1 kg from elsewhere) reads "×10", not "0×10". Assistance, stored as a negative
- * weight, keeps its sign: an assisted pull-up with 30 lb of help reads "-30×8".
+ * weight, keeps its sign: an assisted pull-up with 30 lb of help reads "-30×8". On an exercise done one
+ * side at a time ([com.tczerwien.lifts.data.ExerciseEntity.perSide]) the count is per side: "25×10/side",
+ * "30s/side".
  */
 enum class NotationStyle {
     /** A set in a list on screen: "w95×10", "140×8F RIR1", "×12", "20×45s". */
@@ -32,7 +34,7 @@ private const val TYPE_DROP = "drop"
  * [restSec] (EXPORT only) adds " r180". [withUnit] (SINGLE only) writes the unit after the weight,
  * "165 lb × 5", for a record shown on its own. The effort ([SetEntity.rpe], logged as RIR, stored as
  * RPE = 10 − RIR) reads as he logged it on screen, "RIR2", and as RPE in the export, "@8", the scale
- * programs and AIs read.
+ * programs and AIs read. [perSide]: the reps or seconds are each side's ("10/side").
  */
 fun setNotation(
     set: SetEntity,
@@ -40,6 +42,7 @@ fun setNotation(
     style: NotationStyle,
     restSec: Int? = null,
     withUnit: Boolean = false,
+    perSide: Boolean = false,
 ): String? = setNotation(
     weightKg = set.weightKg,
     reps = set.reps,
@@ -50,6 +53,7 @@ fun setNotation(
     rpe = set.rpe,
     restSec = restSec,
     withUnit = withUnit,
+    perSide = perSide,
 )
 
 /** [setNotation] from loose values: a PREVIOUS row, the values a tick would log, a record. */
@@ -63,6 +67,7 @@ fun setNotation(
     rpe: Double? = null,
     restSec: Int? = null,
     withUnit: Boolean = false,
+    perSide: Boolean = false,
 ): String? {
     val weight = weightKg?.takeIf { Format.roundWeight(Format.kgToDisplay(it, unit), unit) != 0.0 }?.let { kg ->
         Format.weight(kg, unit) + if (withUnit && style == NotationStyle.SINGLE) " ${unit.suffix}" else ""
@@ -72,9 +77,10 @@ fun setNotation(
         NotationStyle.SINGLE -> " × "
         NotationStyle.EXPORT -> "x"
     }
+    val side = if (perSide) PER_SIDE else ""
     val amount = when {
-        reps != null -> "$reps"
-        durationSec != null -> "${durationSec}s"
+        reps != null -> "$reps$side"
+        durationSec != null -> "${durationSec}s$side"
         else -> null
     }
     val core = when {
@@ -100,6 +106,9 @@ fun setNotation(
         if (style == NotationStyle.EXPORT) restSec?.let { append(" r").append(it) }
     }
 }
+
+/** After a count done on each side in turn: "10/side". */
+const val PER_SIDE = "/side"
 
 /** "8" for 8.0, "7.5" for 7.5. */
 fun plainNumber(value: Double): String =
