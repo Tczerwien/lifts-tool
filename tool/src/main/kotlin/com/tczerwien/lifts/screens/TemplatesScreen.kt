@@ -73,6 +73,8 @@ class TemplatesViewModel(
     )
 
     data class UiState(
+        /** The list has been read once: until then an empty list is not "No templates yet". */
+        val loaded: Boolean = false,
         val templates: List<TemplateRow> = emptyList(),
         val mode: Mode = Mode.Overview,
         /** Bumped per editor entry so the embedded keyboard binds to the fresh field state. */
@@ -178,7 +180,7 @@ class TemplatesViewModel(
                 estimatedMinutes = estimateMinutes(exercises.sumOf { it.targetSets }),
             )
         }
-        _uiState.update { it.copy(templates = templates) }
+        _uiState.update { it.copy(loaded = true, templates = templates) }
     }
 
     /** [MINUTES_PER_WORKING_SET] per target set, rounded to the nearest 5 min (min 5). */
@@ -264,7 +266,7 @@ class TemplatesScreen(
                     .weight(1f)
                     .fillMaxWidth(),
             ) {
-                if (uiState.templates.isEmpty()) {
+                if (uiState.loaded && uiState.templates.isEmpty()) {
                     LightText(
                         text = "No templates yet",
                         variant = LightTextVariant.Copy,
