@@ -1,13 +1,13 @@
 package com.tczerwien.lifts.library
 
 import com.tczerwien.lifts.data.summary
-import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.seed.TestCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class PickerTest {
 
-    private val catalog = catalogEntries(SeedParser.parse().map { it.summary() })
+    private val catalog = catalogEntries(TestCatalog.exercises.map { it.summary() }, TestCatalog.source)
 
     private fun ids(chip: PickerChip, recent: List<String> = emptyList(), query: String? = null) =
         pickerEntries(catalog, recent, chip, query).map { it.id }

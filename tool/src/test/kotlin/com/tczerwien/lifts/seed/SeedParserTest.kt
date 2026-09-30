@@ -10,11 +10,11 @@ import kotlin.test.assertTrue
 /** Pure-JVM tests over the bundled seed payload — no Room, no Android. */
 class SeedParserTest {
 
-    private val entities = SeedParser.parse()
+    private val entities = TestCatalog.exercises
 
     @Test
     fun recordCountMatchesDataset() {
-        val datasetCount = Json.parseToJsonElement(ExerciseSeedData.json).jsonArray.size
+        val datasetCount = Json.parseToJsonElement(TestCatalog.json).jsonArray.size
         assertEquals(datasetCount, entities.size, "parser must not drop records")
         assertEquals(873, entities.size, "bundled free-exercise-db snapshot has 873 exercises")
     }
@@ -97,17 +97,23 @@ class SeedParserTest {
     }
 
     @Test
-    fun jsonPayloadIsUnderTwoMegabytes() {
-        val bytes = ExerciseSeedData.json.toByteArray(Charsets.UTF_8).size
-        assertTrue(bytes < 2 * 1024 * 1024, "seed payload is $bytes bytes; expected < 2 MB")
+    fun theAssetIsUnderTwoMegabytesAndPlainAscii() {
+        // Light's builder takes .json assets up to 5 MB a file.
+        val bytes = TestCatalog.json.toByteArray(Charsets.UTF_8)
+        assertTrue(bytes.size < 2 * 1024 * 1024, "catalog is ${bytes.size} bytes; expected < 2 MB")
+        assertTrue(bytes.all { it >= 0 }, "the generator writes ASCII, non-ASCII as \\u escapes")
     }
 
     @Test
-    fun `catalog name lookup finds a lift by its app id`() {
-        assertEquals("Barbell Bench Press - Medium Grip", SeedParser.catalogName("barbell-bench-press-medium-grip"))
-        assertEquals(null, SeedParser.catalogName("no-such-lift"))
-        // One map for the whole catalog, the same one each time: parsed once per process.
-        assertEquals(SeedParser.parse().size, SeedParser.catalogNames.size)
-        assertTrue(SeedParser.catalogNames === SeedParser.catalogNames)
+    fun `catalog names are the parse's names, read once per process`() {
+        val names = SeedParser.parseNames(TestCatalog.json)
+        assertEquals(entities.associate { it.id to it.name }, names, "same ids, repeats included, same names")
+        var reads = 0
+        val counting = CatalogSource { reads++; TestCatalog.json }
+        val first = BundledCatalog.names(counting)
+        assertEquals("Barbell Bench Press - Medium Grip", first["barbell-bench-press-medium-grip"])
+        assertEquals(null, first["no-such-lift"])
+        assertTrue(BundledCatalog.names(counting) === first, "one map, the same each time")
+        assertTrue(reads <= 1, "the file is read once at most (another test may have read it first)")
     }
 }

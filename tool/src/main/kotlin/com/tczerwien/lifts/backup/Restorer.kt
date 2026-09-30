@@ -125,9 +125,11 @@ class Restorer(
         if (RestorePlan.refitsTypes(prepared.settingsRows)) {
             runCatching { live.fitTrackingToHistory() }.onFailure { Log.w("Lifts", "fitting exercise types after a restore failed", it) }
         }
-        // The rest, the exercise on screen: they name ids of the log just replaced.
+        // The rest, the exercise on screen: they name ids of the log just replaced. And the catalog
+        // version: the restored log may hold an older catalog, which Home then brings up to date.
         val keysProblem = try {
             ActiveSession.forgetWorkoutState(dataStore)
+            settings.forgetCatalogVersion()
             null
         } catch (e: Exception) {
             e.message ?: e.toString()

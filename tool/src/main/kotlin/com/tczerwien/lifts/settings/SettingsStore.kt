@@ -81,6 +81,18 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { prefs -> prefs[TRACKING_FITTED] = true }
     }
 
+    /** The bundled catalog's version this phone's exercises are at ([com.tczerwien.lifts.seed.BundledCatalog.VERSION]); 0 before any. */
+    suspend fun catalogVersion(): Int = dataStore.data.first()[CATALOG_VERSION] ?: 0
+
+    suspend fun markCatalogVersion(version: Int) {
+        dataStore.edit { prefs -> prefs[CATALOG_VERSION] = version }
+    }
+
+    /** Forgets [catalogVersion]: a restored log may hold an older catalog, so Home brings it up to date. */
+    suspend fun forgetCatalogVersion() {
+        dataStore.edit { prefs -> prefs.remove(CATALOG_VERSION) }
+    }
+
     /** Saves [step] as the weight step for [unit]; a step that unit doesn't offer is ignored. */
     suspend fun setWeightStep(unit: WeightUnit, step: Double) {
         if (step !in unit.weightSteps) return
@@ -142,6 +154,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
 
         /** Not a setting (backups leave it out): the one-time fit of types to history has run. */
         private val TRACKING_FITTED = booleanPreferencesKey("lifts_tracking_fitted")
+        private val CATALOG_VERSION = intPreferencesKey("lifts_catalog_version")
 
         private fun weightStepKey(unit: WeightUnit) = when (unit) {
             WeightUnit.LB -> WEIGHT_STEP_LB

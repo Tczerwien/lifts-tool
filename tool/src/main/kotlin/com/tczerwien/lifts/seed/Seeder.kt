@@ -1,14 +1,13 @@
 package com.tczerwien.lifts.seed
 
 import com.tczerwien.lifts.data.BarEntity
-import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.ui.Format
 
-/** What a first run puts into an empty database. [com.tczerwien.lifts.data.LiftsRepository.seedIfEmpty] writes it. */
+/**
+ * The bar a first run puts into an empty database, with the bundled catalog ([BundledCatalog]);
+ * [com.tczerwien.lifts.data.LiftsRepository.updateCatalog] writes them.
+ */
 object Seeder {
-    /** The bundled exercise catalog. */
-    fun exercises(): List<ExerciseEntity> = SeedParser.parse()
-
     /** The one bar a new install starts with. */
     fun defaultBar(): BarEntity = BarEntity(name = DEFAULT_BAR_NAME, weightKg = DEFAULT_BAR_KG, position = 0)
 

@@ -3,7 +3,10 @@ package com.tczerwien.lifts.data
 import com.tczerwien.lifts.library.Removal
 import com.tczerwien.lifts.library.removalFor
 import com.tczerwien.lifts.library.withoutExercise
+import com.tczerwien.lifts.seed.BundledCatalog
+import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.seed.Seeder
+import com.tczerwien.lifts.seed.mergeCatalog
 
 /**
  * SDK-independent repository over [LiftsDatabase]. The database instance is injected via the
@@ -19,17 +22,32 @@ class LiftsRepository private constructor(
      */
     override fun <T> inTransaction(block: () -> T): T = db.runInTransaction<T>(block)
 
-    // --- First run ---
+    // --- The bundled catalog ---
 
     /**
-     * First run only (the catalog is empty): seeds the bundled exercise catalog and the default bar.
-     * Home calls this on every show, so the bar is tied to the catalog; a lifter who deletes every
-     * bar doesn't get the default back.
+     * Brings the bundled exercise catalog in ([catalog]), in one transaction. A first run (no exercises
+     * yet) gets every exercise and the default bar; the bar is tied to that, so a lifter who deletes every
+     * bar doesn't get it back. An install whose catalog is older ([storedVersion] below
+     * [BundledCatalog.VERSION]) gets what the new one adds and its new facts about the ones it has,
+     * keeping what is his ([mergeCatalog]). Otherwise it reads nothing: one count. Home calls it on every
+     * show; true when exercises changed (the exports list them), and the caller then saves the version.
      */
-    fun seedIfEmpty() = inTransaction {
-        if (db.exerciseDao.count() != 0L) return@inTransaction
-        db.exerciseDao.insertAll(Seeder.exercises())
-        if (db.barDao.count() == 0L) db.barDao.insert(Seeder.defaultBar())
+    fun updateCatalog(storedVersion: Int, catalog: CatalogSource): Boolean = inTransaction {
+        val empty = db.exerciseDao.count() == 0L
+        when {
+            empty -> {
+                db.exerciseDao.insertAll(BundledCatalog.exercises(catalog))
+                if (db.barDao.count() == 0L) db.barDao.insert(Seeder.defaultBar())
+                true
+            }
+            storedVersion >= BundledCatalog.VERSION -> false
+            else -> {
+                val changes = mergeCatalog(db.exerciseDao.listAll(), BundledCatalog.exercises(catalog))
+                db.exerciseDao.insertAll(changes.inserts)
+                changes.updates.forEach { db.exerciseDao.update(it) }
+                !changes.isEmpty
+            }
+        }
     }
 
     // --- Exercises ---

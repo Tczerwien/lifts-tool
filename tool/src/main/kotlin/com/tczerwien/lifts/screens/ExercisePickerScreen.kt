@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.bundledCatalog
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.BodyPart
 import com.tczerwien.lifts.library.CatalogEntry
@@ -35,6 +36,7 @@ import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.chipAfterLoad
 import com.tczerwien.lifts.library.nameFromQuery
 import com.tczerwien.lifts.library.pickerEntries
+import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.ui.KeptListState
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -64,6 +66,8 @@ import kotlinx.coroutines.flow.update
 
 class ExercisePickerViewModel(
     private val repository: LiftsRepository,
+    /** The APK's catalog, for the catalog names of lifts he renamed. */
+    private val catalog: CatalogSource,
 ) : LightViewModel<String>() {
 
     /** [custom]: one he made, which the row's pencil edits. */
@@ -96,7 +100,7 @@ class ExercisePickerViewModel(
      * is open (a new exercise closes it). Chips and search filter it in memory.
      */
     @Volatile
-    private var catalog: List<CatalogEntry> = emptyList()
+    private var entries: List<CatalogEntry> = emptyList()
 
     /** What he has logged, most recently used first ([LiftsRepository.recentExerciseIds]). */
     @Volatile
@@ -173,8 +177,8 @@ class ExercisePickerViewModel(
     private fun load(keepPlace: Boolean = false) {
         val summaries = repository.exerciseSummaries().filterNot { it.hidden }
         customIds = summaries.filter { it.isCustom }.mapTo(HashSet()) { it.id }
-        catalog = catalogEntries(summaries)
-        val shown = catalog.mapTo(HashSet()) { it.id }
+        entries = catalogEntries(summaries, catalog)
+        val shown = entries.mapTo(HashSet()) { it.id }
         recentIds = repository.recentExerciseIds(RECENT_LIMIT).filter { it in shown }
         val hasRecent = recentIds.isNotEmpty()
         _uiState.update { state ->
@@ -189,7 +193,7 @@ class ExercisePickerViewModel(
     /** The list for this state ([pickerEntries]): a search, else the chip's; a [newList] starts at the top. */
     private fun UiState.withRows(newList: Boolean = true): UiState {
         val perf = Perf.start()
-        val rows = pickerEntries(catalog, recentIds, chip, searchQuery).map { it.toRow() }
+        val rows = pickerEntries(entries, recentIds, chip, searchQuery).map { it.toRow() }
         Perf.done("picker.rows", perf, "${rows.size} rows for ${searchQuery?.let { "\"$it\"" } ?: chip}")
         return copy(
             rows = rows,
@@ -224,7 +228,7 @@ class ExercisePickerScreen(
     override val viewModelClass: Class<ExercisePickerViewModel>
         get() = ExercisePickerViewModel::class.java
 
-    override fun createViewModel() = ExercisePickerViewModel(repository)
+    override fun createViewModel() = ExercisePickerViewModel(repository, lightContext.bundledCatalog())
 
     @Composable
     override fun Content() {

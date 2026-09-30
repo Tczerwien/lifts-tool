@@ -14,8 +14,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.LiftsRepository
+import com.tczerwien.lifts.data.bundledCatalog
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
+import com.tczerwien.lifts.seed.BundledCatalog
+import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.shouldAutoResume
@@ -66,6 +69,8 @@ class HomeViewModel(
     private val session: ActiveSession,
     private val share: LiftsShare,
     private val settingsStore: SettingsStore,
+    /** The APK's exercise catalog, read only on a first run or when it is newer than the phone's. */
+    private val catalog: CatalogSource,
 ) : LightViewModel<Unit>() {
 
     data class TemplateRow(val id: Long, val name: String, val exerciseCount: Int)
@@ -212,7 +217,11 @@ class HomeViewModel(
     }
 
     private fun load(): UiState {
-        repository.seedIfEmpty()
+        // One count on most shows: a first run gets the catalog, an update that brought a newer one what
+        // it adds (BundledCatalog.VERSION). The exports list exercises, so they catch up.
+        val catalogVersion = runBlocking { settingsStore.catalogVersion() }
+        if (repository.updateCatalog(catalogVersion, catalog)) share.logChanged()
+        if (catalogVersion < BundledCatalog.VERSION) runBlocking { settingsStore.markCatalogVersion(BundledCatalog.VERSION) }
         // Once per install, the first time B9 runs: types started to matter, so an exercise logged with
         // numbers its guessed type hides gets a type that shows them (a belted pull-up, a plank as reps).
         if (!runBlocking { settingsStore.trackingFitted() }) {
@@ -277,7 +286,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
         get() = HomeViewModel::class.java
 
     override fun createViewModel() =
-        HomeViewModel(repository, session, lightContext.liftsShare(), SettingsStore(lightContext.dataStore))
+        HomeViewModel(repository, session, lightContext.liftsShare(), SettingsStore(lightContext.dataStore), lightContext.bundledCatalog())
 
     /** Opens a new workout from [templateId] (null: empty). */
     private fun openNew(templateId: Long?) {

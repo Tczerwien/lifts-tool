@@ -28,17 +28,24 @@ internal data class SeedExercise(
     val category: String,
 )
 
-/** Parses [ExerciseSeedData.json] into catalog [ExerciseEntity] rows. Pure JVM, no reflection. */
+/** An exercise's id and name alone: the catalog's names without building the rest ([SeedParser.parseNames]). */
+@Serializable
+internal data class SeedName(val id: String, val name: String)
+
+/**
+ * Parses the bundled catalog (assets/exercises.json, [BundledCatalog]) into catalog [ExerciseEntity]
+ * rows. Pure JVM, no reflection.
+ */
 internal object SeedParser {
     private val json = Json { ignoreUnknownKeys = true }
 
     private val SEED_LIST_SERIALIZER = ListSerializer(SeedExercise.serializer())
 
-    fun parse(raw: String = ExerciseSeedData.json): List<ExerciseEntity> {
+    private val NAME_LIST_SERIALIZER = ListSerializer(SeedName.serializer())
+
+    fun parse(raw: String): List<ExerciseEntity> {
         val records = json.decodeFromString(SEED_LIST_SERIALIZER, raw)
-        val usedSlugs = HashSet<String>(records.size * 2)
-        return records.map { record ->
-            val slug = uniqueSlug(slugify(record.id), usedSlugs)
+        return records.zip(appIds(records.map { it.id })) { record, slug ->
             ExerciseEntity(
                 id = slug,
                 name = record.name,
@@ -55,17 +62,19 @@ internal object SeedParser {
     }
 
     /**
-     * The catalog's own name for exercise [id] (an app id, as [parse] makes them); null for none.
-     * The first call parses the whole catalog: make it off the main thread, and only when
-     * [com.tczerwien.lifts.ui.knownCatalogName] can't answer.
+     * Every catalog name by app id, as [parse] would give them, without building the instructions and
+     * muscles of 873 exercises: a renamed lift's search and rename checks need only the names.
      */
-    fun catalogName(id: String): String? = catalogNames[id]
+    fun parseNames(raw: String): Map<String, String> {
+        val records = json.decodeFromString(NAME_LIST_SERIALIZER, raw)
+        return appIds(records.map { it.id }).zip(records) { slug, record -> slug to record.name }.toMap()
+    }
 
-    /**
-     * Every catalog name by app id, parsed once per process (the catalog is in the APK and never
-     * changes), so a renamed lift doesn't cost a 0.8 MB parse on every picker, form and rename.
-     */
-    val catalogNames: Map<String, String> by lazy { parse().associate { it.id to it.name } }
+    /** The app ids of the dataset's [recordIds], in order: slugs, with "-2", "-3" for a repeat ([uniqueSlug]). */
+    private fun appIds(recordIds: List<String>): List<String> {
+        val usedSlugs = HashSet<String>(recordIds.size * 2)
+        return recordIds.map { uniqueSlug(slugify(it), usedSlugs) }
+    }
 
     /**
      * Which numbers a seeded exercise records by default. The dataset has no such field, so this

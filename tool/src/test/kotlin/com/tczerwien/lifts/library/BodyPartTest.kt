@@ -1,7 +1,7 @@
 package com.tczerwien.lifts.library
 
 import com.tczerwien.lifts.data.summary
-import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.seed.TestCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class BodyPartTest {
 
-    private val catalog = SeedParser.parse()
+    private val catalog = TestCatalog.exercises
     private val entries = catalog.map { catalogEntry(it.summary()) }
 
     private fun ids(part: BodyPart) = inBodyPart(entries, part).map { it.id }

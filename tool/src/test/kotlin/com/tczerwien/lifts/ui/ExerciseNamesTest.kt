@@ -1,6 +1,6 @@
 package com.tczerwien.lifts.ui
 
-import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.seed.TestCatalog
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 class ExerciseNamesTest {
 
-    private val catalog = SeedParser.parse().associateBy { it.id }
+    private val catalog = TestCatalog.exercises.associateBy { it.id }
 
     private fun shown(id: String) = displayName(catalog.getValue(id))
 

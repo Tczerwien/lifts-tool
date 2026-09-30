@@ -34,13 +34,15 @@ import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
+import com.tczerwien.lifts.data.bundledCatalog
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.library.renameClash
-import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.seed.BundledCatalog
+import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
@@ -87,6 +89,8 @@ class ExerciseDetailViewModel(
     private val repository: LiftsRepository,
     private val settings: SettingsStore,
     private val share: LiftsShare,
+    /** The APK's catalog: a renamed lift's catalog name, for the rename checks and a reset. */
+    private val catalog: CatalogSource,
     /** Opened only to rename (the "…" menu): the name editor opens at once, and closing it leaves. */
     private val renameOnly: Boolean = false,
 ) : LightViewModel<Unit>() {
@@ -216,7 +220,7 @@ class ExerciseDetailViewModel(
     fun openNameEditor() {
         if (!_uiState.value.loaded) return
         openEditor(Editing.NAME)
-        LiftsIo.write({}) { names = catalogEntries(repository.exerciseSummaries()) }
+        LiftsIo.write({}) { names = catalogEntries(repository.exerciseSummaries(), catalog) }
     }
 
     private fun openEditor(editing: Editing) {
@@ -291,10 +295,10 @@ class ExerciseDetailViewModel(
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write RenameResult.Unchanged
             val name = renameTarget(exercise, raw, shown) {
-                knownCatalogName(exercise.id) ?: SeedParser.catalogName(exercise.id)
+                knownCatalogName(exercise.id) ?: BundledCatalog.names(catalog)[exercise.id]
             } ?: return@write RenameResult.Unchanged
             // What it would show counts too: a reset to the catalog name shows the short name again.
-            val taken = renameClash(exerciseId, exercise.isCustom, name, catalogEntries(repository.exerciseSummaries()))
+            val taken = renameClash(exerciseId, exercise.isCustom, name, catalogEntries(repository.exerciseSummaries(), catalog))
             when {
                 taken != null -> RenameResult.Taken(taken.shown)
                 repository.updateExercise(exercise.copy(name = name)) -> RenameResult.Saved
@@ -506,7 +510,14 @@ class ExerciseDetailScreen(
         get() = ExerciseDetailViewModel::class.java
 
     override fun createViewModel() =
-        ExerciseDetailViewModel(exerciseId, repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare(), renameOnly)
+        ExerciseDetailViewModel(
+            exerciseId,
+            repository,
+            SettingsStore(lightContext.dataStore),
+            lightContext.liftsShare(),
+            lightContext.bundledCatalog(),
+            renameOnly,
+        )
 
     @Composable
     override fun Content() {

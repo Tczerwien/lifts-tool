@@ -2,7 +2,7 @@ package com.tczerwien.lifts.library
 
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.summary
-import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.seed.TestCatalog
 import com.tczerwien.lifts.ui.knownCatalogName
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 
 class NameClashTest {
 
-    private val catalog = SeedParser.parse()
+    private val catalog = TestCatalog.exercises
     private val entries = catalog.map { catalogEntry(it.summary()) }
 
     private val landmine = ExerciseEntity(

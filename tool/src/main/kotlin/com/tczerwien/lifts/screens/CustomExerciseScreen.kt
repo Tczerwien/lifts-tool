@@ -20,6 +20,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.Tracking
+import com.tczerwien.lifts.data.bundledCatalog
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.CatalogEntry
@@ -27,6 +28,7 @@ import com.tczerwien.lifts.library.Removal
 import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.formTracking
 import com.tczerwien.lifts.library.nameClash
+import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.toolmanager.LiftsShare
@@ -66,6 +68,8 @@ import kotlinx.coroutines.flow.update
 class CustomExerciseViewModel(
     private val repository: LiftsRepository,
     private val share: LiftsShare,
+    /** The APK's catalog: a renamed lift's catalog name is taken too, for the name check. */
+    private val catalog: CatalogSource,
     initialName: String = "",
     /** Editing this custom exercise; null makes a new one. */
     private val editId: String? = null,
@@ -264,7 +268,7 @@ class CustomExerciseViewModel(
         )
         // On the write lane, so Back can't drop it half-way.
         LiftsIo.write({
-            val current = catalogEntries(repository.exerciseSummaries())
+            val current = catalogEntries(repository.exerciseSummaries(), catalog)
             names = current
             val clash = nameClash(state.name, current, selfId = editId)
             when {
@@ -325,7 +329,7 @@ class CustomExerciseViewModel(
      */
     private fun loadOptions() {
         val summaries = repository.exerciseSummaries()
-        names = catalogEntries(summaries)
+        names = catalogEntries(summaries, catalog)
         hiddenIds = summaries.filter { it.hidden }.mapTo(HashSet()) { it.id }
         val edited = editId?.let { repository.exerciseById(it) }
         val inTemplates = editId?.let { repository.templatesWithExercise(it) } ?: 0
@@ -387,6 +391,7 @@ class CustomExerciseScreen(
     override fun createViewModel() = CustomExerciseViewModel(
         lightContext.liftsRepository(),
         lightContext.liftsShare(),
+        lightContext.bundledCatalog(),
         initialName,
         editId,
     )
