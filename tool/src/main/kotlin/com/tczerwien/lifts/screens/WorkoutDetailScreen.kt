@@ -35,6 +35,7 @@ import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.ReloadFloor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
@@ -295,7 +296,7 @@ class WorkoutDetailViewModel(
             notes != workout.notes && repository.updateWorkout(workout.copy(notes = notes))
         }) { changed ->
             if (changed) share.logChanged()
-            synchronized(reloadLock) { notesFloor = reloadsStarted }
+            notesFloor.saveLanded()
             _uiState.update { it.copy(editingNotes = false, notes = if (changed) notes else it.notes) }
             refresh()
         }
@@ -303,15 +304,12 @@ class WorkoutDetailViewModel(
 
     /**
      * Reloads run beside the write lane: one that read the notes before a save landed must not put
-     * the old ones back after it. Reloads started before the latest save landed keep the notes on
-     * screen. Guarded by [reloadLock].
+     * the old ones back after it ([ReloadFloor]).
      */
-    private val reloadLock = Any()
-    private var reloadsStarted = 0L
-    private var notesFloor = 0L
+    private val notesFloor = ReloadFloor()
 
     private fun refresh() {
-        val reload = synchronized(reloadLock) { ++reloadsStarted }
+        val reload = notesFloor.reloadStarted()
         val workout = repository.workoutById(workoutId)
         if (workout == null) {
             // Deleted from another Workout Detail stacked above this one (via Exercise Detail's
@@ -358,7 +356,7 @@ class WorkoutDetailViewModel(
                 name = workout.name,
                 subtitle = Format.dateWithYear(workout.startedAt) +
                     (duration?.let { " · $it" } ?: ""),
-                notes = if (synchronized(reloadLock) { reload <= notesFloor }) state.notes else workout.notes,
+                notes = if (notesFloor.keepsShown(reload)) state.notes else workout.notes,
                 blocks = blocks,
                 bodyweightText = bodyweight?.let {
                     "${Format.bodyweight(it.weightKg, unit)} ${unit.suffix}" +

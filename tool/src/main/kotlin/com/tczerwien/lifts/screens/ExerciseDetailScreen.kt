@@ -45,6 +45,7 @@ import com.tczerwien.lifts.seed.BundledCatalog
 import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.ReloadFloor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
@@ -244,17 +245,14 @@ class ExerciseDetailViewModel(
      * note shows at once, so the editor opened again before the save lands starts from it, not the old one.
      */
     fun saveNote(raw: String) {
-        synchronized(reloadLock) { noteSaves++ }
+        noteFloor.saveQueued()
         _uiState.update { it.copy(editing = null, pinnedNote = raw.trim().takeIf { note -> note.isNotEmpty() }) }
         LiftsIo.write({
             val exercise = repository.exerciseById(exerciseId) ?: return@write false
             val note = raw.trim().takeIf { it.isNotEmpty() }
             note != exercise.pinnedNote && repository.updateExercise(exercise.copy(pinnedNote = note))
         }) { changed ->
-            synchronized(reloadLock) {
-                noteSaves--
-                noteFloor = reloadsStarted
-            }
+            noteFloor.saveLanded()
             if (changed) share.logChanged()
             refresh()
         }
@@ -263,14 +261,9 @@ class ExerciseDetailViewModel(
     /**
      * Reloads run beside the write lane, so one that read the database before a cue save landed can
      * land after it. While a save is pending, and for every reload started before it landed, the note
-     * on screen (the one just saved) stands. Guarded by [reloadLock].
+     * on screen (the one just saved) stands ([ReloadFloor]).
      */
-    private val reloadLock = Any()
-    private var reloadsStarted = 0L
-    private var noteSaves = 0
-    private var noteFloor = 0L
-
-    private fun keepsNote(reload: Long): Boolean = synchronized(reloadLock) { noteSaves > 0 || reload <= noteFloor }
+    private val noteFloor = ReloadFloor()
 
     /**
      * Renames the exercise ([renameTarget]): the new name shows everywhere, exports included, over any
@@ -362,7 +355,7 @@ class ExerciseDetailViewModel(
     }
 
     private fun refresh() {
-        val reload = synchronized(reloadLock) { ++reloadsStarted }
+        val reload = noteFloor.reloadStarted()
         val exercise = repository.exerciseById(exerciseId)
         val unit = settings.snapshot().units
         val tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS
@@ -405,7 +398,7 @@ class ExerciseDetailViewModel(
             state.copy(
                 name = exercise?.let(::displayName) ?: "Exercise",
                 tracking = tracking,
-                pinnedNote = if (keepsNote(reload)) state.pinnedNote else exercise?.pinnedNote,
+                pinnedNote = if (noteFloor.keepsShown(reload)) state.pinnedNote else exercise?.pinnedNote,
                 instructions = exercise?.instructions ?: emptyList(),
                 history = history,
                 records = records,
