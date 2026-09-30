@@ -40,7 +40,9 @@ class LiftsRepository private constructor(
                 if (db.barDao.count() == 0L) db.barDao.insert(Seeder.defaultBar())
                 true
             }
-            storedVersion >= BundledCatalog.VERSION -> false
+            // A phone from before catalog versions (none stored), or a restored log (forgotten), holds
+            // version 1: every Lifts until now shipped that catalog. Nothing to read until there is a 2.
+            maxOf(storedVersion, BundledCatalog.FIRST_VERSION) >= BundledCatalog.VERSION -> false
             else -> {
                 val changes = mergeCatalog(db.exerciseDao.listAll(), BundledCatalog.exercises(catalog))
                 db.exerciseDao.insertAll(changes.inserts)

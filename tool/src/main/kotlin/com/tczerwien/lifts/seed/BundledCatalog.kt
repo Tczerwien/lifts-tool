@@ -23,6 +23,9 @@ object BundledCatalog {
      */
     const val VERSION = 1
 
+    /** The catalog every Lifts shipped before catalog versions: what a phone with none stored holds. */
+    const val FIRST_VERSION = 1
+
     /** The catalog's rows ([SeedParser.parse]), parsed afresh: a first run or a catalog update only. */
     fun exercises(source: CatalogSource): List<ExerciseEntity> = SeedParser.parse(source.read())
 
