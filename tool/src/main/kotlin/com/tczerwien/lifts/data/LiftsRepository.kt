@@ -277,6 +277,9 @@ class LiftsRepository private constructor(
 
     fun listBodyweight(): List<BodyweightEntity> = db.bodyweightDao.listAll()
 
+    /** Deletes the weigh-in of [epochDay]; true when there was one. */
+    fun deleteBodyweight(epochDay: Long): Boolean = db.bodyweightDao.deleteByEpochDay(epochDay) > 0
+
     override fun bodyweightBetween(fromEpochDay: Long, toEpochDay: Long): List<BodyweightEntity> =
         db.bodyweightDao.between(fromEpochDay, toEpochDay)
 

@@ -15,6 +15,9 @@ interface BodyweightDao {
     @Query("SELECT * FROM bodyweight ORDER BY epochDay")
     fun listAll(): List<BodyweightEntity>
 
+    @Query("DELETE FROM bodyweight WHERE epochDay = :epochDay")
+    fun deleteByEpochDay(epochDay: Long): Int
+
     @Query("SELECT * FROM bodyweight WHERE epochDay BETWEEN :fromDay AND :toDay ORDER BY epochDay")
     fun between(fromDay: Long, toDay: Long): List<BodyweightEntity>
 }
