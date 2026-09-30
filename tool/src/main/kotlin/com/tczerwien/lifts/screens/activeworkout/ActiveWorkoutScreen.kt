@@ -179,13 +179,15 @@ class ActiveWorkoutScreen(
                     else -> {
                         val activeSet = viewModel.activeSet(uiState)
                         val logging = activeSet != null
-                        // The header's equipment line shows only while no row is logged: when that flips,
-                        // every row moves 48 px under his finger ([ActiveWorkoutViewModel.headerShifted]).
+                        // The header's equipment line shows only while no row is logged (and the exercise
+                        // has one): when it comes or goes, every row moves 48 px under his finger
+                        // ([ActiveWorkoutViewModel.headerShifted]).
+                        val lineShown = !logging && current.detailLine.isNotEmpty()
                         key(current.slot.id) {
-                            var headerLogging by remember { mutableStateOf(logging) }
-                            LaunchedEffect(logging) {
-                                if (logging != headerLogging) {
-                                    headerLogging = logging
+                            var shownBefore by remember { mutableStateOf(lineShown) }
+                            LaunchedEffect(lineShown) {
+                                if (lineShown != shownBefore) {
+                                    shownBefore = lineShown
                                     viewModel.headerShifted()
                                 }
                             }

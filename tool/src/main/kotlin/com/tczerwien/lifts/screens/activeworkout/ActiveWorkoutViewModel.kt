@@ -466,9 +466,9 @@ class ActiveWorkoutViewModel(
             state.copy(activeSetId = block?.let { activeRowAfterTick(it.sets, setId) })
         }
         lastTickAt = now
-        // The exercise's last tick: no row is logged now, so the header's equipment line comes back
-        // and every row slides down under his finger.
-        if (_uiState.value.activeSetId == null) rowsShiftedAt = now
+        // The exercise's last tick: no row is logged now, so the header's equipment line (if it has
+        // one) comes back and every row slides down under his finger.
+        if (_uiState.value.activeSetId == null && located.block.detailLine.isNotEmpty()) rowsShiftedAt = now
         Perf.done("aw.tick.ui", perf)
         // The exercise's last set: move on once the rest that this tick starts is over.
         val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
