@@ -324,7 +324,8 @@ class WorkoutDetailViewModel(
             .groupBy { it.workoutExerciseId }
         val exercises = repository.exercisesByIds(slots.map { it.exerciseId })
 
-        val prSetIds = computePrSetIds(exercises.keys + slots.map { it.exerciseId }, exercises.mapValues { it.value.tracking })
+        val lastSetAt = setsBySlot.values.flatten().maxOfOrNull { it.completedAt ?: 0L } ?: 0L
+        val prSetIds = computePrSetIds(exercises.keys + slots.map { it.exerciseId }, exercises.mapValues { it.value.tracking }, lastSetAt)
 
         val blocks = slots.sortedBy { it.position }.mapNotNull { slot ->
             // An exercise with nothing ticked shows only for his note on it ("skipped: left shoulder").
@@ -371,11 +372,13 @@ class WorkoutDetailViewModel(
     }
 
     /**
-     * Ids of sets (across all workouts) that were PRs when logged, for the exercises in
-     * [exerciseIds]: the shared records engine over one history query, each exercise by its [tracking].
+     * Ids of sets that were PRs when logged, for the exercises in [exerciseIds]: the shared records
+     * engine, each exercise by its [tracking], over one history query that stops at this workout's
+     * last set ([until]): what came after can't change its stars, and on an old workout it is most of
+     * the history.
      */
-    private fun computePrSetIds(exerciseIds: Set<String>, tracking: Map<String, Tracking>): Set<Long> =
-        chronologicalPrSetIds(repository.completedSetsByExercise(exerciseIds), tracking)
+    private fun computePrSetIds(exerciseIds: Set<String>, tracking: Map<String, Tracking>, until: Long): Set<Long> =
+        chronologicalPrSetIds(repository.completedSetsByExerciseUntil(exerciseIds, until), tracking)
 }
 
 /**

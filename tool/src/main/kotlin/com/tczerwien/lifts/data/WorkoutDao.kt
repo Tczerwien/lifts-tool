@@ -210,6 +210,18 @@ interface WorkoutDao {
             "ORDER BY sets.completedAt, sets.id"
     )
     fun completedSetsForExercises(exerciseIds: List<String>, excludeWorkoutId: Long): List<SetWithExercise>
+
+    /**
+     * Every completed set of the given exercises completed at or before [until], from any workout, in
+     * completion order: the history a past workout's PR stars depend on (later sets can't change them).
+     */
+    @Query(
+        "SELECT sets.*, we.exerciseId AS exerciseId, we.workoutId AS workoutId, we.position AS slotPosition FROM sets " +
+            "JOIN workout_exercises we ON sets.workoutExerciseId = we.id " +
+            "WHERE we.exerciseId IN (:exerciseIds) AND sets.completedAt IS NOT NULL AND sets.completedAt <= :until " +
+            "ORDER BY sets.completedAt, sets.id"
+    )
+    fun completedSetsForExercisesUntil(exerciseIds: List<String>, until: Long): List<SetWithExercise>
 }
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */

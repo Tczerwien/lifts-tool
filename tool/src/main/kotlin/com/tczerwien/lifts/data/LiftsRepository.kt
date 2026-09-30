@@ -274,6 +274,13 @@ class LiftsRepository private constructor(
             .groupBy(keySelector = { it.exerciseId }, valueTransform = { it.set })
     }
 
+    /** [completedSetsByExercise] of every workout, only the sets completed at or before [until]. */
+    fun completedSetsByExerciseUntil(exerciseIds: Collection<String>, until: Long): Map<String, List<SetEntity>> {
+        if (exerciseIds.isEmpty()) return emptyMap()
+        return db.workoutDao.completedSetsForExercisesUntil(exerciseIds.distinct(), until)
+            .groupBy(keySelector = { it.exerciseId }, valueTransform = { it.set })
+    }
+
     // --- Templates ---
 
     override fun addTemplate(template: TemplateEntity): Long = db.templateDao.insert(template)
