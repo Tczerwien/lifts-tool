@@ -753,8 +753,16 @@ class ActiveWorkoutViewModel(
         }
     }
 
+    /** When "+ ADD SET" last added a row: a second tap before the row shows is a double tap ([isDoubleTap]). */
+    @Volatile
+    private var lastAddSetAt: Long? = null
+
     fun addSet() {
+        val now = System.currentTimeMillis()
+        // The new row takes a save and a reload to show (long on the LP3): a double tap meant one set.
+        if (lastAddSetAt?.let { isDoubleTap(it, now) } == true) return
         if (!beginRowAction()) return
+        lastAddSetAt = now
         val state = _uiState.value
         val block = state.exercises.getOrNull(state.currentIndex) ?: return
         LiftsIo.write({ session.addSet(state.workoutId, block.slot.id) }) { refresh() }
