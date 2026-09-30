@@ -42,6 +42,7 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.displayName
+import com.tczerwien.lifts.ui.msUntilNextSecond
 import com.tczerwien.lifts.ui.rememberSecondClock
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -261,8 +262,10 @@ class RestTimerScreen(
         val uiState by viewModel.uiState.collectAsState()
 
         // Latched as the rest ends: once 0:00 shows, a late +30 result can't bring the countdown back
-        // mid-pulse. Timed by the rest's end, not by a clock read here, so only the countdown redraws
-        // each second ([Countdown]). Frames time it, as they do the clock: in the background it waits.
+        // mid-pulse. Checked on the countdown's own second boundaries ([msUntilNextSecond]), not by a
+        // clock read here, so only the countdown redraws each second ([Countdown]). Never one long
+        // wait: delays count uptime, which stops while the phone sleeps, so a rest that ended with the
+        // screen off is caught within a second of waking. Frames time it too: in the background it waits.
         var done by remember { mutableStateOf(false) }
         val loaded = uiState.loaded
         val endMillis = uiState.endMillis
@@ -270,7 +273,7 @@ class RestTimerScreen(
             if (!loaded) return@LaunchedEffect
             while (!done) {
                 val now = withFrameMillis { System.currentTimeMillis() }
-                if (restRemainingSec(endMillis, now) == 0) done = true else delay(endMillis - now)
+                if (restRemainingSec(endMillis, now) == 0) done = true else delay(msUntilNextSecond(endMillis, now))
             }
         }
 
