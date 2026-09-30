@@ -127,11 +127,25 @@ class SessionLogicTest {
         assertEquals(SET_TYPE_WARMUP, nextSetType(SET_TYPE_WARMUP, ticked = true))
     }
 
-    @Test
-    fun `RIR cycles blank then 0 to 5 then blank and is stored as RPE`() {
+    /** The cell's values over [taps] taps from blank, for a slot with [target]. */
+    private fun rirCycle(target: Int?, taps: Int = 8): List<Int?> {
         var rir: Int? = null
-        val cycle = List(8) { rir.also { rir = nextRir(it) } }
-        assertEquals(listOf(null, 0, 1, 2, 3, 4, 5, null), cycle)
+        return List(taps) { rir.also { rir = nextRir(it, target) } }
+    }
+
+    @Test
+    fun `RIR starts at the target, counts down to 0, then up, then blank, and is stored as RPE`() {
+        // No target: the usual 2 is one tap, 1 two, 0 three.
+        assertEquals(listOf(null, 2, 1, 0, 3, 4, 5, null), rirCycle(null))
+        assertEquals(listOf(null, 1, 0, 2, 3, 4, 5, null), rirCycle(1))
+        assertEquals(listOf(null, 0, 1, 2, 3, 4, 5, null), rirCycle(0))
+        assertEquals(listOf(null, 5, 4, 3, 2, 1, 0, null), rirCycle(5))
+        assertEquals(listOf(null, 3, 2, 1, 0, 4, 5, null), rirCycle(3))
+        // Every value comes round once a lap, whatever the target.
+        for (target in listOf(null, 0, 1, 2, 3, 4, 5)) {
+            assertEquals((0..MAX_RIR).toSet(), rirCycle(target).filterNotNull().toSet(), "target $target")
+        }
+        assertEquals(listOf(null, 5, 4), rirCycle(9, taps = 3), "a target out of range is held to it")
         assertEquals(8.0, rpeOf(2))
         assertEquals(10.0, rpeOf(0))
         assertNull(rpeOf(null))

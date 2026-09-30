@@ -83,11 +83,25 @@ fun rirOf(rpe: Double?): Int? = rpe?.let { (10.0 - it).roundToInt() }
 /** The RPE a set stores for [rir] reps in reserve (RPE = 10 − RIR); null clears it. */
 fun rpeOf(rir: Int?): Double? = rir?.let { 10.0 - it }
 
-/** A tap on a row's RIR cell: blank → 0 → 1 … [MAX_RIR] → blank. */
-fun nextRir(rir: Int?): Int? = when {
-    rir == null -> 0
-    rir >= MAX_RIR || rir < 0 -> null
-    else -> rir + 1
+/** The RIR a row's first tap gives when the exercise has no RIR target: the usual one or two in reserve. */
+const val DEFAULT_FIRST_RIR = 2
+
+/**
+ * A tap on a row's RIR cell (B11): the first gives the slot's [target] RIR
+ * ([DEFAULT_FIRST_RIR] without one), each next one less down to 0, then the numbers above the start
+ * up to [MAX_RIR], then blank. With target 2: blank → 2 → 1 → 0 → 3 → 4 → 5 → blank, so the usual 2
+ * is one tap and 1 two. A value from elsewhere outside 0..[MAX_RIR] goes to blank.
+ */
+fun nextRir(rir: Int?, target: Int? = null): Int? {
+    val start = (target ?: DEFAULT_FIRST_RIR).coerceIn(0, MAX_RIR)
+    return when {
+        rir == null -> start
+        rir < 0 || rir > MAX_RIR -> null
+        rir in 1..start -> rir - 1
+        rir == 0 -> (start + 1).takeIf { it <= MAX_RIR }
+        rir < MAX_RIR -> rir + 1
+        else -> null
+    }
 }
 
 /**

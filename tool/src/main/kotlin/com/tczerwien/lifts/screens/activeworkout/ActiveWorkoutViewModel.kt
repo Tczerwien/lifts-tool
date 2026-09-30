@@ -380,14 +380,16 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * A tap on a row's RIR cell cycles it (blank, 0–5, blank; [nextRir]), stored as RPE = 10 − RIR.
+     * A tap on a row's RIR cell cycles it from the slot's RIR target, else 2, down to 0, then up to 5,
+     * then blank ([nextRir]), stored as RPE = 10 − RIR.
      * Ticked rows too: the effort is known once the set is done, usually while resting. It rates the
      * set without moving the steppers or cancelling a pending move to the next exercise, but a tap in
      * the second after the screen moved on was aimed at the rows before and is dropped.
      */
     fun onRirTapped(setId: Long) {
         if (locked || tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis())) return
-        val edit = applySetChange(setId) { it.copy(rpe = rpeOf(nextRir(rirOf(it.rpe)))) } ?: return
+        val target = locate(setId)?.block?.slot?.targetRir
+        val edit = applySetChange(setId) { it.copy(rpe = rpeOf(nextRir(rirOf(it.rpe), target))) } ?: return
         persistSet(edit)
     }
 
