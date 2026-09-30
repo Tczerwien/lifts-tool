@@ -22,9 +22,10 @@ import kotlinx.coroutines.launch
  * data however many requests pile up.
  *
  * Every file of a run is first written to a hidden temp file; only when all of them are written are
- * they renamed over the old ones. Tool Manager never serves half a file, and a run that fails (full
- * storage, a query that throws) leaves the previous files as they were. Nothing escapes: a failure
- * shows in [status], never as a crash.
+ * they renamed over the old ones. Tool Manager never serves half a file, and a run that fails while
+ * writing (full storage, a query that throws) leaves the previous files as they were; one that fails
+ * while renaming (rare: the files are in one folder) leaves the ones renamed so far new and the rest
+ * old, until the next run. Nothing escapes: a failure shows in [status], never as a crash.
  *
  * [render] returns file name to content. It runs on [scope], which must outlive any screen.
  */
@@ -41,7 +42,10 @@ class ExportWriter(
         /** A run is going or waiting its turn. */
         data object Preparing : Status
 
-        /** The latest run failed; the files from the run before are still there. */
+        /**
+         * The latest run failed. Failed while writing, the files from the run before are still there;
+         * failed while renaming, some are the new ones and the rest the old.
+         */
         data class Failed(val message: String) : Status
     }
 
