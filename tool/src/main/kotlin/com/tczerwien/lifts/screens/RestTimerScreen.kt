@@ -75,8 +75,10 @@ class RestTimerViewModel(
     private val requestedDurationSec: Int,
     /** The workout resting; null falls back to the open workout. */
     private val workoutId: Long?,
-    /** The exercise on Active Workout's screen; its next unticked set is the one NEXT names. */
+    /** The exercise on Active Workout's screen; NEXT names a set of it while one is unticked ([restNextContext]). */
     private val slotId: Long?,
+    /** The row Active Workout's steppers are on: NEXT names it while it is unticked. */
+    private val activeSetId: Long?,
     /** Opened from the rest strip: resume the saved rest, never start a fresh one. */
     private val resumeOnly: Boolean,
 ) : LightViewModel<Unit>() {
@@ -184,7 +186,7 @@ class RestTimerViewModel(
             ?: return NextLines()
         val slots = repository.exercisesForWorkout(workout.id)
         val sets = repository.setsForWorkout(workout.id)
-        val next = when (val context = restNextContext(slots, sets, slotId)) {
+        val next = when (val context = restNextContext(slots, sets, slotId, activeSetId)) {
             RestNext.NoExercises -> return NextLines("NO EXERCISES YET", context = "Add an exercise")
             RestNext.NoSets -> return NextLines("NO SETS YET", context = "Add a set")
             RestNext.AllDone -> return NextLines("ALL SETS DONE", context = "Finish or add an exercise")
@@ -226,6 +228,8 @@ class RestTimerScreen(
     private val workoutId: Long? = null,
     /** The exercise on Active Workout's screen, which NEXT follows; null falls back to the last tick's. */
     private val slotId: Long? = null,
+    /** The row Active Workout's steppers are on, which NEXT names while it is unticked. */
+    private val activeSetId: Long? = null,
     /** Resume the saved rest only; true from the rest strip, false from the alarm icon. */
     private val resumeOnly: Boolean = false,
 ) : LightScreen<Unit, RestTimerViewModel>(sealedActivity) {
@@ -240,7 +244,7 @@ class RestTimerScreen(
         get() = RestTimerViewModel::class.java
 
     override fun createViewModel() =
-        RestTimerViewModel(repository, session, settingsStore, durationSec, workoutId, slotId, resumeOnly)
+        RestTimerViewModel(repository, session, settingsStore, durationSec, workoutId, slotId, activeSetId, resumeOnly)
 
     /**
      * False once this screen has been popped. Nothing opens on top of the timer, so hiding means

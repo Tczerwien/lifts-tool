@@ -147,6 +147,7 @@ class ActiveWorkoutScreen(
                     durationSec = timerDurationSec,
                     workoutId = uiState.workoutId,
                     slotId = current?.slot?.id,
+                    activeSetId = uiState.activeSetId,
                     resumeOnly = resumeOnly,
                 )
             })

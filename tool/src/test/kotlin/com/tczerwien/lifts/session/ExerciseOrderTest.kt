@@ -67,6 +67,23 @@ class ExerciseOrderTest {
     }
 
     @Test
+    fun `the Rest Timer's NEXT names the row the steppers are on, not a warm-up he skipped`() {
+        // Squat: W1 ticked, W2 skipped, set 1 just ticked; the steppers are on set 2.
+        val sets = listOf(
+            row(11, 1, done = true, at = 10L), row(12, 1), row(13, 1, done = true, at = 20L), row(14, 1),
+            row(21, 2),
+        )
+        val next = restNextContext(slots, sets, currentSlotId = 1) as RestNext.Next
+        assertEquals(14L, next.rows[next.index].id, "the row after his last tick")
+        // He tapped W2 to do it now: NEXT follows the steppers.
+        val chosen = restNextContext(slots, sets, currentSlotId = 1, activeSetId = 12) as RestNext.Next
+        assertEquals(12L, chosen.rows[chosen.index].id)
+        // An active row that is ticked (or gone) says nothing: the rule again.
+        val stale = restNextContext(slots, sets, currentSlotId = 1, activeSetId = 13) as RestNext.Next
+        assertEquals(14L, stale.rows[stale.index].id)
+    }
+
+    @Test
     fun `it moves on as the rest ends, or two seconds after the tick with none running`() {
         val tick = 1_000_000L
         assertEquals(tick + 90_000, autoAdvanceAt(tick, restEndMillis = tick + 90_000))

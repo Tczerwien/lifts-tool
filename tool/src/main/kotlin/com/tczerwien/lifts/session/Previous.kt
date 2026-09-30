@@ -268,28 +268,33 @@ sealed interface RestNext {
 }
 
 /**
- * The set the lifter is resting toward: the first unticked row of [currentSlotId] (the exercise on
- * screen) when it has one, otherwise the first of the next exercise with one, where Active Workout
- * moves on to ([autoAdvanceSlotId]). With no exercise on screen, [nextPendingSet]'s pick.
+ * The set the lifter is resting toward, the one Active Workout's steppers are on: [activeSetId]
+ * while it is an unticked row of [currentSlotId] (the exercise on screen), else the row he is on
+ * there ([nextRowOf]: after his last tick, not a warm-up he skipped); once that exercise is done,
+ * the row he is on in the next exercise with one unticked, where Active Workout moves on to
+ * ([autoAdvanceSlotId]). With no exercise on screen, in [nextPendingSet]'s exercise.
  */
 fun restNextContext(
     slots: List<WorkoutExerciseEntity>,
     sets: List<SetEntity>,
     currentSlotId: Long?,
+    activeSetId: Long? = null,
 ): RestNext {
     if (slots.isEmpty()) return RestNext.NoExercises
     val slotIds = slots.mapTo(HashSet()) { it.id }
     if (sets.none { it.workoutExerciseId in slotIds }) return RestNext.NoSets
+    fun rowsOf(slotId: Long) = sets.filter { it.workoutExerciseId == slotId }.sortedBy { it.position }
+    fun indexOf(rows: List<SetEntity>, id: Long?) = rows.indexOfFirst { it.id == id && it.completedAt == null }
     val current = slots.firstOrNull { it.id == currentSlotId }
     if (current != null) {
-        val rows = sets.filter { it.workoutExerciseId == current.id }.sortedBy { it.position }
-        val index = rows.indexOfFirst { it.completedAt == null }
+        val rows = rowsOf(current.id)
+        val index = indexOf(rows, activeSetId).takeIf { it >= 0 } ?: indexOf(rows, nextRowOf(rows))
         if (index >= 0) return RestNext.Next(current, rows, index)
         val next = firstUntickedSlotAfter(slots, sets, current.id) ?: return RestNext.AllDone
-        val nextRows = sets.filter { it.workoutExerciseId == next.id }.sortedBy { it.position }
-        return RestNext.Next(next, nextRows, nextRows.indexOfFirst { it.completedAt == null })
+        val nextRows = rowsOf(next.id)
+        return RestNext.Next(next, nextRows, indexOf(nextRows, nextRowOf(nextRows)))
     }
     val next = nextPendingSet(slots, sets) ?: return RestNext.AllDone
-    val rows = sets.filter { it.workoutExerciseId == next.slot.id }.sortedBy { it.position }
-    return RestNext.Next(next.slot, rows, rows.indexOfFirst { it.id == next.set.id })
+    val rows = rowsOf(next.slot.id)
+    return RestNext.Next(next.slot, rows, indexOf(rows, nextRowOf(rows)))
 }
