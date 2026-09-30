@@ -390,7 +390,8 @@ class ExerciseDetailViewModel(
         val history = perWorkout.map { entry ->
             HistoryRow(
                 workoutId = entry.workoutId,
-                dateLabel = Format.dateShort(entry.dateMillis),
+                // Today's open workout: shown, but not opened (its trash would delete the live workout).
+                dateLabel = Format.dateShort(entry.dateMillis) + if (entry.inProgress) " · NOW" else "",
                 runs = compactNotation(entry.sets.map { set -> set.toToken(unit, set.id in prSetIds, perSide) }),
                 inProgress = entry.inProgress,
             )

@@ -85,6 +85,7 @@ private const val CHECKMARK_UNITS = 0.9f
 private const val PR_STAR_UNITS = 1.1f
 private const val PAD_START_UNITS = 1f
 private const val MARKER_PAD_UNITS = 0.3f
+private const val MARKER_PAD_TIGHT_UNITS = 0.1f
 
 /**
  * Room kept left of the count's column for "REPS/SIDE" in [SetRowHeader]: it measured 164 px in its 160 px
@@ -195,17 +196,19 @@ fun SetRow(
             contentAlignment = Alignment.Center,
         ) {
             val markerColor = if (state.active) colors.background else null
+            val suffix = when {
+                state.failure -> " F"
+                state.drop -> " D"
+                else -> null
+            }
+            // "10 D" with the usual padding is wider than its column and ran into PREVIOUS: it pads less.
+            val pad = if (suffix != null && state.marker.length > 1) MARKER_PAD_TIGHT_UNITS else MARKER_PAD_UNITS
             Row(
                 modifier = Modifier
                     .let { m -> if (state.active) m.background(colors.content) else m }
-                    .padding(horizontal = MARKER_PAD_UNITS.gridUnitsAsDp()),
+                    .padding(horizontal = pad.gridUnitsAsDp()),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val suffix = when {
-                    state.failure -> " F"
-                    state.drop -> " D"
-                    else -> null
-                }
                 LightText(
                     text = state.marker,
                     variant = LightTextVariant.Detail,

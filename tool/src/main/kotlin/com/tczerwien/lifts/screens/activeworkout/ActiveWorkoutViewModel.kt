@@ -760,8 +760,10 @@ class ActiveWorkoutViewModel(
         val activeSet = block.sets.getOrNull(activeIndex)
         val removableSet = activeSet?.takeIf { it.completedAt == null }
         val exerciseRemovable = block.sets.none { it.completedAt != null }
-        // Plates for the weight the active row shows, its own or its starting value.
-        val shownKg = activeSet?.let { it.weightKg ?: block.seeds[activeIndex].weightKg }
+        // Plates for the weight the active row shows, its own or its starting value; once every set is
+        // ticked, for the last one lifted (what to strip, or load again).
+        val platesIndex = if (activeIndex >= 0) activeIndex else block.sets.indexOfLast { it.completedAt != null }
+        val shownKg = block.sets.getOrNull(platesIndex)?.let { it.weightKg ?: block.seeds[platesIndex].weightKg }
         val platesKg = shownKg?.takeIf { block.tracking == Tracking.WEIGHT_REPS && Format.roundWeight(Format.kgToDisplay(it, state.units), state.units) > 0.0 }
         return MenuOptions(
             content = workout.copy(
@@ -773,7 +775,7 @@ class ActiveWorkoutViewModel(
                 platesUnavailable = when {
                     platesKg != null -> null
                     block.tracking != Tracking.WEIGHT_REPS -> "BARBELL LIFTS ONLY"
-                    activeSet == null -> "NO SET SELECTED"
+                    platesIndex < 0 -> "NO SET SELECTED"
                     else -> "SET A WEIGHT FIRST"
                 },
                 position = "${state.currentIndex + 1} OF ${state.exercises.size}",

@@ -25,6 +25,7 @@ import com.tczerwien.lifts.session.restOver
 import com.tczerwien.lifts.session.restOverSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.rememberSecondClock
@@ -184,15 +185,16 @@ internal fun StepperStrip(
                 label = "$label (${uiState.units.suffix})",
                 decrementEnabled = active && viewModel.weightDecrementEnabled(uiState),
                 incrementEnabled = active,
+                // A quarter unit under the label, not one: most of a set row back while resting (B11).
+                labelGapUnits = STRIP_LABEL_GAP_UNITS,
                 // A tap on the number types one in: the sled, the odd dumbbell.
                 onValueClick = viewModel::openWeightEntry.takeIf { active },
             ) {
-                LightText(
+                // Digits monospace, the point not: "103.75" kg in full monospace ran over the steppers.
+                MonoDigits(
                     text = weightKg?.let { Format.weight(it, uiState.units) } ?: "—",
                     variant = LightTextVariant.Copy,
                     lighten = activeSet?.weightKg == null,
-                    monospace = true,
-                    maxLines = 1,
                 )
             }
         } else {
@@ -207,6 +209,8 @@ internal fun StepperStrip(
                 label = if (perSide) "Time/side (sec)" else "Time (sec)",
                 decrementEnabled = active && viewModel.durationDecrementEnabled(uiState),
                 incrementEnabled = active,
+                // A quarter unit under the label, not one: most of a set row back while resting (B11).
+                labelGapUnits = STRIP_LABEL_GAP_UNITS,
             ) {
                 LightText(
                     text = seconds?.toString() ?: "—",
@@ -224,6 +228,8 @@ internal fun StepperStrip(
                 label = if (perSide) "Reps/side" else "Reps",
                 decrementEnabled = active && viewModel.repsDecrementEnabled(uiState),
                 incrementEnabled = active,
+                // A quarter unit under the label, not one: most of a set row back while resting (B11).
+                labelGapUnits = STRIP_LABEL_GAP_UNITS,
             ) {
                 LightText(
                     text = reps?.toString() ?: "—",
@@ -240,6 +246,9 @@ internal fun StepperStrip(
 
 /** Each side of a lone stepper (reps only, a hold): it sits in the middle at the weight stepper's width. */
 private const val LONE_STEPPER_MARGIN = 0.5f
+
+/** The gap under the strip's stepper labels (B11: 0.25gu, from 1gu). */
+private const val STRIP_LABEL_GAP_UNITS = 0.25f
 
 /**
  * Collapsed next-exercise row (2gu + 0.5gu top margin), "NEXT › Overhead Press · 0/3": the exercise
