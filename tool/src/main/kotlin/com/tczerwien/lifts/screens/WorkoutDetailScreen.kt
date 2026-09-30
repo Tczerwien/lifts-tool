@@ -120,6 +120,9 @@ class WorkoutDetailViewModel(
      * Back from a Start Again, its tap guard is released (a wake while a save is queued leaves it held).
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        // Back from Exercise Detail (or the phone waking): a trash armed before must not be confirmed
+        // by the next tap, meant for something else.
+        deleteArm.disarm()
         if (startedAgain) {
             startedAgain = false
             starting = false
