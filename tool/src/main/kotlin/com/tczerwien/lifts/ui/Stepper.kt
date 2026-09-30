@@ -35,6 +35,9 @@ import com.thelightphone.sdk.ui.lightClickable
 
 private const val TARGET_UNITS = 4f
 private const val GLYPH_UNITS = 2.2f
+
+/** The +/- stroke, fixed like every glyph Lifts draws (about 5.9 px, as at 2.2gu before), heavy as Light's icons. */
+private const val STEPPER_STROKE_UNITS = 0.147f
 private const val DISABLED_ALPHA = 0.4f
 
 /** A press held this long starts repeating; a shorter one is a tap. */
@@ -201,12 +204,12 @@ private suspend fun AwaitPointerEventScope.awaitPressEnd(down: PointerInputChang
     }
 }
 
-/** Thin +/- strokes on a 24-unit design box: horizontal (5,12)-(19,12), vertical (12,5)-(12,19). */
+/** +/- strokes on a 24-unit design box: horizontal (5,12)-(19,12), vertical (12,5)-(12,19). */
 @Composable
 private fun StepperGlyph(color: Color, plus: Boolean, modifier: Modifier = Modifier) {
+    val stroke = strokePx(STEPPER_STROKE_UNITS)
     Canvas(modifier = modifier) {
         val u = size.minDimension / 24f
-        val stroke = 1.6f * u
         drawLine(
             color = color,
             start = Offset(5f * u, 12f * u),

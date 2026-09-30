@@ -346,9 +346,10 @@ private fun SetCheckbox(
     }
 }
 
-/** Thin checkmark on a 24-unit design box: (4,12.5) -> (9.5,18) -> (20,6.5). */
+/** Checkmark on a 24-unit design box: (4,12.5) -> (9.5,18) -> (20,6.5), with the fixed glyph stroke. */
 @Composable
 private fun Checkmark(color: Color, modifier: Modifier = Modifier) {
+    val stroke = strokePx(GLYPH_STROKE_UNITS)
     Canvas(modifier = modifier) {
         val u = size.minDimension / 24f
         val path = Path().apply {
@@ -359,14 +360,15 @@ private fun Checkmark(color: Color, modifier: Modifier = Modifier) {
         drawPath(
             path = path,
             color = color,
-            style = Stroke(width = 1.6f * u, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
     }
 }
 
-/** Thin outlined five-point star on a 24-unit design box (design pr-star path). */
+/** Outlined five-point star on a 24-unit design box (design pr-star path), with the fixed glyph stroke. */
 @Composable
 private fun PrStar(color: Color, modifier: Modifier = Modifier) {
+    val stroke = strokePx(GLYPH_STROKE_UNITS)
     Canvas(modifier = modifier) {
         val u = size.minDimension / 24f
         val points = listOf(
@@ -389,7 +391,7 @@ private fun PrStar(color: Color, modifier: Modifier = Modifier) {
         drawPath(
             path = path,
             color = color,
-            style = Stroke(width = 1.4f * u, cap = StrokeCap.Round, join = StrokeJoin.Round),
+            style = Stroke(width = stroke, cap = StrokeCap.Round, join = StrokeJoin.Round),
         )
     }
 }
