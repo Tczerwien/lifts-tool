@@ -340,7 +340,7 @@ fun buildSnapshot(
                     name = nameOf(it.exerciseId),
                     targetSets = it.targetSets,
                     warmupSets = it.warmupSets,
-                    // A hold is seconds, as for workout slots below.
+                    // A hold is seconds, as for workout slots above.
                     repMin = it.repMin?.takeIf { _ -> tracking[it.exerciseId]?.takesReps != false },
                     repMax = it.repMax?.takeIf { _ -> tracking[it.exerciseId]?.takesReps != false },
                     targetRir = it.targetRir?.takeIf { _ -> tracking[it.exerciseId]?.takesReps != false },

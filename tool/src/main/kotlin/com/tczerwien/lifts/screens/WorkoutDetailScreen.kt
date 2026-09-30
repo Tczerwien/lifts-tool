@@ -173,7 +173,9 @@ class WorkoutDetailViewModel(
      * so it survives Back, then runs [onDeleted] on Main (unless the screen is already gone).
      */
     fun tapDelete(onDeleted: () -> Unit) {
-        if (deleting || !deleteArm.tap()) return
+        // Not while a Start Again or Save as Template is on its way: its screen would open on top, and the
+        // delete's exit would pop that one instead of this.
+        if (deleting || starting || !deleteArm.tap()) return
         deleting = true
         LiftsIo.write({ repository.deleteWorkout(workoutId) }) {
             share.workoutDeleted()
@@ -254,9 +256,12 @@ class WorkoutDetailViewModel(
         if (starting) return
         starting = true
         LiftsIo.write({ session.saveAsTemplate(workoutId, raw) }) { templateId ->
-            starting = false
             if (templateId != null) share.logChanged()
-            withContext(Dispatchers.Main) { if (!cleared && templateId != null) onSaved(templateId) }
+            withContext(Dispatchers.Main) {
+                // Lifted on Main, with the editor's opening: a row tapped in between can't land under it.
+                starting = false
+                if (!cleared && templateId != null) onSaved(templateId)
+            }
         }
     }
 
