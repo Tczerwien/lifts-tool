@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,8 +15,10 @@ import kotlinx.coroutines.launch
 
 /**
  * Writes the export files into [dir] (files/shared/exports, which Tool Manager serves), one run at a
- * time. A request made while a run is going is folded into one more run after it, so the files end
- * up reflecting the latest data however many requests pile up.
+ * time. A run waits [settleMillis] after the request that starts it, so a burst of edits (a template
+ * built exercise by exercise, a run of renames) makes one full rewrite, not one per edit; a request made
+ * while a run is going is folded into one more run after it, so the files end up reflecting the latest
+ * data however many requests pile up.
  *
  * Every file of a run is first written to a hidden temp file; only when all of them are written are
  * they renamed over the old ones. Tool Manager never serves half a file, and a run that fails (full
@@ -27,6 +30,7 @@ import kotlinx.coroutines.launch
 class ExportWriter(
     private val dir: File,
     scope: CoroutineScope,
+    private val settleMillis: Long = SETTLE_MS,
     private val render: suspend () -> Map<String, String>,
 ) {
     sealed interface Status {
@@ -50,7 +54,12 @@ class ExportWriter(
 
     init {
         scope.launch {
-            for (request in requests) runOnce()
+            for (request in requests) {
+                delay(settleMillis)
+                // Requests made while it settled are served by this run.
+                requests.tryReceive()
+                runOnce()
+            }
         }
     }
 
@@ -98,6 +107,9 @@ class ExportWriter(
     private fun tempFor(name: String) = File(dir, ".$name.tmp")
 
     companion object {
+        /** How long a run waits for more requests: short, so the files are rarely behind. */
+        const val SETTLE_MS = 1_000L
+
         const val TRAINING_LOG = "training-log.md"
         const val WORKOUTS_JSON = "workouts.json"
         const val STRONG_CSV = "strong.csv"

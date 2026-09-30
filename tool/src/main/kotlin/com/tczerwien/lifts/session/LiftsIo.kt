@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.session
 
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +10,21 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+/**
+ * One piece of work waiting its turn on the lane at most ([tryQueue] until it has [started]): a request
+ * made while it waits is served by it, since it reads the data when it runs. A request made once it has
+ * started queues another, as its reading may already be done.
+ */
+class QueuedOnce {
+    private val queued = AtomicBoolean(false)
+
+    /** True when the caller should queue the work; false when a queued one will serve this request. */
+    fun tryQueue(): Boolean = queued.compareAndSet(false, true)
+
+    /** The queued work has begun: the next request queues again. */
+    fun started() = queued.set(false)
+}
 
 /**
  * Saves that outlive the screen. The SDK cancels a screen's viewModelScope the moment the user

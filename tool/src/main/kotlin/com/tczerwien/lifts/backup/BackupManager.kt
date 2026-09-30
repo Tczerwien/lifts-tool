@@ -3,6 +3,7 @@ package com.tczerwien.lifts.backup
 import android.util.Log
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.QueuedOnce
 import com.tczerwien.lifts.settings.SettingsRows
 import com.tczerwien.lifts.settings.SettingsStore
 import java.io.File
@@ -55,11 +56,22 @@ class BackupManager(
      */
     val changes: StateFlow<Long> = _changes.asStateFlow()
 
-    /** A dated backup, queued on the write lane: Finish and Back up now. */
+    /** A dated backup already queued and not started: it will hold whatever a request made now would. */
+    private val queued = QueuedOnce()
+
+    /**
+     * A dated backup, queued on the write lane: Finish and Back up now. While one waits its turn a second
+     * isn't queued (a Finish, RESUME and Finish again behind a busy lane): the one waiting reads the
+     * database when its turn comes, so it holds both.
+     */
     fun request() {
+        if (!queued.tryQueue()) return
         requested.incrementAndGet()
         publish()
-        LiftsIo.write({ runCatching { backUp(BackupPolicy.Kind.DATED) } }) {
+        LiftsIo.write({
+            queued.started()
+            runCatching { backUp(BackupPolicy.Kind.DATED) }
+        }) {
             requested.decrementAndGet()
             publish()
         }

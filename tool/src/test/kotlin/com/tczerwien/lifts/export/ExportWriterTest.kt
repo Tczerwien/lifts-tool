@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -35,6 +36,22 @@ class ExportWriterTest {
 
     private fun contents(): Map<String, String> =
         dir.listFiles().orEmpty().associate { it.name to it.readText() }
+
+    @Test
+    fun `a burst of edits makes one rewrite`() = runBlocking {
+        var runs = 0
+        val writer = ExportWriter(dir, scope, settleMillis = 300) {
+            runs++
+            mapOf("a.md" to "run $runs")
+        }
+        repeat(10) {
+            writer.request()
+            delay(20)
+        }
+        assertEquals(ExportWriter.Status.Idle, writer.settled())
+        assertEquals(1, runs, "ten edits in a fifth of a second: one full rewrite")
+        assertEquals(mapOf("a.md" to "run 1"), contents())
+    }
 
     @Test
     fun `a run writes every file and leaves no temp file behind`() = runBlocking {
