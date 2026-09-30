@@ -13,7 +13,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.BuildConfig
 import com.tczerwien.lifts.analytics.plainNumber
 import com.tczerwien.lifts.backup.BackupManager
@@ -45,12 +44,10 @@ import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 class SettingsViewModel(
     private val repository: LiftsRepository,
@@ -88,8 +85,9 @@ class SettingsViewModel(
 
     private var editorSession = 0
 
+    /** Loads behind any write still queued (a bar just deleted, a unit just switched), so the rows show it. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write({}) {
             val settings = settingsStore.snapshot()
             val barCount = repository.listBars().size
             val lastBackup = backups.lastBackupMillis()
