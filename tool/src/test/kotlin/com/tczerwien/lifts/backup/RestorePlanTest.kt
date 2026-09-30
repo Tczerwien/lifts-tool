@@ -64,7 +64,7 @@ class RestorePlanTest {
     fun `the summary counts what History would show`() {
         val summary = RestorePlan.summarize(rows)
         assertEquals(2, summary.workouts, "a finished workout with nothing ticked and an open one don't count")
-        assertEquals(3, summary.loggedSets, "unticked sets never count")
+        assertEquals(2, summary.loggedSets, "unticked sets never count, nor the open workout's ticked one")
         assertEquals(1, summary.customExercises)
         assertEquals("Lower A", summary.lastWorkout?.name)
         assertEquals(4L, summary.openWorkout?.id)
@@ -75,7 +75,7 @@ class RestorePlanTest {
     fun `the summary reads as short lines`() {
         assertEquals(
             listOf(
-                "2 workouts · 3 sets",
+                "2 workouts · 2 sets",
                 "Jul 31, 2026 – Sep 25, 2026",
                 "last: Lower A · Sep 25",
                 "1 template · 1 custom exercise · 2 weigh-ins",

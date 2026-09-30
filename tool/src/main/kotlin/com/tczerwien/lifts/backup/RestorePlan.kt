@@ -17,7 +17,7 @@ object RestorePlan {
     data class Summary(
         /** Finished workouts with at least one logged set: what History lists. */
         val workouts: Int,
-        /** Logged (ticked) sets; unticked ones never count. */
+        /** Logged (ticked) sets of finished workouts: unticked sets and a workout in progress count nowhere. */
         val loggedSets: Int,
         val templates: Int,
         val customExercises: Int,
@@ -52,9 +52,10 @@ object RestorePlan {
 
     fun summarize(rows: LiftsRows): Summary {
         val slotWorkout = rows.workoutExercises.associate { it.id to it.workoutId }
-        val logged = rows.sets.filter { it.completedAt != null }
+        val finishedIds = rows.workouts.filter { it.endedAt != null }.mapTo(HashSet()) { it.id }
+        val logged = rows.sets.filter { it.completedAt != null && slotWorkout[it.workoutExerciseId] in finishedIds }
         val workoutsWithSets = logged.mapNotNull { slotWorkout[it.workoutExerciseId] }.toSet()
-        val finished = rows.workouts.filter { it.endedAt != null && it.id in workoutsWithSets }
+        val finished = rows.workouts.filter { it.id in workoutsWithSets }
         return Summary(
             workouts = finished.size,
             loggedSets = logged.size,
