@@ -636,10 +636,15 @@ class ActiveWorkoutViewModel(
         return state.exercises.firstOrNull { it.slot.id == nextSlotId }
     }
 
-    /** The next-exercise row: moves to the exercise it offers. */
+    /**
+     * The next-exercise row: moves to the exercise it offers. The row sits in the same place on every
+     * exercise, so a bounce would move on again: the rows ignore taps for a moment, as after a jump.
+     */
     fun goToNextExercise() {
         if (!beginRowAction()) return
-        nextExercise(_uiState.value)?.let { showExercise(it.slot.id) }
+        val next = nextExercise(_uiState.value) ?: return
+        showExercise(next.slot.id)
+        rowsMovedUnderFinger()
     }
 
     /** Result of the exercise list: that exercise, on the row he is on in it ([nextRowOf]). */
