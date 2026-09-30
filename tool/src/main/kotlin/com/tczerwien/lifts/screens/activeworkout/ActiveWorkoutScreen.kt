@@ -195,8 +195,13 @@ class ActiveWorkoutScreen(
                                 val fullyVisible = info.visibleItemsInfo.filter {
                                     it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset
                                 }
-                                activeRowScrollTarget(activeIndex, fullyVisible.firstOrNull()?.index, fullyVisible.lastOrNull()?.index)
-                                    ?.let { listState.animateScrollToItem(it) }
+                                val target = activeRowScrollTarget(activeIndex, fullyVisible.firstOrNull()?.index, fullyVisible.lastOrNull()?.index)
+                                // A tick that scrolls the list slides another row under his finger: a
+                                // double tap's second tap would tick it, or land on "+ ADD SET".
+                                if (scrollMovesRows(target, listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)) {
+                                    viewModel.rowsScrolled()
+                                }
+                                target?.let { listState.animateScrollToItem(it) }
                             }
                             // Inside: the scrollbar floats over the rows' 2gu end padding instead of taking
                             // 4gu from them once the list overflows, which slid them off their headers.

@@ -73,6 +73,14 @@ internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, la
 }
 
 /**
+ * Whether scrolling to [target] moves the rows from where they are ([firstVisibleIndex] at the top,
+ * [firstVisibleOffset] px scrolled into it): then a tap already on its way lands on another row
+ * ([ActiveWorkoutViewModel.rowsScrolled]). A list built on the target (a new exercise) doesn't move.
+ */
+internal fun scrollMovesRows(target: Int?, firstVisibleIndex: Int, firstVisibleOffset: Int): Boolean =
+    target != null && (target != firstVisibleIndex || firstVisibleOffset != 0)
+
+/**
  * The exercise's name, the equipment and muscles under it, the template's target ("8–12 REPS · RIR 1 ·
  * ADD LOAD") and its pinned cue. While a row is being logged ([logging]) the equipment and muscles line
  * gives its height to the set list; the target and the cue stay. The whole header is one tap target

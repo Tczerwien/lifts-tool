@@ -2,9 +2,11 @@ package com.tczerwien.lifts.screens.activeworkout
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-/** When the set list moves to show the active row ([activeRowScrollTarget], [openingListIndex]). */
+/** When the set list moves to show the active row ([activeRowScrollTarget], [openingListIndex], [scrollMovesRows]). */
 class SetListScrollTest {
 
     @Test
@@ -31,6 +33,19 @@ class SetListScrollTest {
         assertEquals(0, activeRowScrollTarget(activeIndex = 1, firstFullyVisible = 3, lastFullyVisible = 5))
         // Not laid out yet.
         assertEquals(1, activeRowScrollTarget(activeIndex = 2, firstFullyVisible = null, lastFullyVisible = null))
+    }
+
+    @Test
+    fun `a scroll that moves the rows drops the taps on its way, one onto the list already there doesn't`() {
+        // Set 3 ticked with rows 0-3 in view: set 4 half hidden, row 3 goes to the top.
+        assertTrue(scrollMovesRows(target = 3, firstVisibleIndex = 0, firstVisibleOffset = 0))
+        // Back up to a row above the view.
+        assertTrue(scrollMovesRows(target = 0, firstVisibleIndex = 2, firstVisibleOffset = 0))
+        // The right row at the top, but scrolled part way into it.
+        assertTrue(scrollMovesRows(target = 2, firstVisibleIndex = 2, firstVisibleOffset = 40))
+        // A new exercise's list is built on its opening row: nothing moves.
+        assertFalse(scrollMovesRows(target = 2, firstVisibleIndex = 2, firstVisibleOffset = 0))
+        assertFalse(scrollMovesRows(target = null, firstVisibleIndex = 0, firstVisibleOffset = 0))
     }
 
     @Test

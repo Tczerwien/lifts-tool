@@ -653,6 +653,13 @@ class ActiveWorkoutViewModel(
         movedOnAt = System.currentTimeMillis()
     }
 
+    /**
+     * The set list scrolled by itself to show the active row (after a tick, most often): the rows
+     * moved under his finger, so for a moment a tap on them is dropped, not given to the row that
+     * slid into its place.
+     */
+    fun rowsScrolled() = rowsMovedUnderFinger()
+
     /** Puts exercise [slotId] on screen with the steppers on its first unticked row, and saves it as the one on screen. */
     private fun showExercise(slotId: Long) {
         _uiState.update { state ->
