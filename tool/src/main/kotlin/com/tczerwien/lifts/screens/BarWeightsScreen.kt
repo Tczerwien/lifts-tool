@@ -54,12 +54,10 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 class BarWeightsViewModel(
     private val repository: LiftsRepository,
@@ -105,8 +103,12 @@ class BarWeightsViewModel(
 
     private var editorSession = 0
 
+    /**
+     * Loads behind any write still queued: a unit switch made just before swaps the seeded bar (45 lb
+     * for 20 kg), and a list read before it lands would show, and save back, the old one.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) {
+        LiftsIo.write({}) {
             val settings = settingsStore.snapshot()
             val bars = repository.listBars()
             _uiState.update { it.copy(units = settings.units, weightStep = settings.weightStep, bars = bars) }
@@ -180,7 +182,9 @@ class BarWeightsViewModel(
         // Close the editor synchronously so a double-tap on ACCEPT cannot insert twice.
         _uiState.update { it.copy(mode = Mode.BarList) }
         LiftsIo.write {
-            val existing = state.bars.firstOrNull { it.id == mode.barId }
+            // The bars as stored now, not as the list showed them: a rename keeps the stored weight.
+            val stored = repository.listBars()
+            val existing = stored.firstOrNull { it.id == mode.barId }
             // A rename alone must not re-round the weight (45 lb would drift through 0.5-unit rounding).
             val weightKg = if (existing != null && !mode.stepped) {
                 existing.weightKg
@@ -190,7 +194,7 @@ class BarWeightsViewModel(
             if (existing != null) {
                 repository.updateBar(existing.copy(name = mode.name, weightKg = weightKg))
             } else {
-                val position = (state.bars.maxOfOrNull { it.position } ?: -1) + 1
+                val position = (stored.maxOfOrNull { it.position } ?: -1) + 1
                 repository.addBar(BarEntity(name = mode.name, weightKg = weightKg, position = position))
             }
             // workouts.json lists the bars.
