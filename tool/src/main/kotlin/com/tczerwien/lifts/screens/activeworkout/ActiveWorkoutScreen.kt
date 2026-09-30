@@ -126,6 +126,8 @@ class ActiveWorkoutScreen(
         val current = uiState.exercises.getOrNull(uiState.currentIndex)
         // resumeOnly from the rest strip: a rest that ends on the way shows REST OVER, not a new rest.
         val openTimer = { resumeOnly: Boolean ->
+            // Another screen on top: an armed Finish must not still be armed when he comes back.
+            viewModel.finishArm.disarm()
             // Read the clock at the tap: nothing on this screen ticks except the small clocks.
             val restRemaining = uiState.restEndMillis?.let { restRemainingSec(it, System.currentTimeMillis()) } ?: 0
             val timerDurationSec = when {
@@ -297,6 +299,7 @@ class ActiveWorkoutScreen(
                             contentDescription = "add exercise",
                             onClick = {
                                 if (live) {
+                                    viewModel.finishArm.disarm()
                                     viewModel.holdPosition()
                                     navigateTo(::ExercisePickerScreen) { exerciseId ->
                                         viewModel.addExercise(exerciseId)
