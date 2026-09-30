@@ -15,8 +15,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Writes the export files into [dir] (files/shared/exports, which Tool Manager serves), one run at a
- * time. A run waits [settleMillis] after the request that starts it, so a burst of edits (a template
- * built exercise by exercise, a run of renames) makes one full rewrite, not one per edit; a request made
+ * time. A request after a quiet spell runs at once; one within [settleMillis] of a run's end waits out
+ * the rest of that time, so a burst of edits (a template built exercise by exercise, a run of renames)
+ * makes two full rewrites, not one per edit; a request made
  * while a run is going is folded into one more run after it, so the files end up reflecting the latest
  * data however many requests pile up.
  *
@@ -54,11 +55,17 @@ class ExportWriter(
 
     init {
         scope.launch {
+            var lastRunEnded = Long.MIN_VALUE / 2
             for (request in requests) {
-                delay(settleMillis)
-                // Requests made while it settled are served by this run.
-                requests.tryReceive()
+                // Straight away after a quiet spell (Finish's run starts at once); a request close behind
+                // a run waits for the rest of the burst, and the ones made meanwhile are served by it.
+                val wait = settleMillis - (System.currentTimeMillis() - lastRunEnded)
+                if (wait > 0) {
+                    delay(wait)
+                    requests.tryReceive()
+                }
                 runOnce()
+                lastRunEnded = System.currentTimeMillis()
             }
         }
     }

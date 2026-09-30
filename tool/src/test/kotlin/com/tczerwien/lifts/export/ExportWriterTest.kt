@@ -38,7 +38,7 @@ class ExportWriterTest {
         dir.listFiles().orEmpty().associate { it.name to it.readText() }
 
     @Test
-    fun `a burst of edits makes one rewrite`() = runBlocking {
+    fun `a burst of edits makes two rewrites, the first at once`() = runBlocking {
         var runs = 0
         val writer = ExportWriter(dir, scope, settleMillis = 300) {
             runs++
@@ -49,8 +49,8 @@ class ExportWriterTest {
             delay(20)
         }
         assertEquals(ExportWriter.Status.Idle, writer.settled())
-        assertEquals(1, runs, "ten edits in a fifth of a second: one full rewrite")
-        assertEquals(mapOf("a.md" to "run 1"), contents())
+        assertEquals(2, runs, "ten edits in a fifth of a second: the first at once, one for the other nine")
+        assertEquals(mapOf("a.md" to "run 2"), contents())
     }
 
     @Test
