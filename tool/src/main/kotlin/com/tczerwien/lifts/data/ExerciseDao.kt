@@ -37,4 +37,21 @@ interface ExerciseDao {
 
     @Query("SELECT * FROM exercises WHERE id IN (:ids)")
     fun byIds(ids: List<String>): List<ExerciseEntity>
+
+    /** A workout slot or a template exercise refers to [id]: deleting it would orphan them. */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM workout_exercises WHERE exerciseId = :id) " +
+            "OR EXISTS(SELECT 1 FROM template_exercises WHERE exerciseId = :id)"
+    )
+    fun isReferenced(id: String): Boolean
+
+    /** Deletes a custom exercise; a catalog one is never deleted. */
+    @Query("DELETE FROM exercises WHERE id = :id AND isCustom = 1")
+    fun deleteCustom(id: String): Int
+
+    @Query("UPDATE exercises SET hidden = :hidden WHERE id = :id AND hidden != :hidden")
+    fun setHidden(id: String, hidden: Boolean): Int
+
+    @Query("UPDATE exercises SET perSide = :perSide WHERE id = :id AND perSide != :perSide")
+    fun setPerSide(id: String, perSide: Boolean): Int
 }

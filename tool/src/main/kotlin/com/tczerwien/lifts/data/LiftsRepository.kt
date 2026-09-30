@@ -1,5 +1,7 @@
 package com.tczerwien.lifts.data
 
+import com.tczerwien.lifts.library.Removal
+import com.tczerwien.lifts.library.removalFor
 import com.tczerwien.lifts.seed.Seeder
 
 /**
@@ -75,6 +77,43 @@ class LiftsRepository private constructor(
         }
         true
     }
+
+    /**
+     * Saves his edit of a custom exercise ([edited]'s name, muscles, equipment and category) and measures
+     * it by [tracking] ([setTracking], which keeps logged weights' signs in step), in one transaction.
+     * False when nothing changed, or it isn't a custom exercise.
+     */
+    fun updateCustomExercise(edited: ExerciseEntity, tracking: Tracking): Boolean = inTransaction {
+        val current = db.exerciseDao.byId(edited.id)?.takeIf { it.isCustom } ?: return@inTransaction false
+        val next = current.copy(
+            name = edited.name,
+            equipment = edited.equipment,
+            primaryMuscles = edited.primaryMuscles,
+            secondaryMuscles = edited.secondaryMuscles,
+            category = edited.category,
+        )
+        val fields = next != current && db.exerciseDao.update(next) > 0
+        setTracking(edited.id, tracking) || fields
+    }
+
+    /**
+     * Removes custom exercise [id] ([removalFor]): deleted when no workout or template refers to it,
+     * otherwise hidden from the picker so history keeps it. One transaction, so a workout can't start
+     * using it between the check and the delete. Null when it isn't a custom exercise.
+     */
+    fun removeCustomExercise(id: String): Removal? = inTransaction {
+        db.exerciseDao.byId(id)?.takeIf { it.isCustom } ?: return@inTransaction null
+        when (removalFor(inUse = db.exerciseDao.isReferenced(id))) {
+            Removal.HIDE -> Removal.HIDE.also { db.exerciseDao.setHidden(id, true) }
+            Removal.DELETE -> Removal.DELETE.also { db.exerciseDao.deleteCustom(id) }
+        }
+    }
+
+    /** Takes a hidden exercise back into the picker (or out); true when it changed. */
+    fun setExerciseHidden(id: String, hidden: Boolean): Boolean = db.exerciseDao.setHidden(id, hidden) > 0
+
+    /** Reps (or seconds) of [id] are per side from now on, or not; true when it changed. */
+    fun setPerSide(id: String, perSide: Boolean): Boolean = db.exerciseDao.setPerSide(id, perSide) > 0
 
     /** Every exercise without its instructions, by name: the picker's catalog. */
     fun exerciseSummaries(): List<ExerciseSummary> = db.exerciseDao.listSummaries()
