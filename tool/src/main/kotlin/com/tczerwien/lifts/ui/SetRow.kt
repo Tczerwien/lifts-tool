@@ -160,8 +160,8 @@ private fun HeaderLabel(text: String, modifier: Modifier = Modifier) {
  * @param onMarkerClick taps the set marker (number / "W") to change the set type. Kept apart from
  *   [onRowClick] so a near-miss on the row can never silently turn a work set into a warm-up.
  * @param onPreviousClick taps previous performance to autofill.
- * @param onRirClick taps the RIR cell to cycle it (blank, 0–5, blank); ticked rows too, since the
- *   effort is known once the set is done.
+ * @param onRirClick taps the RIR cell to cycle it ([com.tczerwien.lifts.session.nextRir]: the slot's
+ *   target or 2, down to 0, up to 5, blank); ticked rows too, since the effort is known once the set is done.
  * @param onCheckToggle toggles set completion.
  */
 @Composable

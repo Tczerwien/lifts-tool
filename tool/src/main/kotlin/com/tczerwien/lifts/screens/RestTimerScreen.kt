@@ -84,7 +84,7 @@ class RestTimerViewModel(
         val loaded: Boolean = false,
         /** Wall-clock end; remaining is derived against it every tick. */
         val endMillis: Long = 0,
-        /** "NEXT · 165 × 5 @ 8": what a tick on the upcoming set would log, or an end-of-workout note. */
+        /** "NEXT · 165 × 5 RIR 2": what a tick on the upcoming set would log, or an end-of-workout note. */
         val nextLine: String? = null,
         /** "Bench Press", the exercise of [nextContext]; cut short before the set's number is. */
         val nextExercise: String? = null,
