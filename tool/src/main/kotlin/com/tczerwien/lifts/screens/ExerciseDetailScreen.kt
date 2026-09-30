@@ -59,6 +59,7 @@ import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.SetLine
 import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.knownCatalogName
@@ -414,7 +415,7 @@ class ExerciseDetailViewModel(
             // A Type, Per Side or Show tapped while this read stands until its save is read back.
             val keepAbout = aboutFloor.keepsShown(aboutReload)
             state.copy(
-                name = exercise?.let(::displayName) ?: "Exercise",
+                name = exercise?.let(::displayName) ?: UNKNOWN_EXERCISE,
                 tracking = if (keepAbout) state.tracking else tracking,
                 pinnedNote = if (noteFloor.keepsShown(reload)) state.pinnedNote else exercise?.pinnedNote,
                 instructions = exercise?.instructions ?: emptyList(),
