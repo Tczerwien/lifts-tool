@@ -26,6 +26,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
@@ -104,6 +105,8 @@ fun Stepper(
                 variant = LightTextVariant.Superfine,
                 lighten = true,
                 maxLines = 1,
+                // "WARM-UP REST · DEFAULT" in half the width: cut with an ellipsis, not silently at a word.
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(bottom = labelGapUnits.gridUnitsAsDp()),
             )
         }

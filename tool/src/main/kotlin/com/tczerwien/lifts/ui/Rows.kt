@@ -179,6 +179,7 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
             variant = LightTextVariant.Superfine,
             lighten = true,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
