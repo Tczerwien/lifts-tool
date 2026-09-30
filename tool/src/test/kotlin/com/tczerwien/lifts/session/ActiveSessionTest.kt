@@ -81,6 +81,20 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a template's warm-ups, rep range and RIR reach the workout's slot`() {
+        store.addFinishedWorkout(startedAt = 1_000_000, "incline" to listOf(Triple(w, 20.0, 10), Triple(n, 30.0, 12)))
+        val template = store.addTemplate("Upper A", "incline" to 3)
+        val row = store.exercisesForTemplate(template).single()
+        store.templateExercises[row.id] = row.copy(warmupSets = 2, repMin = 6, repMax = 12, targetRir = 1, restSecWork = 150)
+        val workoutId = session.startFromTemplate(template, now = 2_000_000)
+        val slot = store.exercisesForWorkout(workoutId).single()
+        assertEquals(listOf(6, 12, 1, 150), listOf(slot.targetRepMin, slot.targetRepMax, slot.targetRir, slot.restSecWork))
+        assertEquals(listOf(w, w, n, n, n), store.setsForWorkout(workoutId).map { it.type }, "two warm-ups, not last time's one")
+        // Exactly as started: backing out leaves nothing.
+        assertTrue(session.discardIfUntouched(workoutId))
+    }
+
+    @Test
     fun `a template with Bench twice gives each slot its own group`() {
         store.addFinishedWorkout(
             startedAt = 1_000_000,

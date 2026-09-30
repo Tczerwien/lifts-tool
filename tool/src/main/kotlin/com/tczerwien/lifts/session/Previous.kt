@@ -145,25 +145,34 @@ fun seedFor(
 
 /**
  * Set types a new slot starts with, from [lastTime] (the matching slot group from last session).
- * From a template ([targetWorkSets] given): last time's warm-ups, then that many work sets. Added
- * by hand: last time's pattern, warm-ups kept, every other type as a plain work set. With no
- * history either way: [targetWorkSets], or [DEFAULT_NEW_EXERCISE_SETS], work sets.
+ * From a template ([targetWorkSets] given): [warmupSets] warm-ups, or last time's when the template
+ * leaves them to last session (null), then that many work sets. Added by hand: last time's pattern,
+ * warm-ups kept, every other type as a plain work set. With no history either way: [targetWorkSets],
+ * or [DEFAULT_NEW_EXERCISE_SETS], work sets.
  */
-fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null): List<String> {
+fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null, warmupSets: Int? = null): List<String> {
     if (targetWorkSets != null) {
-        return List(lastTime.count { it.isWarmup() }) { SET_TYPE_WARMUP } +
+        val warmups = warmupSets ?: lastTime.count { it.isWarmup() }
+        return List(warmups.coerceAtLeast(0)) { SET_TYPE_WARMUP } +
             List(targetWorkSets.coerceAtLeast(0)) { SET_TYPE_NORMAL }
     }
     if (lastTime.isEmpty()) return List(DEFAULT_NEW_EXERCISE_SETS) { SET_TYPE_NORMAL }
     return lastTime.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
 }
 
-/** One slot as a start creates it: the exercise, its rows' set types in order, and its rests (the template's). */
+/**
+ * One slot as a start creates it: the exercise, its rows' set types in order, its rests, and the
+ * targets shown at the gym (rep range, RIR), all copied from the template (or the workout started
+ * again), so editing that later never changes this workout.
+ */
 data class PlannedSlot(
     val exerciseId: String,
     val types: List<String>,
     val restSecWork: Int? = null,
     val restSecWarmup: Int? = null,
+    val targetRepMin: Int? = null,
+    val targetRepMax: Int? = null,
+    val targetRir: Int? = null,
 )
 
 /**
@@ -183,9 +192,12 @@ fun planTemplate(
         val lastTime = groupsByExercise[planned.exerciseId].orEmpty().getOrElse(occurrence) { emptyList() }
         PlannedSlot(
             planned.exerciseId,
-            prefillTypes(lastTime, targetWorkSets = planned.targetSets),
+            prefillTypes(lastTime, targetWorkSets = planned.targetSets, warmupSets = planned.warmupSets),
             restSecWork = planned.restSecWork,
             restSecWarmup = planned.restSecWarmup,
+            targetRepMin = planned.repMin,
+            targetRepMax = planned.repMax,
+            targetRir = planned.targetRir,
         )
     }
 }

@@ -230,6 +230,29 @@ class PreviousTest {
     }
 
     @Test
+    fun `a template's own warm-up count wins over last time's, and 0 means none`() {
+        val lastTime = listOf(prev(1, w), prev(2, w), prev(3, n))
+        assertEquals(listOf(w, n, n, n), prefillTypes(lastTime, targetWorkSets = 3, warmupSets = 1))
+        assertEquals(listOf(n, n, n), prefillTypes(lastTime, targetWorkSets = 3, warmupSets = 0))
+        assertEquals(listOf(w, w, w, n), prefillTypes(emptyList(), targetWorkSets = 1, warmupSets = 3))
+        assertEquals(listOf(w, w, n), prefillTypes(lastTime, targetWorkSets = 1, warmupSets = null), "none: last session's")
+    }
+
+    @Test
+    fun `a template slot's rep range, RIR and rests reach the plan`() {
+        val template = listOf(
+            TemplateExerciseEntity(
+                id = 1, templateId = 7, exerciseId = "incline", position = 0, targetSets = 4, warmupSets = 2,
+                repMin = 6, repMax = 12, targetRir = 1, restSecWork = 150, restSecWarmup = 60,
+            ),
+        )
+        assertEquals(
+            listOf(PlannedSlot("incline", listOf(w, w, n, n, n, n), 150, 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1)),
+            planTemplate(template, emptyMap()),
+        )
+    }
+
+    @Test
     fun `a hand-added exercise mirrors last time's pattern, or starts with three sets`() {
         assertEquals(listOf(w, n, n), prefillTypes(listOf(prev(1, w), prev(2, n), prev(3, f))))
         assertEquals(listOf(n, n, n), prefillTypes(emptyList()))

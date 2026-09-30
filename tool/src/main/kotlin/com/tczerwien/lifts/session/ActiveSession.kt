@@ -42,8 +42,9 @@ class ActiveSession(
 
     /**
      * Creates a workout from [templateId]: one workout_exercises row per template slot (copying rest
-     * overrides), each starting with last session's warm-ups for that slot, then targetSets work
-     * sets ([planTemplate]), so PREVIOUS lines up warm-up to warm-up. Rows start empty; their
+     * overrides and the rep range and RIR target), each starting with the template's warm-ups, or last
+     * session's for that slot when it leaves them to last session, then targetSets work sets
+     * ([planTemplate]), so PREVIOUS lines up warm-up to warm-up. Rows start empty; their
      * starting values are only shown ([seedRows]). A vanished template degrades to an empty
      * workout. All rows are written in one transaction. A rest left running from an earlier
      * workout is cleared, so the new one never inherits it.
@@ -66,21 +67,29 @@ class ActiveSession(
         template ?: return workoutId
         val templateExercises = repository.exercisesForTemplate(templateId).sortedBy { it.position }
         val plan = planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
-        templateExercises.zip(plan).forEachIndexed { index, (templateExercise, planned) ->
+        addPlannedSlots(workoutId, plan)
+        return workoutId
+    }
+
+    /** Writes [plan]'s slots into [workoutId], in order, with their empty rows: exactly what [isUntouched] expects. */
+    private fun addPlannedSlots(workoutId: Long, plan: List<PlannedSlot>) {
+        plan.forEachIndexed { index, planned ->
             val slotId = repository.addWorkoutExercise(
                 WorkoutExerciseEntity(
                     workoutId = workoutId,
-                    exerciseId = templateExercise.exerciseId,
+                    exerciseId = planned.exerciseId,
                     position = index,
-                    restSecWork = templateExercise.restSecWork,
-                    restSecWarmup = templateExercise.restSecWarmup,
+                    restSecWork = planned.restSecWork,
+                    restSecWarmup = planned.restSecWarmup,
+                    targetRepMin = planned.targetRepMin,
+                    targetRepMax = planned.targetRepMax,
+                    targetRir = planned.targetRir,
                 ),
             )
             planned.types.forEachIndexed { setIndex, type ->
                 repository.addSet(SetEntity(workoutExerciseId = slotId, position = setIndex, type = type))
             }
         }
-        return workoutId
     }
 
     /**

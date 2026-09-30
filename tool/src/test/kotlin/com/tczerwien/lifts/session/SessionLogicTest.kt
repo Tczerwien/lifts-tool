@@ -432,6 +432,21 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a slot target changed since the start counts as touched`() {
+        val plan = benchAndSquatPlan.map { it.copy(targetRepMin = 6, targetRepMax = 12, targetRir = 1) }
+        val (slots, sets) = startedFrom(plan)
+        val asStarted = slots.map { it.copy(targetRepMin = 6, targetRepMax = 12, targetRir = 1) }
+        assertTrue(isUntouched(workout(templateId = 7), asStarted, sets, plan))
+        for (edit in listOf(
+            asStarted[0].copy(targetRepMin = 8),
+            asStarted[0].copy(targetRepMax = 15),
+            asStarted[0].copy(targetRir = null),
+        )) {
+            assertFalse(isUntouched(workout(templateId = 7), listOf(edit) + asStarted.drop(1), sets, plan), "$edit")
+        }
+    }
+
+    @Test
     fun `a workout used within four hours is kept`() {
         val hour = 3_600_000L
         val sets = listOf(set(id = 1, completedAt = 10 * hour))
