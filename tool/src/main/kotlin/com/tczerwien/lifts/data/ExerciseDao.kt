@@ -45,9 +45,17 @@ interface ExerciseDao {
     )
     fun isReferenced(id: String): Boolean
 
-    /** A workout slot refers to [id]: it has history (a template alone doesn't give it any). */
+    /** A workout slot refers to [id], ticked or not, finished or not. */
     @Query("SELECT EXISTS(SELECT 1 FROM workout_exercises WHERE exerciseId = :id)")
     fun inWorkouts(id: String): Boolean
+
+    /** [id] has history: a ticked set in a finished workout (unticked sets and open workouts count nowhere). */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM sets s JOIN workout_exercises we ON s.workoutExerciseId = we.id " +
+            "JOIN workouts w ON w.id = we.workoutId " +
+            "WHERE we.exerciseId = :id AND s.completedAt IS NOT NULL AND w.endedAt IS NOT NULL)"
+    )
+    fun hasHistory(id: String): Boolean
 
     /** Deletes a custom exercise; a catalog one is never deleted. */
     @Query("DELETE FROM exercises WHERE id = :id AND isCustom = 1")

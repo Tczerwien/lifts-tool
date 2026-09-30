@@ -95,8 +95,10 @@ class CustomExerciseViewModel(
         val nameTaken: Taken? = null,
         /** The edited exercise is in a workout or template, so removing it hides it ([Removal.HIDE]). */
         val inUse: Boolean = false,
-        /** ...and a workout has it: history the hide keeps. In use without it, only a template has it. */
+        /** ...and a finished workout has a ticked set of it: history the hide keeps. */
         val hasHistory: Boolean = false,
+        /** ...or a workout has it, with nothing ticked (skipped, or the open one). Neither: only templates. */
+        val inWorkouts: Boolean = false,
         /**
          * Leaving with this result, via goBack: the new exercise once the insert succeeded, the existing
          * one he chose over a taken name, the edited one once saved or hidden, or "" once deleted.
@@ -327,6 +329,7 @@ class CustomExerciseViewModel(
         val edited = editId?.let { repository.exerciseById(it) }
         val inUse = editId?.let { repository.isExerciseInUse(it) } ?: false
         val hasHistory = editId?.let { repository.exerciseHasHistory(it) } ?: false
+        val inWorkouts = editId?.let { repository.exerciseInWorkouts(it) } ?: false
         _uiState.update { state ->
             val filled = if (edited != null && !state.loaded) {
                 state.copy(
@@ -341,7 +344,7 @@ class CustomExerciseViewModel(
             } else {
                 state
             }
-            filled.copy(inUse = inUse, hasHistory = hasHistory).withClash()
+            filled.copy(inUse = inUse, hasHistory = hasHistory, inWorkouts = inWorkouts).withClash()
         }
         val all = repository.listExercises()
         val muscles = (all.flatMap { it.primaryMuscles } + all.flatMap { it.secondaryMuscles })
@@ -564,6 +567,7 @@ class CustomExerciseScreen(
                         text = when {
                             !uiState.inUse -> "TAP AGAIN TO DELETE"
                             uiState.hasHistory -> "TAP AGAIN TO HIDE · HISTORY KEPT"
+                            uiState.inWorkouts -> "TAP AGAIN TO HIDE · IT'S IN A WORKOUT"
                             else -> "TAP AGAIN TO HIDE · IT'S IN A TEMPLATE"
                         },
                     )
