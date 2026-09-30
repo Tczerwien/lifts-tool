@@ -389,6 +389,87 @@ class ActiveSessionTest {
         assertTrue(utc.discardIfUntouched(empty))
     }
 
+    // --- Start again and Save as template (Workout Detail) ---
+
+    /**
+     * A finished Tuesday-evening workout: Incline with one warm-up and three work sets (one to failure,
+     * one left unticked), 6–12 at RIR 1 and a 150 s rest; Curl done; Fly skipped; notes on it all.
+     */
+    private fun finishedEvening(): Long {
+        val workoutId = store.addFinishedWorkout(
+            startedAt = 18 * 3_600_000L,
+            "incline" to listOf(Triple(w, 20.0, 10), Triple(n, 30.0, 12), Triple(SET_TYPE_FAILURE, 30.0, 11)),
+            "fly" to listOf(Triple(n, 10.0, 15)),
+            "curl" to listOf(Triple(n, 12.0, 10)),
+        )
+        store.updateWorkout(store.workoutById(workoutId)!!.copy(name = "Evening Workout", notes = "tired"))
+        val (incline, fly, _) = store.exercisesForWorkout(workoutId)
+        store.slots[incline.id] = incline.copy(
+            restSecWork = 150, restSecWarmup = 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1, notes = "elbow ok",
+        )
+        store.addSet(SetEntity(workoutExerciseId = incline.id, position = 3, type = n, weightKg = 30.0))
+        store.skipSlot(workoutId, fly.position)
+        return workoutId
+    }
+
+    @Test
+    fun `start again copies each done exercise's ticked pattern, rests and targets, not notes or skipped ones`() {
+        val utc = ActiveSession(store, SettingsStore(dataStore), dataStore, alarm, ZoneOffset.UTC)
+        val source = finishedEvening()
+        val again = utc.startFromWorkout(source, now = 3 * 24 * 3_600_000L + 7 * 3_600_000L)
+        val workout = store.workoutById(again)!!
+        assertEquals("Morning Workout", workout.name, "a time-of-day name follows the new start")
+        assertNull(workout.notes)
+        assertNull(workout.endedAt)
+        val slots = store.exercisesForWorkout(again)
+        assertEquals(listOf("incline", "curl"), slots.map { it.exerciseId }, "the skipped Fly is left out")
+        val incline = slots.first()
+        assertEquals(listOf(150, 60, 6, 12, 1), listOf(incline.restSecWork, incline.restSecWarmup, incline.targetRepMin, incline.targetRepMax, incline.targetRir))
+        assertNull(incline.notes, "his note stays with the old workout")
+        val rows = store.setsForWorkout(again)
+        assertEquals(listOf(w, n, n), rows.filter { it.workoutExerciseId == incline.id }.map { it.type }, "warm-up kept, failure as a work set, the unticked set left out")
+        assertEquals(listOf(n), rows.filter { it.workoutExerciseId == slots[1].id }.map { it.type })
+        assertTrue(rows.all { it.weightKg == null && it.reps == null && it.completedAt == null })
+        // Nothing done yet: backing out leaves nothing.
+        assertTrue(utc.discardIfUntouched(again, startedFrom = source))
+        assertNull(store.workoutById(again))
+    }
+
+    @Test
+    fun `a workout started again keeps a name he gave the old one, and counts a tick as a change`() {
+        val source = finishedEvening()
+        store.updateWorkout(store.workoutById(source)!!.copy(name = "Upper A"))
+        val again = session.startFromWorkout(source, now = 5 * 24 * 3_600_000L)
+        assertEquals("Upper A", store.workoutById(again)!!.name)
+        val first = store.setsForWorkout(again).first()
+        assertNotNull(session.completeSet(again, first, 20.0, 10, w, now = 5 * 24 * 3_600_000L + 1))
+        assertFalse(session.discardIfUntouched(again, startedFrom = source))
+        // Without its source it can't be told from a workout he built by hand: kept.
+        val other = session.startFromWorkout(source, now = 6 * 24 * 3_600_000L)
+        assertFalse(session.discardIfUntouched(other))
+    }
+
+    @Test
+    fun `save as template writes the done exercises with their sets, warm-ups, targets and rests`() {
+        val source = finishedEvening()
+        val incline = store.exercisesForWorkout(source).first()
+        // A warm-up rest equal to Settings' default follows the default in the template.
+        store.slots[incline.id] = incline.copy(restSecWarmup = SettingsStore.DEFAULT_WARMUP_REST_SEC_VALUE)
+        store.addTemplate("Lower A", "squat" to 3)
+        val templateId = assertNotNull(session.saveAsTemplate(source, "  Push   day "))
+        val template = store.templateById(templateId)!!
+        assertEquals("Push day", template.name)
+        assertEquals(1, template.position, "last in the list")
+        val rows = store.exercisesForTemplate(templateId)
+        assertEquals(listOf("incline", "curl"), rows.map { it.exerciseId })
+        val first = rows.first()
+        assertEquals(listOf(2, 1, 6, 12, 1, 150), listOf(first.targetSets, first.warmupSets, first.repMin, first.repMax, first.targetRir, first.restSecWork))
+        assertNull(first.restSecWarmup)
+        assertEquals(listOf(1, 0), listOf(rows[1].targetSets, rows[1].warmupSets))
+        assertEquals("Evening Workout", store.templateById(session.saveAsTemplate(source, " ")!!)!!.name, "blank takes the workout's")
+        assertNull(session.saveAsTemplate(9_999, "Gone"))
+    }
+
     @Test
     fun `a stale workout with a note but no tick is closed, not deleted`() {
         val workoutId = session.startEmpty(now = 1_000)

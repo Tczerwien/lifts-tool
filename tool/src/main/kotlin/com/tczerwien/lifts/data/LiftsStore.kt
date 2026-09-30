@@ -67,6 +67,13 @@ interface LiftsStore {
 
     fun templateById(id: Long): TemplateEntity?
 
+    /** Every template, in the Templates screen's order (position). */
+    fun listTemplates(): List<TemplateEntity>
+
+    fun addTemplate(template: TemplateEntity): Long
+
+    fun addTemplateExercise(templateExercise: TemplateExerciseEntity): Long
+
     /** A template's exercises in position order. */
     fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity>
 

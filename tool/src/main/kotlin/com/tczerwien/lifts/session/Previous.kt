@@ -202,6 +202,29 @@ fun planTemplate(
     }
 }
 
+/**
+ * The slots "Start again" begins with, from a finished workout's [slots] and [sets]: one per slot
+ * with a ticked set, in position order, each with its ticked sets' pattern (warm-ups kept, every
+ * other type a plain work set) and the slot's rests and targets. Unticked sets count nowhere, so an
+ * exercise skipped that day is left out; notes stay with the old workout. "Save as template" reads
+ * the same plan.
+ */
+fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): List<PlannedSlot> {
+    val ticked = sets.filter { it.completedAt != null }.groupBy { it.workoutExerciseId }
+    return slots.sortedBy { it.position }.mapNotNull { slot ->
+        val done = ticked[slot.id]?.sortedBy { it.position } ?: return@mapNotNull null
+        PlannedSlot(
+            exerciseId = slot.exerciseId,
+            types = done.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL },
+            restSecWork = slot.restSecWork,
+            restSecWarmup = slot.restSecWarmup,
+            targetRepMin = slot.targetRepMin,
+            targetRepMax = slot.targetRepMax,
+            targetRir = slot.targetRir,
+        )
+    }
+}
+
 /** "Set 2 of 3", counting work sets only, or "Warm-up 1 of 2" for a warm-up row of [rows]. */
 fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
     val warmup = rows[index].isWarmup()

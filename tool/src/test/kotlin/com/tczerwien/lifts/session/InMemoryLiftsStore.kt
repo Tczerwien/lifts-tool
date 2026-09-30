@@ -134,6 +134,14 @@ class InMemoryLiftsStore : LiftsStore {
 
     override fun templateById(id: Long): TemplateEntity? = templates[id]
 
+    override fun listTemplates(): List<TemplateEntity> = templates.values.sortedBy { it.position }
+
+    override fun addTemplate(template: TemplateEntity): Long =
+        newId(template.id).also { templates[it] = template.copy(id = it) }
+
+    override fun addTemplateExercise(templateExercise: TemplateExerciseEntity): Long =
+        newId(templateExercise.id).also { templateExercises[it] = templateExercise.copy(id = it) }
+
     val bodyweight = mutableListOf<BodyweightEntity>()
 
     override fun bodyweightBetween(fromEpochDay: Long, toEpochDay: Long): List<BodyweightEntity> =

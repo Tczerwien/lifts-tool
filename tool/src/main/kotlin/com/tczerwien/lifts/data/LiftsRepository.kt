@@ -201,7 +201,7 @@ class LiftsRepository private constructor(
 
     // --- Templates ---
 
-    fun addTemplate(template: TemplateEntity): Long = db.templateDao.insert(template)
+    override fun addTemplate(template: TemplateEntity): Long = db.templateDao.insert(template)
 
     fun updateTemplate(template: TemplateEntity): Boolean = db.templateDao.update(template) > 0
 
@@ -213,9 +213,9 @@ class LiftsRepository private constructor(
 
     override fun templateById(id: Long): TemplateEntity? = db.templateDao.byId(id)
 
-    fun listTemplates(): List<TemplateEntity> = db.templateDao.listAll()
+    override fun listTemplates(): List<TemplateEntity> = db.templateDao.listAll()
 
-    fun addTemplateExercise(templateExercise: TemplateExerciseEntity): Long =
+    override fun addTemplateExercise(templateExercise: TemplateExerciseEntity): Long =
         db.templateDao.insertTemplateExercise(templateExercise)
 
     fun updateTemplateExercise(templateExercise: TemplateExerciseEntity): Boolean =

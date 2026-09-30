@@ -56,6 +56,14 @@ fun defaultWorkoutName(startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): 
         else -> "Night Workout"
     }
 
+/**
+ * The name "Start again" gives a copy of [source] started at [startedAt]: its own name, unless that
+ * is only the time of day it started ([defaultWorkoutName]), when the copy is named for its own start
+ * (Tuesday's "Evening Workout" repeated on Saturday morning is a "Morning Workout").
+ */
+fun startAgainName(source: WorkoutEntity, startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): String =
+    if (source.name == defaultWorkoutName(source.startedAt, zone)) defaultWorkoutName(startedAt, zone) else source.name
+
 /** A hold's stepper moves 5 s a step. */
 const val DURATION_STEP_SEC = 5
 

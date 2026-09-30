@@ -9,6 +9,8 @@ import com.tczerwien.lifts.analytics.workoutBodyweight
 import com.tczerwien.lifts.analytics.workoutEpochDay
 import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.data.tracking
@@ -101,6 +103,68 @@ class ActiveSession(
 
     private fun previousGroupsOf(exerciseId: String): List<List<SetEntity>> =
         previousGroups(repository.previousPerformance(exerciseId), repository.previousSlotIds(exerciseId))
+
+    /**
+     * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises, each with the set
+     * pattern he ticked that day, its rests and its targets ([planFromWorkout]); the rows start empty,
+     * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
+     * that name was only its time of day ([startAgainName]). A vanished workout degrades to an empty
+     * one. Written in one transaction; any leftover rest is cleared.
+     */
+    fun startFromWorkout(sourceId: Long, now: Long = System.currentTimeMillis()): Long {
+        val workoutId = repository.inTransaction {
+            val source = repository.workoutById(sourceId)
+            val workoutId = repository.addWorkout(
+                WorkoutEntity(
+                    name = source?.let { startAgainName(it, now, zone) } ?: defaultWorkoutName(now, zone),
+                    startedAt = now,
+                ),
+            )
+            source?.let { addPlannedSlots(workoutId, planOf(it.id)) }
+            workoutId
+        }
+        runBlocking { clearRest() }
+        return workoutId
+    }
+
+    /** What [planFromWorkout] makes of stored workout [workoutId]. */
+    private fun planOf(workoutId: Long): List<PlannedSlot> =
+        planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
+
+    /**
+     * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
+     * workout's name), last in the list, with one exercise per slot he ticked a set in: that many work
+     * sets (at least 1) and warm-ups, the slot's rep range and RIR target, and its rests, stored as
+     * none where they equal Settings' defaults so they follow them. Returns the template's id, or null
+     * when the workout is gone. One transaction.
+     */
+    fun saveAsTemplate(workoutId: Long, name: String): Long? = repository.inTransaction {
+        val workout = repository.workoutById(workoutId) ?: return@inTransaction null
+        val snapshot = settings.snapshot()
+        val templateId = repository.addTemplate(
+            TemplateEntity(
+                name = name.replace(Regex("\\s+"), " ").trim().ifEmpty { workout.name },
+                position = (repository.listTemplates().maxOfOrNull { it.position } ?: -1) + 1,
+            ),
+        )
+        planOf(workoutId).forEachIndexed { index, planned ->
+            repository.addTemplateExercise(
+                TemplateExerciseEntity(
+                    templateId = templateId,
+                    exerciseId = planned.exerciseId,
+                    position = index,
+                    targetSets = planned.types.count { it != SET_TYPE_WARMUP }.coerceAtLeast(1),
+                    warmupSets = planned.types.count { it == SET_TYPE_WARMUP },
+                    restSecWork = planned.restSecWork?.let { restOverride(it, snapshot.defaultRestSec) },
+                    restSecWarmup = planned.restSecWarmup?.let { restOverride(it, snapshot.warmupRestSec) },
+                    repMin = planned.targetRepMin,
+                    repMax = planned.targetRepMax,
+                    targetRir = planned.targetRir,
+                ),
+            )
+        }
+        templateId
+    }
 
     /**
      * Creates an empty workout named by the time of day ([defaultWorkoutName]); like
@@ -326,11 +390,13 @@ class ActiveSession(
 
     /**
      * Deletes the workout if it is still open and nothing has changed since it was started
-     * ([isUntouched]), so opening a template by mistake and backing out leaves no trace.
+     * ([isUntouched]), so opening a template by mistake and backing out leaves no trace. A workout
+     * started again from another ([startFromWorkout]) names that one as [startedFrom]: it was started
+     * from it, not empty.
      */
-    fun discardIfUntouched(workoutId: Long): Boolean {
+    fun discardIfUntouched(workoutId: Long, startedFrom: Long? = null): Boolean {
         val workout = repository.workoutById(workoutId) ?: return false
-        if (workout.endedAt != null || !untouched(workout, repository.setsForWorkout(workoutId))) return false
+        if (workout.endedAt != null || !untouched(workout, repository.setsForWorkout(workoutId), startedFrom)) return false
         return discardWorkout(workoutId)
     }
 
@@ -389,20 +455,26 @@ class ActiveSession(
 
     /**
      * [isUntouched] for a stored workout, against what its template would start with now
-     * ([planTemplate]). Other workouts can't finish while this one is open, so last session is the
-     * same as at the start; if it somehow isn't, the workout counts as touched and is kept.
+     * ([planTemplate]), or the workout it was started again from ([startedFrom], [planFromWorkout]).
+     * Other workouts can't finish while this one is open, so last session is the same as at the start;
+     * if it somehow isn't, the workout counts as touched and is kept.
      */
-    private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean = isUntouched(
-        workout = workout,
-        slots = repository.exercisesForWorkout(workout.id),
-        sets = sets,
-        planned = workout.templateId?.let { templateId ->
-            val templateExercises = repository.exercisesForTemplate(templateId)
-            planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
-        },
-        // A name or a rest he set from the "…" menu is his: Back must not throw it away.
-        startName = workout.templateId?.let { repository.templateById(it)?.name } ?: defaultWorkoutName(workout.startedAt, zone),
-    )
+    private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>, startedFrom: Long? = null): Boolean {
+        val source = startedFrom?.takeIf { workout.templateId == null }?.let { repository.workoutById(it) }
+        return isUntouched(
+            workout = workout,
+            slots = repository.exercisesForWorkout(workout.id),
+            sets = sets,
+            planned = workout.templateId?.let { templateId ->
+                val templateExercises = repository.exercisesForTemplate(templateId)
+                planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
+            } ?: source?.let { planOf(it.id) },
+            // A name or a rest he set from the "…" menu is his: Back must not throw it away.
+            startName = workout.templateId?.let { repository.templateById(it)?.name }
+                ?: source?.let { startAgainName(it, workout.startedAt, zone) }
+                ?: defaultWorkoutName(workout.startedAt, zone),
+        )
+    }
 
     /** Clears endedAt after a Finish the lifter takes back from Workout Complete. */
     fun reopenWorkout(workoutId: Long): Boolean = repository.reopenWorkout(workoutId)
