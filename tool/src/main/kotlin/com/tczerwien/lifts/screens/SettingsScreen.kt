@@ -204,7 +204,7 @@ class SettingsViewModel(
         const val MIN_REST_SEC = 15
 
         /** 15:00 ceiling so hold-repeat cannot run away. */
-        const val MAX_REST_SEC = 900
+        const val MAX_REST_SEC = com.tczerwien.lifts.session.MAX_REST_SEC
     }
 }
 

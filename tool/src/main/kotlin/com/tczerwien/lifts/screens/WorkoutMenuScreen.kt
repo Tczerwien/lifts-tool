@@ -154,7 +154,7 @@ class WorkoutMenuViewModel : LightViewModel<WorkoutMenuResult>() {
 
     companion object {
         const val REST_STEP_SEC = 15
-        const val MAX_REST_SEC = 900
+        const val MAX_REST_SEC = com.tczerwien.lifts.session.MAX_REST_SEC
     }
 }
 

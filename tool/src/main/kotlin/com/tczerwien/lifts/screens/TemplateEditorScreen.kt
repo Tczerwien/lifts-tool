@@ -24,6 +24,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.renumber
 import com.tczerwien.lifts.library.reorderPositions
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.MAX_REST_SEC
 import com.tczerwien.lifts.session.MAX_RIR
 import com.tczerwien.lifts.session.MAX_TARGET_REPS
 import com.tczerwien.lifts.session.MAX_TEMPLATE_WARMUPS
@@ -77,7 +78,6 @@ private const val MIN_TARGET_SETS = 1
 private const val MAX_TARGET_SETS = 10
 private const val REST_STEP_SEC = 15
 private const val MIN_REST_SEC = 0
-private const val MAX_REST_SEC = 600
 
 private const val LIST_ROW_HEIGHT_UNITS = 3f
 

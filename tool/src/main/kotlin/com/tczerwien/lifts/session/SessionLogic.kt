@@ -64,6 +64,9 @@ fun defaultWorkoutName(startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): 
 fun startAgainName(source: WorkoutEntity, startedAt: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     if (source.name == defaultWorkoutName(source.startedAt, zone)) defaultWorkoutName(startedAt, zone) else source.name
 
+/** The longest rest any stepper sets (Settings, the "…" menu, the Template Editor): 15:00. */
+const val MAX_REST_SEC = 900
+
 /** A hold's stepper moves 5 s a step. */
 const val DURATION_STEP_SEC = 5
 
