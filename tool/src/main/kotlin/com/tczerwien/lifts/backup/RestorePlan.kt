@@ -2,6 +2,7 @@ package com.tczerwien.lifts.backup
 
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
+import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import java.time.ZoneId
 import java.util.Locale
@@ -22,6 +23,15 @@ object RestorePlan {
         /** A workout still in progress in these rows, if any. */
         val openWorkout: WorkoutEntity?,
     )
+
+    /**
+     * Whether a restore fits exercise types to history, as the B9 upgrade did: only for a backup made
+     * before B9, whose types are the old guesses. Every backup Lifts writes carries its settings
+     * ([settingsRows]), and B9's have the weight step; a file with no settings at all (a database
+     * pulled over adb) says nothing about its age, and its types may be his own choices, so it keeps them.
+     */
+    fun refitsTypes(settingsRows: Map<String, String>): Boolean =
+        settingsRows.isNotEmpty() && SettingsStore.KEY_WEIGHT_STEP_LB !in settingsRows
 
     fun summarize(rows: LiftsRows): Summary {
         val slotWorkout = rows.workoutExercises.associate { it.id to it.workoutId }

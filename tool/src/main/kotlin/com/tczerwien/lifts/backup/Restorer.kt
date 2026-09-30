@@ -122,7 +122,7 @@ class Restorer(
         }
         // A backup from before B9 (its settings have no weight step yet) has the guessed types beside its
         // history: fit them as an upgrade does. A B9 backup's types are his choices and stay.
-        if (SettingsStore.KEY_WEIGHT_STEP_LB !in prepared.settingsRows) {
+        if (RestorePlan.refitsTypes(prepared.settingsRows)) {
             runCatching { live.fitTrackingToHistory() }.onFailure { Log.w("Lifts", "fitting exercise types after a restore failed", it) }
         }
         // The rest, the exercise on screen: they name ids of the log just replaced.

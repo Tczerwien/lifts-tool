@@ -9,10 +9,13 @@ import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.settings.SettingsStore
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class RestorePlanTest {
 
@@ -116,5 +119,12 @@ class RestorePlanTest {
     fun `a file without the exercise catalog is refused`() {
         val bare = rows.copy(exercises = emptyList())
         assertEquals("it has no exercises at all", RestorePlan.problems(bare).first())
+    }
+
+    @Test
+    fun `types are refitted only for a backup from before B9`() {
+        assertTrue(RestorePlan.refitsTypes(mapOf("lifts_units" to "lb")), "settings without the B9 weight step")
+        assertFalse(RestorePlan.refitsTypes(mapOf("lifts_units" to "lb", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0")))
+        assertFalse(RestorePlan.refitsTypes(emptyMap()), "no settings at all: a pulled database, age unknown")
     }
 }
