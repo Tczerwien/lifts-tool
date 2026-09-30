@@ -142,6 +142,10 @@ class Restorer(
                 e.message ?: e.toString()
             }
         }
+        // A backup from before B9 in kg: its 45 lb seeded bar goes to 20 kg, as the upgrade did on the phone.
+        runCatching {
+            RestorePlan.barsToFit(prepared.rows.bars, prepared.settingsRows, settings.snapshot().units).forEach { live.updateBar(it) }
+        }.onFailure { Log.w("Lifts", "fitting the bar to the unit after a restore failed", it) }
         val backupProblem = try {
             // Still keeping the source: if the settings didn't come back, it is the copy to retry from.
             backups.backUp(BackupPolicy.Kind.DATED, keep = source)

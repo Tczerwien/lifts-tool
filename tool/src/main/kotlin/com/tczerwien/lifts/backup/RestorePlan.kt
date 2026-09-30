@@ -1,9 +1,12 @@
 package com.tczerwien.lifts.backup
 
+import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.settings.barAfterUnitSwitch
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
 import java.time.ZoneId
 import java.util.Locale
 
@@ -32,6 +35,19 @@ object RestorePlan {
      */
     fun refitsTypes(settingsRows: Map<String, String>): Boolean =
         settingsRows.isNotEmpty() && SettingsStore.KEY_WEIGHT_STEP_LB !in settingsRows
+
+    /**
+     * The bars a restore changes, as the B9 upgrade changed the phone's: for a backup made before B9
+     * ([refitsTypes]) restored in kg ([unit], as the restore leaves it), the seeded bar still at 45 lb
+     * was kept only because nothing switched it then, so it becomes 20 kg ([barAfterUnitSwitch]). A
+     * later backup's bars are as he left them.
+     */
+    fun barsToFit(bars: List<BarEntity>, settingsRows: Map<String, String>, unit: WeightUnit): List<BarEntity> =
+        if (!refitsTypes(settingsRows) || unit != WeightUnit.KG) {
+            emptyList()
+        } else {
+            bars.mapNotNull { barAfterUnitSwitch(it, WeightUnit.LB, WeightUnit.KG) }
+        }
 
     fun summarize(rows: LiftsRows): Summary {
         val slotWorkout = rows.workoutExercises.associate { it.id to it.workoutId }

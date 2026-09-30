@@ -9,7 +9,10 @@ import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
+import com.tczerwien.lifts.seed.Seeder
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.Test
@@ -126,5 +129,17 @@ class RestorePlanTest {
         assertTrue(RestorePlan.refitsTypes(mapOf("lifts_units" to "lb")), "settings without the B9 weight step")
         assertFalse(RestorePlan.refitsTypes(mapOf("lifts_units" to "lb", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0")))
         assertFalse(RestorePlan.refitsTypes(emptyMap()), "no settings at all: a pulled database, age unknown")
+    }
+
+    @Test
+    fun `a backup from before B9 restored in kg gets the 20 kg bar, as the upgrade gave the phone`() {
+        val seeded = Seeder.defaultBar().copy(id = 1)
+        val his = BarEntity(id = 2, name = "EZ Bar", weightKg = Format.lbToKg(25.0), position = 1)
+        val preB9 = mapOf("lifts_units" to "kg")
+        assertEquals(listOf(seeded.copy(weightKg = 20.0)), RestorePlan.barsToFit(listOf(seeded, his), preB9, WeightUnit.KG))
+        assertEquals(emptyList(), RestorePlan.barsToFit(listOf(seeded), preB9, WeightUnit.LB), "in lb the 45 lb bar is right")
+        val b9 = mapOf("lifts_units" to "kg", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0")
+        assertEquals(emptyList(), RestorePlan.barsToFit(listOf(seeded), b9, WeightUnit.KG), "a later backup's bar is as he left it")
+        assertEquals(emptyList(), RestorePlan.barsToFit(listOf(seeded), emptyMap(), WeightUnit.KG), "a pulled database: age unknown")
     }
 }
