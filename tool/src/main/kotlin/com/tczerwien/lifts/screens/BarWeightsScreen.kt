@@ -32,6 +32,7 @@ import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
@@ -340,12 +341,7 @@ class BarWeightsScreen(
                         },
                         right = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                LightText(
-                                    text = Format.plate(bar.weightKg, uiState.units),
-                                    variant = LightTextVariant.Copy,
-                                    monospace = true,
-                                    maxLines = 1,
-                                )
+                                MonoDigits(Format.plate(bar.weightKg, uiState.units), LightTextVariant.Copy)
                                 Spacer(modifier = Modifier.width(0.3f.gridUnitsAsDp()))
                                 LightText(
                                     text = uiState.units.suffix,

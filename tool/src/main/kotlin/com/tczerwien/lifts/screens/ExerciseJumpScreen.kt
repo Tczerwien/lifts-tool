@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.MonoDigits
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -128,12 +129,10 @@ private fun JumpRow(number: Int, entry: JumpEntry, current: Boolean, onClick: ()
                 .weight(1f)
                 .padding(start = 0.5f.gridUnitsAsDp()),
         )
-        LightText(
+        MonoDigits(
             text = "${entry.doneCount}/${entry.setCount}",
             variant = LightTextVariant.Detail,
             lighten = true,
-            monospace = true,
-            maxLines = 1,
             modifier = Modifier.padding(start = 0.5f.gridUnitsAsDp()),
         )
     }

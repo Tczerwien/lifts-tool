@@ -51,6 +51,7 @@ import com.tczerwien.lifts.ui.LiftsFieldRow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
 import com.tczerwien.lifts.ui.LiftsTabRow
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.SetLine
@@ -754,27 +755,13 @@ class ExerciseDetailScreen(
                 if (index > 0) RowDivider()
                 LiftsListRow(
                     left = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            LightText(
-                                text = "${repMax.reps}",
-                                variant = LightTextVariant.Detail,
-                                monospace = true,
-                                maxLines = 1,
-                            )
-                            LightText(
-                                text = if (repMax.reps == 1) " rep" else " reps",
-                                variant = LightTextVariant.Detail,
-                                maxLines = 1,
-                            )
-                        }
+                        MonoDigits(Format.count(repMax.reps, "rep"), LightTextVariant.Detail)
                     },
                     right = {
-                        LightText(
-                            text = repMax.valueLabel ?: "—",
-                            variant = LightTextVariant.Copy,
-                            monospace = true,
+                        MonoDigits(
+                            repMax.valueLabel ?: "—",
+                            LightTextVariant.Copy,
                             lighten = repMax.valueLabel == null || repMax.estimated,
-                            maxLines = 1,
                         )
                     },
                 )
@@ -823,7 +810,6 @@ private fun HistoryRow(
                 text = row.dateLabel,
                 variant = LightTextVariant.Detail,
                 lighten = true,
-                monospace = true,
                 maxLines = 1,
             )
             Spacer(modifier = Modifier.width(1f.gridUnitsAsDp()))
@@ -840,7 +826,7 @@ private fun HistoryRow(
     }
 }
 
-/** Stat row (design .statrow): superfine label over mono value with the date at the right. */
+/** Stat row (design .statrow): superfine label over the value (digits mono) with the date at the right. */
 @Composable
 private fun StatRow(stat: ExerciseDetailViewModel.Stat) {
     Column(
@@ -858,13 +844,7 @@ private fun StatRow(stat: ExerciseDetailViewModel.Stat) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            LightText(
-                text = stat.value,
-                variant = LightTextVariant.Copy,
-                monospace = true,
-                maxLines = 1,
-                modifier = Modifier.alignByBaseline(),
-            )
+            MonoDigits(stat.value, LightTextVariant.Copy, modifier = Modifier.alignByBaseline())
             LightText(
                 text = stat.dateLabel,
                 variant = LightTextVariant.Detail,

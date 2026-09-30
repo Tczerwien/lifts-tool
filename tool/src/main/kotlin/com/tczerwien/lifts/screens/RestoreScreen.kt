@@ -233,7 +233,6 @@ class RestoreScreen(
                         LightText(
                             text = uiState.fileName,
                             variant = LightTextVariant.Copy,
-                            monospace = true,
                             maxLines = 1,
                             // Cut in the middle: the date and extension at the end tell uploads apart.
                             overflow = TextOverflow.MiddleEllipsis,

@@ -149,7 +149,6 @@ class ExportScreen(
                                     LightText(
                                         text = file.name,
                                         variant = LightTextVariant.Copy,
-                                        monospace = true,
                                         maxLines = 1,
                                     )
                                     LightText(

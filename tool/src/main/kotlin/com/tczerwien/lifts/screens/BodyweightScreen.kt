@@ -31,6 +31,7 @@ import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.Stepper
@@ -349,17 +350,11 @@ class BodyweightScreen(
                                             text = row.dateText,
                                             variant = LightTextVariant.Detail,
                                             lighten = !picked,
-                                            monospace = true,
                                             maxLines = 1,
                                         )
                                     },
                                     right = {
-                                        LightText(
-                                            text = row.valueText,
-                                            variant = LightTextVariant.Copy,
-                                            monospace = true,
-                                            maxLines = 1,
-                                        )
+                                        MonoDigits(row.valueText, LightTextVariant.Copy)
                                     },
                                 )
                             }

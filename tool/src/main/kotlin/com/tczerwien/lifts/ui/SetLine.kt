@@ -13,7 +13,6 @@ import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.tczerwien.lifts.analytics.SetRun
@@ -24,7 +23,8 @@ import com.thelightphone.sdk.ui.designVerticalPxToSp
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 
 /**
- * Sets as Detail mono text, "w95×10; 140×8; 165×5☆; 165×4" (compactNotation's runs, "225×5 ×3"). A PR
+ * Sets as Detail text, "w95×10; 140×8; 165×5☆; 165×4" (compactNotation's runs, "225×5 ×3"), in the
+ * normal font: monospace gave every "×" and ";" a whole cell ("w61×5;  102×5") and fit fewer sets. A PR
  * star is the outline star icon, inline, always in the content colour so it stands out on [lighten]
  * text. [singleLine] ends in an ellipsis; otherwise the line wraps.
  */
@@ -37,7 +37,7 @@ fun SetLine(
     textAlign: TextAlign = TextAlign.Start,
 ) {
     val colors = LightThemeTokens.colors
-    val style = detailMonoStyle().copy(
+    val style = detailStyle().copy(
         color = if (lighten) colors.contentSecondary else colors.content,
         textAlign = textAlign,
     )
@@ -82,13 +82,12 @@ fun SetLine(
 
 private const val PR_STAR_INLINE_ID = "pr"
 
-/** Detail-variant mono style scaled like LightText scales its variants. */
+/** The Detail variant's style, scaled like LightText scales its variants. */
 @Composable
-private fun detailMonoStyle(): TextStyle {
+private fun detailStyle(): TextStyle {
     val base = LightThemeTokens.typography.detail
     return base.copy(
         fontSize = base.fontSize.value.designVerticalPxToSp(),
         lineHeight = (base.fontSize.value * 1.25f).designVerticalPxToSp(),
-        fontFamily = FontFamily.Monospace,
     )
 }

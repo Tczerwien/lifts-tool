@@ -27,6 +27,7 @@ import com.tczerwien.lifts.domain.PlateMath
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.SectionLabel
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
@@ -294,13 +295,7 @@ class PlateCalculatorScreen(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    LightText(
-                        text = Format.plate(bar.weightKg, uiState.units),
-                        variant = LightTextVariant.Detail,
-                        lighten = true,
-                        monospace = true,
-                        maxLines = 1,
-                    )
+                    MonoDigits(Format.plate(bar.weightKg, uiState.units), LightTextVariant.Detail, lighten = true)
                     LightText(
                         text = " ${uiState.units.suffix}",
                         variant = LightTextVariant.Detail,

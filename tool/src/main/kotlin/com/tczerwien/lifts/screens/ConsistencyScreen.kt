@@ -22,6 +22,7 @@ import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsBarChart
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.SectionLabel
 import com.thelightphone.sdk.LightScreen
@@ -163,10 +164,7 @@ class ConsistencyScreen(
                             LightText(text = "This week", variant = LightTextVariant.Detail)
                         },
                         right = {
-                            LightText(
-                                text = uiState.thisWeekText,
-                                variant = LightTextVariant.Copy,
-                            )
+                            MonoDigits(uiState.thisWeekText, LightTextVariant.Copy)
                         },
                     )
                     RowDivider()
@@ -175,11 +173,8 @@ class ConsistencyScreen(
                             LightText(text = "$AVERAGE_WEEKS-week average", variant = LightTextVariant.Detail)
                         },
                         right = {
-                            // Proportional: in monospace the point gets a whole cell, "3 . 5".
-                            LightText(
-                                text = uiState.fourWeekAvgText,
-                                variant = LightTextVariant.Copy,
-                            )
+                            // Digits in monospace, the point not: in monospace it gets a whole cell, "3 . 5".
+                            MonoDigits(uiState.fourWeekAvgText, LightTextVariant.Copy)
                         },
                     )
                     RowDivider()
@@ -189,10 +184,7 @@ class ConsistencyScreen(
                             LightText(text = "Longest streak ($STREAK_THRESHOLD_WORKOUTS+/wk)", variant = LightTextVariant.Detail)
                         },
                         right = {
-                            LightText(
-                                text = uiState.longestStreakText,
-                                variant = LightTextVariant.Copy,
-                            )
+                            MonoDigits(uiState.longestStreakText, LightTextVariant.Copy)
                         },
                     )
                 }

@@ -159,7 +159,6 @@ class HistoryScreen(
                                                 text = Format.dateShort(row.dateMillis),
                                                 variant = LightTextVariant.Detail,
                                                 lighten = true,
-                                                monospace = true,
                                                 maxLines = 1,
                                             )
                                         }

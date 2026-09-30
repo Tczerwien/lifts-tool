@@ -171,7 +171,6 @@ class BackupsScreen(
                                     LightText(
                                         text = row.name,
                                         variant = LightTextVariant.Copy,
-                                        monospace = true,
                                         maxLines = 1,
                                     )
                                     LightText(

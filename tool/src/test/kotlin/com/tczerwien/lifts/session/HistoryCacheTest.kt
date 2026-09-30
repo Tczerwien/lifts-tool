@@ -4,7 +4,6 @@ import com.tczerwien.lifts.analytics.PriorHistory
 import com.tczerwien.lifts.data.SetEntity
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class HistoryCacheTest {
 

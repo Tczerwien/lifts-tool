@@ -27,6 +27,7 @@ import com.tczerwien.lifts.session.recordLines
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.WeightUnit
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -172,16 +173,12 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
         LightText(text = "Workout Complete", variant = LightTextVariant.Heading)
 
         Gap(1.5f)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Mono("${Format.roundedMinutes(summary.durationSec * 1000L)}", LightTextVariant.Copy)
-            LightText(text = " min", variant = LightTextVariant.Copy)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Mono("${summary.completedSetCount}", LightTextVariant.Copy)
-            LightText(text = if (summary.completedSetCount == 1) " set · " else " sets · ", variant = LightTextVariant.Copy)
-            Mono(volumeDisplay(summary.totalVolumeKg, units), LightTextVariant.Copy)
-            LightText(text = " ${units.suffix} volume", variant = LightTextVariant.Copy)
-        }
+        // Digits in monospace as the mockup draws them, the comma and words not: "3,330", never "3 , 330".
+        MonoDigits(Format.durationMin(summary.durationSec * 1000L), LightTextVariant.Copy)
+        MonoDigits(
+            "${Format.count(summary.completedSetCount, "set")} · ${volumeDisplay(summary.totalVolumeKg, units)} ${units.suffix} volume",
+            LightTextVariant.Copy,
+        )
 
         if (summary.prs.isNotEmpty()) {
             Gap(1.5f)
@@ -198,7 +195,7 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    Mono(prSetDisplay(pr, units), LightTextVariant.Copy)
+                    MonoDigits(prSetDisplay(pr, units), LightTextVariant.Copy)
                     LightIcon(
                         icon = LightIcons.STAR_OUTLINE,
                         size = 1.1f,
@@ -222,7 +219,7 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
                     variant = LightTextVariant.Detail,
                     lighten = true,
                 )
-                Mono(Format.bodyweight(bodyweight.weightKg, units), LightTextVariant.Detail, lighten = true)
+                MonoDigits(Format.bodyweight(bodyweight.weightKg, units), LightTextVariant.Detail, lighten = true)
                 LightText(
                     text = " ${units.suffix}" + if (bodyweight.sameDay) "" else " (${Format.dayShort(bodyweight.epochDay)})",
                     variant = LightTextVariant.Detail,
@@ -238,16 +235,6 @@ private fun Gap(units: Float) {
     Spacer(modifier = Modifier.height(units.gridUnitsAsDp()))
 }
 
-@Composable
-private fun Mono(text: String, variant: LightTextVariant, lighten: Boolean = false) {
-    LightText(
-        text = text,
-        variant = variant,
-        lighten = lighten,
-        monospace = true,
-        maxLines = 1,
-    )
-}
 
 /** "165 × 5", "× 15" for a pull-up record, "-25 × 8" with help, "45s" for a hold, "25 × 10/side" ([setNotation]). */
 private fun prSetDisplay(pr: PrRecord, units: WeightUnit): String =
