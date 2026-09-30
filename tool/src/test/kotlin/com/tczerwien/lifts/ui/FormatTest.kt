@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.ui
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -210,17 +211,40 @@ class FormatTest {
 
     // --- Dates ---
 
+    /** Dates this year leave the year off; tests pin "today" so they don't change on New Year's Day. */
+    private val today = LocalDate.of(2026, 9, 29)
+
     @Test
     fun `short date renders month and day`() {
-        assertEquals("Jul 18", Format.dateShort(millis("2026-07-18T12:00:00Z"), utc))
-        assertEquals("Jan 5", Format.dateShort(millis("2026-01-05T00:00:00Z"), utc))
+        assertEquals("Jul 18", Format.dateShort(millis("2026-07-18T12:00:00Z"), utc, today))
+        assertEquals("Jan 5", Format.dateShort(millis("2026-01-05T00:00:00Z"), utc, today))
+    }
+
+    @Test
+    fun `a date from another year says which`() {
+        assertEquals("Sep 22, 2025", Format.dateShort(millis("2025-09-22T12:00:00Z"), utc, today))
+        assertEquals("Dec 31, 2025", Format.dateShort(millis("2025-12-31T23:30:00Z"), utc, today))
+        assertEquals("Jan 1, 2027", Format.dateShort(millis("2027-01-01T08:00:00Z"), utc, today), "a clock set wrong")
+        // The zone decides the year too: 23:30 UTC on Dec 31 is already January 1 in UTC+2.
+        assertEquals("Jan 1", Format.dateShort(millis("2025-12-31T23:30:00Z"), ZoneId.of("UTC+2"), LocalDate.of(2026, 1, 1)))
+        assertEquals("Sep 22, 2025", Format.dayShort(LocalDate.of(2025, 9, 22).toEpochDay(), today))
+        assertEquals("Sep 22", Format.dayShort(LocalDate.of(2026, 9, 22).toEpochDay(), today))
     }
 
     @Test
     fun `dateTime adds a 24-hour clock in the given zone`() {
-        assertEquals("Jul 18 14:05", Format.dateTime(millis("2026-07-18T14:05:59Z"), utc))
-        assertEquals("Jan 5 00:00", Format.dateTime(millis("2026-01-05T00:00:00Z"), utc))
-        assertEquals("Jul 19 01:30", Format.dateTime(millis("2026-07-18T23:30:00Z"), ZoneId.of("UTC+2")))
+        assertEquals("Jul 18 14:05", Format.dateTime(millis("2026-07-18T14:05:59Z"), utc, today))
+        assertEquals("Jan 5 00:00", Format.dateTime(millis("2026-01-05T00:00:00Z"), utc, today))
+        assertEquals("Jul 19 01:30", Format.dateTime(millis("2026-07-18T23:30:00Z"), ZoneId.of("UTC+2"), today))
+        assertEquals("Sep 22, 2025 14:05", Format.dateTime(millis("2025-09-22T14:05:00Z"), utc, today), "last year's monthly backup")
+    }
+
+    @Test
+    fun `durations round to the nearest minute, never below 0`() {
+        assertEquals(6, Format.roundedMinutes(5 * 60_000L + 40_000L), "5:40 is 6 min, as History says")
+        assertEquals(5, Format.roundedMinutes(5 * 60_000L + 29_000L))
+        assertEquals(0, Format.roundedMinutes(-60_000L), "a clock that went back")
+        assertEquals("62 min", Format.durationMin(62 * 60_000L + 10_000L))
     }
 
     @Test
@@ -232,7 +256,7 @@ class FormatTest {
     fun `dates respect the zone`() {
         // 23:30 UTC on Jul 17 is already Jul 18 in UTC+2.
         val instant = millis("2026-07-17T23:30:00Z")
-        assertEquals("Jul 17", Format.dateShort(instant, utc))
-        assertEquals("Jul 18", Format.dateShort(instant, ZoneId.of("UTC+2")))
+        assertEquals("Jul 17", Format.dateShort(instant, utc, today))
+        assertEquals("Jul 18", Format.dateShort(instant, ZoneId.of("UTC+2"), today))
     }
 }

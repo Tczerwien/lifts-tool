@@ -172,7 +172,7 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
 
         Gap(1.5f)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Mono("${summary.durationSec / 60}", LightTextVariant.Copy)
+            Mono("${Format.roundedMinutes(summary.durationSec * 1000L)}", LightTextVariant.Copy)
             LightText(text = " min", variant = LightTextVariant.Copy)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

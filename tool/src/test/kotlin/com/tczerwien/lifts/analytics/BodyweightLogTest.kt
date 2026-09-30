@@ -29,6 +29,13 @@ class BodyweightLogTest {
     }
 
     @Test
+    fun `a day from last year says so, in place of the weekday`() {
+        val newYear = LocalDate.of(2027, 1, 2).toEpochDay()
+        assertEquals("Dec 20, 2026", logDayLabel(LocalDate.of(2026, 12, 20).toEpochDay(), newYear))
+        assertEquals("Fri Jan 1", logDayLabel(LocalDate.of(2027, 1, 1).toEpochDay(), newYear + 1))
+    }
+
+    @Test
     fun `a day with an entry shows it, so he sees what he is changing`() {
         val entries = listOf(lb(today - 3, 181.0), lb(today - 1, 182.4))
         assertEquals(181.0, bodyweightStepperValue(entries, today - 3, WeightUnit.LB, held = 183.0, fallback = 150.0))

@@ -20,10 +20,14 @@ fun stepLogDay(day: Long, delta: Int, today: Long): Long = (day + delta).coerceI
 
 private val weekdayFormatter = DateTimeFormatter.ofPattern("EEE MMM d", Locale.US)
 
-/** "Today", "Yesterday", else the weekday and date, "Sun Sep 27", so a backdated weigh-in lands where he means. */
-fun logDayLabel(day: Long, today: Long): String = when (day) {
-    today -> "Today"
-    today - 1 -> "Yesterday"
+/**
+ * "Today", "Yesterday", else the weekday and date, "Sun Sep 27", so a backdated weigh-in lands where he
+ * means; a day from another year says which, "Dec 20, 2025" (the weekday gives way to the year).
+ */
+fun logDayLabel(day: Long, today: Long): String = when {
+    day == today -> "Today"
+    day == today - 1 -> "Yesterday"
+    LocalDate.ofEpochDay(day).year != LocalDate.ofEpochDay(today).year -> Format.dayShort(day, LocalDate.ofEpochDay(today))
     else -> weekdayFormatter.format(LocalDate.ofEpochDay(day))
 }
 

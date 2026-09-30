@@ -67,7 +67,6 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 import java.time.ZoneId
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -345,7 +344,7 @@ class WorkoutDetailViewModel(
             )
         }
 
-        val durationMin = workout.endedAt?.let { ((it - workout.startedAt) / 60000.0).roundToInt().coerceAtLeast(0) }
+        val duration = workout.endedAt?.let { Format.durationMin(it - workout.startedAt) }
         val zone = ZoneId.systemDefault()
         val day = workoutEpochDay(workout.startedAt, zone)
         val bodyweight = workoutBodyweight(
@@ -358,7 +357,7 @@ class WorkoutDetailViewModel(
                 loaded = true,
                 name = workout.name,
                 subtitle = Format.dateWithYear(workout.startedAt) +
-                    (durationMin?.let { minutes -> " · $minutes min" } ?: ""),
+                    (duration?.let { " · $it" } ?: ""),
                 notes = if (synchronized(reloadLock) { reload <= notesFloor }) state.notes else workout.notes,
                 blocks = blocks,
                 bodyweightText = bodyweight?.let {

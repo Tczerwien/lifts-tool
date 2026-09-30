@@ -146,6 +146,15 @@ object Format {
     /** How long ago a rest ended: "1:20" under an hour, "1h 23m" from an hour up. */
     fun ago(totalSec: Int): String = if (totalSec < 3600) clock(totalSec) else durationHm(totalSec)
 
+    /**
+     * A workout's length in whole minutes, to the nearest: 5:40 is 6. Every screen and file that shows
+     * a duration in minutes uses it, so Workout Complete and History never disagree by one.
+     */
+    fun roundedMinutes(durationMillis: Long): Int = (durationMillis / 60_000.0).roundToLong().toInt().coerceAtLeast(0)
+
+    /** "62 min" ([roundedMinutes]). */
+    fun durationMin(durationMillis: Long): String = "${roundedMinutes(durationMillis)} min"
+
     /** Seconds -> "1h 23m" (or "43m" under an hour). */
     fun durationHm(totalSec: Int): String {
         val sec = totalSec.coerceAtLeast(0)
@@ -179,17 +188,29 @@ object Format {
     private val dateShortFormatter = DateTimeFormatter.ofPattern("MMM d", Locale.US)
     private val dateWithYearFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy", Locale.US)
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.US)
+    private val dateTimeWithYearFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy HH:mm", Locale.US)
 
-    /** "Jul 18" */
-    fun dateShort(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
-        dateShortFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
+    /**
+     * "Jul 18", or "Jul 18, 2025" when it isn't [today]'s year (in [zone]): after a year of use,
+     * "Sep 22" alone could be either September.
+     */
+    fun dateShort(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): String =
+        dayShort(Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate(), today)
 
-    /** "Jul 18" for a calendar day (epoch day, as bodyweight is stored). */
-    fun dayShort(epochDay: Long): String = dateShortFormatter.format(LocalDate.ofEpochDay(epochDay))
+    /** [dateShort] for a calendar day (epoch day, as bodyweight is stored). */
+    fun dayShort(epochDay: Long, today: LocalDate = LocalDate.now()): String = dayShort(LocalDate.ofEpochDay(epochDay), today)
 
-    /** "Jul 18 14:05", for files rewritten several times a day (exports, backups). */
-    fun dateTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
-        dateTimeFormatter.format(Instant.ofEpochMilli(epochMillis).atZone(zone))
+    private fun dayShort(date: LocalDate, today: LocalDate): String =
+        (if (date.year == today.year) dateShortFormatter else dateWithYearFormatter).format(date)
+
+    /**
+     * "Jul 18 14:05", for files rewritten several times a day (exports, backups); "Jul 18, 2025 14:05"
+     * from another year (a monthly backup kept from last year).
+     */
+    fun dateTime(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): String {
+        val moment = Instant.ofEpochMilli(epochMillis).atZone(zone)
+        return (if (moment.year == today.year) dateTimeFormatter else dateTimeWithYearFormatter).format(moment)
+    }
 
     /** "Jul 18, 2026" */
     fun dateWithYear(epochMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String =

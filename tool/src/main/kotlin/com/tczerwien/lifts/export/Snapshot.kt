@@ -15,15 +15,15 @@ import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.tracking
-import com.tczerwien.lifts.ui.WeightUnit
+import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
+import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.displayName
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.roundToInt
 
 /**
  * Export snapshot model — plain data classes decoupled from Room, built once from entity
@@ -321,7 +321,7 @@ fun buildSnapshot(
                 endTimeIso = format.dateTime(workout.endedAt ?: workout.startedAt),
                 startEpochMillis = workout.startedAt,
                 name = workout.name,
-                durationMin = (((workout.endedAt ?: workout.startedAt) - workout.startedAt) / 60000.0).roundToInt().coerceAtLeast(0),
+                durationMin = Format.roundedMinutes((workout.endedAt ?: workout.startedAt) - workout.startedAt),
                 bodyweight = workoutBodyweight(workout.startedAt, weighInsNear(workout.startedAt, weighInsByDay, zone), zone)?.let {
                     SnapshotWorkoutBodyweight(it.weightKg, LocalDate.ofEpochDay(it.epochDay).toString(), it.sameDay)
                 },

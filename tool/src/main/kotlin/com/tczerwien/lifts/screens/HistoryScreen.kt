@@ -35,7 +35,6 @@ import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
-import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,8 +50,8 @@ class HistoryViewModel(
         val dateMillis: Long,
         /** Completed sets only (completedAt != null). */
         val setCount: Int,
-        /** Rounded minutes, same derivation as the export layer. */
-        val durationMin: Int,
+        /** "62 min" ([Format.durationMin]), as Workout Complete, Workout Detail and the exports have it. */
+        val duration: String,
     )
 
     data class UiState(
@@ -81,7 +80,7 @@ class HistoryViewModel(
                 name = workout.name,
                 dateMillis = workout.startedAt,
                 setCount = completedSets,
-                durationMin = ((endedAt - workout.startedAt) / 60000.0).roundToInt().coerceAtLeast(0),
+                duration = Format.durationMin(endedAt - workout.startedAt),
             )
         }
         _uiState.value = UiState(loaded = true, rows = rows)
@@ -167,7 +166,7 @@ class HistoryScreen(
                                     },
                                     right = {
                                         LightText(
-                                            text = "${Format.count(row.setCount, "set")} · ${row.durationMin} min",
+                                            text = "${Format.count(row.setCount, "set")} · ${row.duration}",
                                             variant = LightTextVariant.Detail,
                                             lighten = true,
                                             maxLines = 1,
