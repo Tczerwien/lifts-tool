@@ -846,9 +846,11 @@ private fun HistoryRow(
                 maxLines = 1,
             )
             Spacer(modifier = Modifier.width(1f.gridUnitsAsDp()))
+            // Two lines: with an RIR on each set a day rarely fits on one, and cut at one line it was
+            // the work sets and the star that went, not the warm-ups.
             SetLine(
                 runs = row.runs,
-                singleLine = true,
+                maxLines = 2,
                 textAlign = TextAlign.End,
                 modifier = Modifier.weight(1f),
             )

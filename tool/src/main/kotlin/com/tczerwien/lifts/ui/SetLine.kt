@@ -26,14 +26,14 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
  * Sets as Detail text, "w95×10; 140×8; 165×5☆; 165×4" (compactNotation's runs, "225×5 ×3"), in the
  * normal font: monospace gave every "×" and ";" a whole cell ("w61×5;  102×5") and fit fewer sets. A PR
  * star is the outline star icon, inline, always in the content colour so it stands out on [lighten]
- * text. [singleLine] ends in an ellipsis; otherwise the line wraps.
+ * text. It wraps; past [maxLines] it ends in an ellipsis.
  */
 @Composable
 fun SetLine(
     runs: List<SetRun>,
     modifier: Modifier = Modifier,
     lighten: Boolean = false,
-    singleLine: Boolean = false,
+    maxLines: Int = Int.MAX_VALUE,
     textAlign: TextAlign = TextAlign.Start,
 ) {
     val colors = LightThemeTokens.colors
@@ -74,8 +74,8 @@ fun SetLine(
         },
         style = style,
         inlineContent = inlineContent,
-        maxLines = if (singleLine) 1 else Int.MAX_VALUE,
-        overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
+        maxLines = maxLines,
+        overflow = if (maxLines < Int.MAX_VALUE) TextOverflow.Ellipsis else TextOverflow.Clip,
         modifier = modifier,
     )
 }
