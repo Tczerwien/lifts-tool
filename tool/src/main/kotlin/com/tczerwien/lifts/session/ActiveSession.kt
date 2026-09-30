@@ -142,9 +142,10 @@ class ActiveSession(
 
     /**
      * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
-     * workout's name), last in the list, with one exercise per slot he ticked a set in: that many work
-     * sets (at least 1) and warm-ups, the slot's rep range and RIR target, and its rests, stored as
-     * none where they equal Settings' defaults so they follow them. Returns the template's id, or null
+     * workout's name), last in the list, with one exercise per slot he ticked a work set in: that many
+     * work sets and warm-ups (none ticked leaves them to last session, as a new template exercise does),
+     * the slot's rep range and RIR target, and its rests, stored as none where they equal Settings'
+     * defaults so they follow them. Returns the template's id, or null
      * when the workout is gone or not finished (an unfinished workout counts nowhere). One transaction.
      */
     fun saveAsTemplate(workoutId: Long, name: String): Long? = repository.inTransaction {
@@ -163,7 +164,7 @@ class ActiveSession(
                     exerciseId = planned.exerciseId,
                     position = index,
                     targetSets = planned.types.count { it != SET_TYPE_WARMUP }.coerceAtLeast(1),
-                    warmupSets = planned.types.count { it == SET_TYPE_WARMUP },
+                    warmupSets = planned.types.count { it == SET_TYPE_WARMUP }.takeIf { it > 0 },
                     restSecWork = planned.restSecWork?.let { restOverride(it, snapshot.defaultRestSec) },
                     restSecWarmup = planned.restSecWarmup?.let { restOverride(it, snapshot.warmupRestSec) },
                     repMin = planned.targetRepMin,

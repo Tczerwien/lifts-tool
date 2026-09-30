@@ -447,6 +447,20 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `an exercise left after its warm-ups is in neither a start again nor a template`() {
+        val source = store.addFinishedWorkout(
+            startedAt = 1_000_000,
+            "bench" to listOf(Triple(w, 40.0, 10), Triple(n, 80.0, 5)),
+            "row" to listOf(Triple(w, 30.0, 10)),
+        )
+        val again = assertNotNull(session.startFromWorkout(source, now = 2_000_000))
+        assertEquals(listOf("bench"), store.exercisesForWorkout(again).map { it.exerciseId })
+        session.discardWorkout(again)
+        val template = assertNotNull(session.saveAsTemplate(source, "Push"))
+        assertEquals(listOf("bench" to 1), store.exercisesForTemplate(template).map { it.exerciseId to it.targetSets })
+    }
+
+    @Test
     fun `an untouched copy is still known after a restart, so Home's tidy deletes it`() {
         val source = finishedEvening()
         val again = assertNotNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L))
@@ -485,7 +499,8 @@ class ActiveSessionTest {
         val first = rows.first()
         assertEquals(listOf(2, 1, 6, 12, 1, 150), listOf(first.targetSets, first.warmupSets, first.repMin, first.repMax, first.targetRir, first.restSecWork))
         assertNull(first.restSecWarmup)
-        assertEquals(listOf(1, 0), listOf(rows[1].targetSets, rows[1].warmupSets))
+        assertEquals(1, rows[1].targetSets)
+        assertNull(rows[1].warmupSets, "no warm-up ticked: last session's, not \"never\"")
         assertEquals("Evening Workout", store.templateById(session.saveAsTemplate(source, " ")!!)!!.name, "blank takes the workout's")
         assertNull(session.saveAsTemplate(9_999, "Gone"))
     }
