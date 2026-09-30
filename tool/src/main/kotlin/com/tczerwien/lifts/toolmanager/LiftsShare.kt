@@ -18,6 +18,7 @@ import com.thelightphone.sdk.buildDatabase
 import com.thelightphone.toolmanager.LightFileProvider
 import java.io.File
 import java.io.IOException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -45,9 +46,17 @@ class LiftsShare private constructor(
 
     val restorer = Restorer(stagingDir, openDatabase, repository, settings, dataStore, backups)
 
-    /** Finish saved a workout: a backup, and the exports catch up. */
+    /**
+     * Finish saved a workout: a backup, and the exports catch up. The backup waits a few seconds: queued
+     * at once, RESUME's reopen and Home after DONE waited behind it (VACUUM INTO, a check, two copies
+     * flushed to disk), leaving Active Workout blank or Home not ready. A kill in those seconds leaves
+     * the workout saved but not yet copied, until the next Finish or the next day's backup.
+     */
     fun workoutFinished() {
-        backups.request()
+        LiftsIo.scope.launch {
+            delay(FINISH_BACKUP_DELAY_MS)
+            backups.request()
+        }
         exports.request()
     }
 
@@ -125,6 +134,9 @@ class LiftsShare private constructor(
         }
 
         private const val TAG = "LiftsShare"
+
+        /** How long after Finish its backup queues: past RESUME or DONE. */
+        private const val FINISH_BACKUP_DELAY_MS = 3_000L
         private const val APPLIED = "applied"
         private const val REJECTED = "rejected"
 
