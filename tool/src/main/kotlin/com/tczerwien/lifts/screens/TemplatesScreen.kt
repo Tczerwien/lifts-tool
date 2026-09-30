@@ -6,14 +6,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.liftsRepository
@@ -23,6 +20,7 @@ import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.ReorderArrows
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
@@ -33,8 +31,6 @@ import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
-import com.thelightphone.sdk.ui.LightIcon
-import com.thelightphone.sdk.ui.LightIconConfiguration
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
@@ -44,7 +40,6 @@ import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
-import com.thelightphone.sdk.ui.lightClickable
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,11 +51,6 @@ import kotlinx.coroutines.withContext
 /** Duration heuristic: ~3.5 min per working set, rounded to the nearest 5 min. */
 private const val MINUTES_PER_WORKING_SET = 3.5
 private const val ESTIMATE_ROUND_MINUTES = 5
-
-private const val REORDER_TARGET_WIDTH_UNITS = 2f
-private const val REORDER_TARGET_HEIGHT_UNITS = 1.5f
-private const val REORDER_ICON_UNITS = 0.9f
-private const val REORDER_DISABLED_ALPHA = 0.4f
 
 class TemplatesViewModel(
     private val repository: LiftsRepository,
@@ -202,9 +192,10 @@ class TemplatesViewModel(
 
 /**
  * Template list (design/screens/templates.html): uniform 4gu rows of name +
- * "N exercises · ~M min", up/down arrows swap order, tap opens the editor. The top-bar
- * and bottom-bar plus both open the SDK text editor (screen mode, weather idiom) for a
- * new template's name, then push straight into its editor.
+ * "N exercises · ~M min", up/down arrows side by side swap order ([ReorderArrows]), tap opens the
+ * editor. One plus, in the bottom bar where the thumb is (the mockup's top-bar twin went), opens the
+ * SDK text editor (screen mode, weather idiom) for a new template's name, then pushes straight into
+ * its editor.
  *
  * Constructor and result type are FROZEN (cross-referenced by other screens).
  */
@@ -266,11 +257,6 @@ class TemplatesScreen(
                     onClick = { goBack() },
                 ),
                 center = LightTopBarCenter.Text("Templates"),
-                rightButton = LightBarButton.LightIcon(
-                    icon = LightIcons.ADD,
-                    contentDescription = "new template",
-                    onClick = viewModel::openNameEntry,
-                ),
             )
 
             LightScrollView(
@@ -337,35 +323,5 @@ private fun templateDetail(row: TemplatesViewModel.TemplateRow): String {
         "${row.exerciseCount} $noun · ~${row.estimatedMinutes} min"
     } else {
         "${row.exerciseCount} $noun"
-    }
-}
-
-/** Stacked up/down arrows (design .reorder cluster); disabled arrows dim to 40%. */
-@Composable
-private fun ReorderArrows(
-    upEnabled: Boolean,
-    downEnabled: Boolean,
-    onUp: () -> Unit,
-    onDown: () -> Unit,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ReorderArrow(icon = LightIcons.UP, enabled = upEnabled, onClick = onUp)
-        ReorderArrow(icon = LightIcons.DOWN, enabled = downEnabled, onClick = onDown)
-    }
-}
-
-@Composable
-private fun ReorderArrow(icon: LightIconConfiguration, enabled: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(
-                width = REORDER_TARGET_WIDTH_UNITS.gridUnitsAsDp(),
-                height = REORDER_TARGET_HEIGHT_UNITS.gridUnitsAsDp(),
-            )
-            .alpha(if (enabled) 1f else REORDER_DISABLED_ALPHA)
-            .lightClickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        LightIcon(icon = icon, size = REORDER_ICON_UNITS)
     }
 }
