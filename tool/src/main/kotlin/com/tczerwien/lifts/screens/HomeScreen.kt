@@ -233,12 +233,10 @@ class HomeViewModel(
         val open = tidied.open
         val autoResume = firstLoad && open != null && shouldAutoResume(session.lastActivity(open), now)
         firstLoad = false
+        // Two queries however many templates there are.
+        val counts = repository.templateExerciseCounts()
         val templates = repository.listTemplates().map { template ->
-            TemplateRow(
-                id = template.id,
-                name = template.name,
-                exerciseCount = repository.exercisesForTemplate(template.id).size,
-            )
+            TemplateRow(id = template.id, name = template.name, exerciseCount = counts[template.id] ?: 0)
         }
         val recent = repository.finishedWorkoutsWithSetCounts(limit = 2).map { (workout, completedSets) ->
             RecentRow(

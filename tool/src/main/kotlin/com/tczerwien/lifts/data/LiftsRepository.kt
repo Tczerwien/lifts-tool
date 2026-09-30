@@ -267,6 +267,9 @@ class LiftsRepository private constructor(
 
     override fun templateById(id: Long): TemplateEntity? = db.templateDao.byId(id)
 
+    /** Each template's number of exercises by template id, in one query; a template with none isn't in it. */
+    fun templateExerciseCounts(): Map<Long, Int> = db.templateDao.exerciseCounts().associate { it.templateId to it.exercises }
+
     override fun listTemplates(): List<TemplateEntity> = db.templateDao.listAll()
 
     override fun addTemplateExercise(templateExercise: TemplateExerciseEntity): Long =
