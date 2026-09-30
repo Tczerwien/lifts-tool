@@ -282,13 +282,19 @@ class ActiveWorkoutViewModel(
         super.onCleared()
     }
 
-    /** Back closes the weight's keyboard, or cancels an armed Finish, before it leaves the screen. */
+    /**
+     * Back closes the weight's keyboard, or cancels an armed Finish, before it leaves the screen. While
+     * a Finish or Discard is still on the lane it does nothing: leaving then would skip Workout
+     * Complete (and leave a Start Again's Workout Detail behind). Only the in-app back arrow reaches
+     * this; the screen's own exit, once [UiState.leave] is set, passes.
+     */
     override fun onBackPressed(): Boolean {
         val state = _uiState.value
         if (state.weightEntry != null && !state.finishing && !state.leave) {
             closeWeightEntry()
             return true
         }
+        if (state.finishing && !state.leave && !state.completeOpen) return true
         if (state.finishing || state.leave || !finishArm.armed.value) return false
         finishArm.disarm()
         return true
