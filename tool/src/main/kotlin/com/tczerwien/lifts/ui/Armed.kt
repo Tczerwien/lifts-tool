@@ -31,11 +31,15 @@ class ArmGuard(
 
     private var armedAt: Long? = null
 
+    /** When [quiet] was called: for [minConfirmMillis] after it a tap doesn't arm. */
+    private var quietFrom: Long? = null
+
     @Synchronized
     fun tap(): Tap {
         val now = clock()
         val since = armedAt?.let { now - it }
         return when {
+            since == null && quietFrom?.let { now - it in 0 until minConfirmMillis } == true -> Tap.IGNORED
             since == null || since < 0 || since > timeoutMillis -> {
                 armedAt = now
                 Tap.ARMED
@@ -57,6 +61,17 @@ class ArmGuard(
     @Synchronized
     fun disarm() {
         armedAt = null
+    }
+
+    /**
+     * Disarms, and for [minConfirmMillis] a tap doesn't arm: the screen has just switched under his
+     * finger to one with this trash where he tapped last (a confirm or SUBMIT in the same spot), so a
+     * tap now is the bounce of that one, not the first tap of a delete.
+     */
+    @Synchronized
+    fun quiet() {
+        armedAt = null
+        quietFrom = clock()
     }
 }
 
@@ -96,6 +111,12 @@ class ArmedAction(
         expiry?.cancel()
         guard.disarm()
         _armed.value = false
+    }
+
+    /** [disarm], and a tap in the next moment doesn't arm ([ArmGuard.quiet]). */
+    fun quiet() {
+        disarm()
+        guard.quiet()
     }
 }
 

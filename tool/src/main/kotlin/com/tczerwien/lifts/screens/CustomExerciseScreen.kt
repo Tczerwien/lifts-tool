@@ -183,7 +183,9 @@ class CustomExerciseViewModel(
         _uiState.value = _uiState.value.copy(mode = Mode.FORM)
     }
 
+    /** The name editor's SUBMIT, back to the form, whose trash sits where SUBMIT was ([ArmedAction.quiet]). */
     fun submitName(raw: String) {
+        removeArm.quiet()
         _uiState.update { it.copy(name = raw.replace(Regex("\\s+"), " ").trim(), mode = Mode.FORM).withClash() }
     }
 

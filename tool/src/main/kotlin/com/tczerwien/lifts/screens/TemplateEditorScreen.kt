@@ -174,9 +174,13 @@ class TemplateEditorViewModel(
         _uiState.update { it.copy(mode = Mode.Overview) }
     }
 
-    /** Renames from the editor text (trimmed); a blank name cancels the rename. */
+    /**
+     * Renames from the editor text (trimmed); a blank name cancels the rename. The list's trash sits
+     * where SUBMIT was: a bounce of SUBMIT must not arm it ([ArmedAction.quiet]).
+     */
     fun rename(raw: CharSequence) {
         val name = raw.toString().trim()
+        deleteArm.quiet()
         _uiState.update { it.copy(mode = Mode.Overview) }
         if (name.isEmpty()) return
         mutate {
@@ -285,10 +289,15 @@ class TemplateEditorViewModel(
         }
     }
 
-    /** First tap arms ("tap again to remove"); a second, 0.4 to 3 s later, removes and returns to the list. */
+    /**
+     * First tap arms ("tap again to remove"); a second, 0.4 to 3 s later, removes and returns to the
+     * list, whose trash (the whole template's) sits in the same spot: a bounce of the confirming tap
+     * must not arm it ([ArmedAction.quiet]).
+     */
     fun tapRemoveExercise() {
         val mode = _uiState.value.mode as? Mode.EditExercise ?: return
         if (!removeArm.tap()) return
+        deleteArm.quiet()
         _uiState.update { it.copy(mode = Mode.Overview) }
         mutate {
             repository.inTransaction {
@@ -534,7 +543,7 @@ class TemplateEditorScreen(
             }
 
             if (deleteArmed) {
-                ArmedHint(text = "TAP AGAIN TO DELETE")
+                ArmedHint(text = "TAP AGAIN TO DELETE TEMPLATE")
             }
             LightBottomBar(
                 items = listOf(

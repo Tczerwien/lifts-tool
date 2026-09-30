@@ -32,6 +32,18 @@ class ArmGuardTest {
     }
 
     @Test
+    fun `right after the screen switches under his finger, a bounce doesn't arm the trash there`() {
+        guard.quiet()
+        now += 120
+        assertEquals(Tap.IGNORED, guard.tap(), "the second half of the double tap that confirmed the last screen")
+        assertFalse(guard.isArmed())
+        now += 300
+        assertEquals(Tap.ARMED, guard.tap(), "a deliberate tap arms as usual")
+        now += 1_000
+        assertEquals(Tap.CONFIRMED, guard.tap())
+    }
+
+    @Test
     fun `a tap after the window arms again instead of confirming`() {
         guard.tap()
         now += 3_001

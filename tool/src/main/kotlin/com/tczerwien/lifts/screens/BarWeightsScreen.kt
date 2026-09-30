@@ -127,10 +127,14 @@ class BarWeightsViewModel(
         }
     }
 
-    /** Advances name entry to the weight stepper; blank names keep the editor open. */
+    /**
+     * Advances name entry to the weight stepper; blank names keep the editor open. The stepper's trash
+     * sits where NEXT was: a bounce of NEXT must not arm it ([ArmedAction.quiet]).
+     */
     fun submitName(name: CharSequence) {
         val trimmed = name.toString().trim()
         if (trimmed.isEmpty()) return
+        deleteArm.quiet()
         val state = _uiState.value
         val mode = state.mode as? Mode.EditName ?: return
         val existing = state.bars.firstOrNull { it.id == mode.barId }
