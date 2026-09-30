@@ -15,6 +15,7 @@ import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
 import com.tczerwien.lifts.session.DURATION_STEP_SEC
 import com.tczerwien.lifts.session.HistoryCache
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.RestTimerState
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.TypedWeight
@@ -764,11 +765,18 @@ class ActiveWorkoutViewModel(
         if (finishArm.tap()) finish()
     }
 
+    /** The rest running when Finish was confirmed, which Finish clears: RESUME brings it back. */
+    @Volatile
+    private var restBeforeFinish: RestTimerState? = null
+
     /** Ends the workout and opens Workout Complete, or discards it when nothing was logged. */
     private fun finish() {
         val workoutId = resolvedWorkoutId ?: return
         _uiState.update { it.copy(finishing = true) }
-        LiftsIo.write({ session.finishOrDiscard(workoutId) }) { outcome ->
+        LiftsIo.write({
+            restBeforeFinish = session.restStateSnapshot()
+            session.finishOrDiscard(workoutId)
+        }) { outcome ->
             if (outcome == FinishOutcome.ENDED) share.workoutFinished()
             _uiState.update {
                 when (outcome) {
@@ -784,14 +792,15 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * RESUME on Workout Complete: the workout is open again and logging carries on. Unfinished
-     * workouts are in no export file, so the exports drop it until the next Finish (or a Discard,
-     * which then has nothing to take out).
+     * RESUME on Workout Complete: the workout is open again and logging carries on, with the rest
+     * that was running at Finish if it hasn't ended. Unfinished workouts are in no export file, so the
+     * exports drop it until the next Finish (or a Discard, which then has nothing to take out).
      */
     fun resumeAfterComplete() {
         val workoutId = resolvedWorkoutId ?: return
         _uiState.update { it.copy(completeOpen = false) }
-        LiftsIo.write({ session.reopenWorkout(workoutId) }) {
+        val rest = restBeforeFinish
+        LiftsIo.write({ session.reopenWorkout(workoutId, rest) }) {
             share.logChanged()
             refresh()
             _uiState.update { it.copy(finishing = false) }

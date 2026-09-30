@@ -483,6 +483,23 @@ class ActiveSessionTest {
         assertEquals(listOf("bench"), store.exercisesForTemplate(template).map { it.exerciseId })
     }
 
+    @Test
+    fun `RESUME after Finish brings back the rest Finish cleared, while it hasn't ended`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slot = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "row", position = 0))
+        val set = store.addSet(SetEntity(workoutExerciseId = slot, position = 0, type = n))
+        session.completeSet(workoutId, store.setById(set)!!, 60.0, 8, n, now = 10_000)
+        val running = assertNotNull(session.restStateSnapshot())
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 20_000))
+        assertNull(session.restStateSnapshot(), "Finish clears it")
+        assertTrue(session.reopenWorkout(workoutId, running, now = 30_000))
+        assertEquals(running, session.restStateSnapshot(), "back as it was, end and length")
+        // A rest that ended while Workout Complete showed stays gone.
+        session.finishOrDiscard(workoutId, now = 40_000)
+        assertTrue(session.reopenWorkout(workoutId, running, now = running.endMillis))
+        assertNull(session.restStateSnapshot())
+    }
+
     /** What DataStore holds as the workout a Start Again copied ("workoutId:sourceId"), or null. */
     private fun startedFrom(): String? = runBlocking {
         dataStore.data.first()[stringPreferencesKey("lifts_started_from")]

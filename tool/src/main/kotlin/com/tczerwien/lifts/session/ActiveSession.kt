@@ -494,8 +494,19 @@ class ActiveSession(
         )
     }
 
-    /** Clears endedAt after a Finish the lifter takes back from Workout Complete. */
-    fun reopenWorkout(workoutId: Long): Boolean = repository.reopenWorkout(workoutId)
+    /**
+     * Clears endedAt after a Finish the lifter takes back from Workout Complete. [rest], the rest that
+     * was running when he confirmed Finish (which cleared it), comes back while it hasn't ended, armed
+     * as it was, so the REST OVER alert still comes.
+     */
+    fun reopenWorkout(workoutId: Long, rest: RestTimerState? = null, now: Long = System.currentTimeMillis()): Boolean {
+        val reopened = repository.reopenWorkout(workoutId)
+        if (reopened && rest != null && rest.endMillis > now) {
+            runBlocking { this@ActiveSession.rest.restore(rest) }
+            alarm.arm(rest.endMillis, now)
+        }
+        return reopened
+    }
 
     /**
      * Summary of [workoutId]: duration, completed-set count (any type), volume

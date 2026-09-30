@@ -86,6 +86,14 @@ class RestStore(private val dataStore: DataStore<Preferences>) {
         return newEnd
     }
 
+    /** Saves [rest] again as it was: RESUME after a Finish, which cleared it. */
+    suspend fun restore(rest: RestTimerState) {
+        dataStore.edit { prefs ->
+            prefs[REST_END_MILLIS] = rest.endMillis
+            prefs[REST_TOTAL_SEC] = rest.totalSec
+        }
+    }
+
     suspend fun clear() {
         dataStore.edit { prefs ->
             prefs.remove(REST_END_MILLIS)
