@@ -12,6 +12,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
@@ -64,7 +65,11 @@ class HistoryViewModel(
 
     /** Reads behind any queued write, so a workout just deleted on Workout Detail never reappears. */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        LiftsIo.write({}) { refresh() }
+        val perf = Perf.start()
+        LiftsIo.write({}) {
+            refresh()
+            Perf.done("history.load", perf, "${_uiState.value.rows.size} rows")
+        }
     }
 
     /** One query: finished workouts newest first, each with its ticked-set count. */

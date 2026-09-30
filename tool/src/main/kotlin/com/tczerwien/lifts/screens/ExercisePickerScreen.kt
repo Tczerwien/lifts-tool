@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.BodyPart
@@ -121,7 +122,11 @@ class ExercisePickerViewModel(
         val reload = loadStarted
         loadStarted = true
         editOpened = false
-        LiftsIo.write({}) { load(keepPlace = reload) }
+        val perf = Perf.start()
+        LiftsIo.write({}) {
+            load(keepPlace = reload)
+            Perf.done("picker.load", perf, "${_uiState.value.rows.size} rows")
+        }
     }
 
     /** The pencil on a row of his own: the edit screen opens, and the list reloads on the way back. */
@@ -183,7 +188,9 @@ class ExercisePickerViewModel(
 
     /** The list for this state ([pickerEntries]): a search, else the chip's; a [newList] starts at the top. */
     private fun UiState.withRows(newList: Boolean = true): UiState {
+        val perf = Perf.start()
         val rows = pickerEntries(catalog, recentIds, chip, searchQuery).map { it.toRow() }
+        Perf.done("picker.rows", perf, "${rows.size} rows for ${searchQuery?.let { "\"$it\"" } ?: chip}")
         return copy(
             rows = rows,
             showMuscles = rows.mapTo(HashSet()) { it.muscleLabel }.size > 1,

@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.PER_SIDE
 import com.tczerwien.lifts.analytics.SetRun
@@ -152,8 +153,10 @@ class ExerciseDetailViewModel(
      * Queued behind any write still pending, so a workout deleted a moment ago can't show.
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        val perf = Perf.start()
         LiftsIo.write({}) {
             refresh()
+            Perf.done("detail.load", perf, "${_uiState.value.history.size} workouts")
             // Opened to rename: straight into the name editor, once, as the name has loaded.
             if (renameOnly && !renameOpened) {
                 renameOpened = true

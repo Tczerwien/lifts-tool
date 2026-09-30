@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.liftsRepository
@@ -79,12 +80,14 @@ class WorkoutCompleteViewModel(
     override fun onScreenShow(screen: SimpleLightScreen<WorkoutCompleteResult>) {
         if (loadStarted) return
         loadStarted = true
+        val perf = Perf.start()
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.value = UiState(
                 loaded = true,
                 summary = session.summarize(workoutId),
                 units = settingsStore.snapshot().units,
             )
+            Perf.done("complete.load", perf)
         }
     }
 }

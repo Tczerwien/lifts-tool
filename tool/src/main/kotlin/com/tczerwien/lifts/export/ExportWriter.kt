@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.export
 
+import com.tczerwien.lifts.Perf
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicLong
@@ -63,8 +64,10 @@ class ExportWriter(
     private suspend fun runOnce() {
         val servedUpTo = requested.get()
         _status.value = Status.Preparing
+        val perf = Perf.start()
         val outcome = try {
             writeAll(render())
+            Perf.done("export.run", perf)
             null
         } catch (e: CancellationException) {
             throw e

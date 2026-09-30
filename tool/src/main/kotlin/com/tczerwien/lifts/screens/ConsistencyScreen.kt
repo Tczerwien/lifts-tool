@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.analytics.longestStreak
 import com.tczerwien.lifts.analytics.weeksSince
 import com.tczerwien.lifts.analytics.workoutsPerWeek
@@ -75,7 +76,11 @@ class ConsistencyViewModel(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        viewModelScope.launch(Dispatchers.IO) { refresh() }
+        val perf = Perf.start()
+        viewModelScope.launch(Dispatchers.IO) {
+            refresh()
+            Perf.done("consistency.load", perf)
+        }
     }
 
     private fun refresh() {

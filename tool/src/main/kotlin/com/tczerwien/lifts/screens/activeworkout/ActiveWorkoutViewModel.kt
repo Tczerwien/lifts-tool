@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.screens.activeworkout
 
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
@@ -259,6 +260,7 @@ class ActiveWorkoutViewModel(
                     autoAdvance(pending)
                 }
         }
+        val perf = Perf.start()
         LiftsIo.write({
             resolvedWorkoutId = when {
                 resumeWorkoutId != null -> resumeWorkoutId
@@ -269,6 +271,7 @@ class ActiveWorkoutViewModel(
         }) {
             // Start Again refused (another workout open, or the source gone): nothing to show, so it leaves.
             if (resolvedWorkoutId == null) _uiState.update { it.copy(loaded = true, leave = true) } else refresh()
+            Perf.done("aw.open", perf, "${_uiState.value.exercises.size} exercises")
         }
     }
 
@@ -420,6 +423,7 @@ class ActiveWorkoutViewModel(
      * a double tap or a bounce: it is ignored before anything else, so it cancels no pending move either.
      */
     fun toggleComplete(setId: Long) {
+        val perf = Perf.start()
         val tapAt = System.currentTimeMillis()
         val unticked = lastToggle
         val located = locate(setId) ?: return
@@ -447,11 +451,13 @@ class ActiveWorkoutViewModel(
             val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
             state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
         }
+        Perf.done("aw.tick.ui", perf)
         // The exercise's last set: move on once the rest that this tick starts is over.
         val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
         pending?.let { pendingAdvance.value = it }
         val workoutId = _uiState.value.workoutId
         LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now, seed.durationSec) }) { logged ->
+            Perf.done("aw.tick.saved", perf)
             settle(edit)
             // Its rest is saved now, so the move can be timed by it; unless a tap has cancelled it since.
             // Nothing logged (the workout closed meanwhile): no move either.
@@ -484,6 +490,7 @@ class ActiveWorkoutViewModel(
      * ([Format.stepWeight]); a long hold sends several.
      */
     fun stepWeight(steps: Int) {
+        val perf = Perf.start()
         if (!beginAction()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
@@ -494,6 +501,7 @@ class ActiveWorkoutViewModel(
         val edit = applySetChange(set.id) {
             it.copy(weightKg = tracking.storedWeight(Format.displayToKg(next, state.units)))
         } ?: return
+        Perf.done("aw.step.ui", perf)
         persistSet(edit)
     }
 
@@ -1030,6 +1038,7 @@ class ActiveWorkoutViewModel(
      */
     private fun refresh(focusLastExercise: Boolean = false) {
         val workoutId = resolvedWorkoutId ?: return
+        val perf = Perf.start()
         val ticket = synchronized(refreshLock) { ++refreshesStarted }
         val workout = repository.workoutById(workoutId)
         if (workout == null || workout.endedAt != null) {
@@ -1100,6 +1109,7 @@ class ActiveWorkoutViewModel(
             }
             rememberCurrentSlot()
         }
+        Perf.done("aw.reload", perf)
     }
 
     /**

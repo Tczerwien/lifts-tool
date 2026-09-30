@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.SetRun
 import com.tczerwien.lifts.analytics.WORKOUT_BODYWEIGHT_LOOKBACK_DAYS
@@ -123,7 +124,11 @@ class WorkoutDetailViewModel(
             startedAgain = false
             starting = false
         }
-        LiftsIo.write({}) { refresh() }
+        val perf = Perf.start()
+        LiftsIo.write({}) {
+            refresh()
+            Perf.done("workoutdetail.load", perf)
+        }
     }
 
     /** The trash takes two taps; see [tapDelete]. */

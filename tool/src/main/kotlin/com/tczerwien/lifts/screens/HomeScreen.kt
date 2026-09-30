@@ -12,6 +12,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.viewModelScope
+import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
@@ -144,7 +145,9 @@ class HomeViewModel(
         showing = true
         val ticket = ++latestLoad
         _uiState.update { it.copy(ready = false) }
+        val perf = Perf.start()
         LiftsIo.write({ load() }) { loaded ->
+            Perf.done("home.load", perf)
             share.homeShown()
             // Loads land in any order: an older one never replaces a newer one, and Home is ready
             // for Start taps only once the newest has landed.
@@ -286,6 +289,10 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
         val discardArmed by viewModel.discardAndStartArm.armed.collectAsState()
+
+        LaunchedEffect(uiState.ready) {
+            if (uiState.ready) Perf.firstSinceStart("home.shown")
+        }
 
         LaunchedEffect(uiState.autoResumeWorkoutId) {
             uiState.autoResumeWorkoutId?.let { workoutId ->
