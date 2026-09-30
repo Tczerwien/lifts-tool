@@ -116,10 +116,13 @@ class WorkoutDetailViewModel(
 
     /**
      * Queued behind any write still pending, so a rename made in Exercise Detail shows on the way back.
-     * Back from a Start Again, its tap guard is released.
+     * Back from a Start Again, its tap guard is released (a wake while a save is queued leaves it held).
      */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
-        starting = false
+        if (startedAgain) {
+            startedAgain = false
+            starting = false
+        }
         LiftsIo.write({}) { refresh() }
     }
 
@@ -176,31 +179,39 @@ class WorkoutDetailViewModel(
     @Volatile
     private var starting = false
 
+    /** Active Workout opened for a Start Again: coming back from it releases [starting]. */
+    @Volatile
+    private var startedAgain = false
+
     private var hintJob: Job? = null
 
     /**
      * "Start again": a new workout with these exercises and this set pattern ([ActiveSession.startFromWorkout],
      * which Active Workout runs as it opens). Only one workout is ever open, so with another one open it
      * says so for a moment instead. The check waits its turn on the write lane, behind anything queued,
-     * and first tidies open workouts as Home does ([ActiveSession.tidyOpenWorkouts]): one Home would
-     * delete (untouched) or close (idle 4 h) is no reason to refuse. The tap guard holds until this screen
-     * shows again, so a second tap can't open a second workout.
+     * and first closes open workouts idle past 4 h ([ActiveSession.closeIfStale]), as Home would: a stale
+     * one is no reason to refuse. Not Home's whole tidy: this screen can be reached from inside a workout
+     * (Active Workout › Exercise Detail › a past workout), and that workout, untouched or not, is live.
+     * The tap guard holds until this screen shows again, so a second tap can't open a second workout.
      */
     fun tapStartAgain(onStart: () -> Unit) {
         if (deleting || starting || !_uiState.value.loaded) return
         deleteArm.disarm()
         starting = true
         LiftsIo.write({
-            val tidied = session.tidyOpenWorkouts()
+            val closed = repository.listOpenWorkouts().count { session.closeIfStale(it.id) }
             // One it closed is history now: the exports take it in.
-            if (tidied.closed > 0) share.logChanged()
-            tidied.open == null
+            if (closed > 0) share.logChanged()
+            repository.listOpenWorkouts().isEmpty()
         }) { free ->
             withContext(Dispatchers.Main) {
                 if (!free) starting = false
                 when {
                     cleared -> Unit
-                    free -> onStart()
+                    free -> {
+                        startedAgain = true
+                        onStart()
+                    }
                     else -> showHint("A WORKOUT IS OPEN · FINISH IT FIRST")
                 }
             }

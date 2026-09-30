@@ -477,7 +477,8 @@ class ActiveSessionTest {
         val open = session.startEmpty(now = 5 * 24 * 3_600_000L)
         store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = open, exerciseId = "curl", position = 0))
         assertNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L + 1), "one workout open at a time")
-        assertNull(session.startFromWorkout(open, now = 5 * 24 * 3_600_000L + 1), "an unfinished workout counts nowhere")
+        // An unfinished source is always the open one, so the one-open rule refuses it first.
+        assertNull(session.startFromWorkout(open, now = 5 * 24 * 3_600_000L + 1), "not from the open workout")
         assertNull(session.saveAsTemplate(open, "Half done"))
         assertEquals(1, store.listOpenWorkouts().size)
         assertNull(session.startFromWorkout(9_999, now = 5 * 24 * 3_600_000L + 1), "gone")
