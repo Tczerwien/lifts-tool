@@ -99,10 +99,11 @@ class Restorer(
 
     /**
      * Restores [prepared]. Call it on the write lane only (inside a LiftsIo block), so no save lands
-     * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. Then
-     * every row in one transaction; only once they are in do the in-workout keys go (restored ids can
-     * repeat), so a restore that fails leaves a running rest alone; then the settings. Last, the restored log is saved as the newest dated backup, so lifts-latest.db
-     * holds it rather than what was replaced (on a new install, an empty log). Throws
+     * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. Then the
+     * catalog version is forgotten, then every row goes in, in one transaction; only once they are in
+     * do the in-workout keys go (restored ids can repeat), so a restore that fails leaves a running
+     * rest alone; then the settings. Last, the restored log is saved as the newest dated backup, so
+     * lifts-latest.db holds it rather than what was replaced (on a new install, an empty log). Throws
      * [NothingChanged] when it stopped before the rows were replaced.
      */
     suspend fun apply(prepared: Prepared): Outcome {
@@ -115,6 +116,15 @@ class Restorer(
             throw NothingChanged("could not save a copy of this phone's log first (${e.message ?: e})")
         }
         if (!safety.isFile || safety.length() == 0L) throw NothingChanged("the copy of this phone's log went missing")
+        // The catalog version, before the rows: the restored log may hold an older catalog, which Home
+        // then brings up to date. Forgotten first, a failure or a kill later can't leave the phone
+        // saying its exercises are newer than they are; forgotten for a restore that then fails, Home
+        // only checks the catalog it has.
+        try {
+            settings.forgetCatalogVersion()
+        } catch (e: Exception) {
+            throw NothingChanged("could not reset the exercise catalog's version (${e.message ?: e})")
+        }
         try {
             live.replaceAll(prepared.rows)
         } catch (e: Exception) {
@@ -125,11 +135,9 @@ class Restorer(
         if (RestorePlan.refitsTypes(prepared.settingsRows)) {
             runCatching { live.fitTrackingToHistory() }.onFailure { Log.w("Lifts", "fitting exercise types after a restore failed", it) }
         }
-        // The rest, the exercise on screen: they name ids of the log just replaced. And the catalog
-        // version: the restored log may hold an older catalog, which Home then brings up to date.
+        // The rest, the exercise on screen: they name ids of the log just replaced.
         val keysProblem = try {
             ActiveSession.forgetWorkoutState(dataStore)
-            settings.forgetCatalogVersion()
             null
         } catch (e: Exception) {
             e.message ?: e.toString()
