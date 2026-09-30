@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.Perf
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.bundledCatalog
@@ -59,10 +60,13 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class ExercisePickerViewModel(
     private val repository: LiftsRepository,
@@ -149,7 +153,8 @@ class ExercisePickerViewModel(
     }
 
     fun selectChip(chip: PickerChip) {
-        _uiState.update { it.copy(chip = chip, chipChosen = true, searchQuery = null).withRows() }
+        _uiState.update { it.copy(chip = chip, chipChosen = true, searchQuery = null) }
+        showRows()
     }
 
     fun openSearch() {
@@ -163,11 +168,13 @@ class ExercisePickerViewModel(
     /** Blank submit clears the search; otherwise the query replaces the chip until cleared. */
     fun submitSearch(raw: String) {
         val query = raw.trim().takeIf { it.isNotEmpty() }
-        _uiState.update { it.copy(searchOpen = false, searchQuery = query, chipChosen = true).withRows() }
+        _uiState.update { it.copy(searchOpen = false, searchQuery = query, chipChosen = true) }
+        showRows()
     }
 
     fun clearSearch() {
-        _uiState.update { it.copy(searchQuery = null).withRows() }
+        _uiState.update { it.copy(searchQuery = null) }
+        showRows()
     }
 
     /**
@@ -175,6 +182,7 @@ class ExercisePickerViewModel(
      * A reload after an edit ([keepPlace]) keeps the list where he left it.
      */
     private fun load(keepPlace: Boolean = false) {
+        loads++
         val summaries = repository.exerciseSummaries().filterNot { it.hidden }
         customIds = summaries.filter { it.isCustom }.mapTo(HashSet()) { it.id }
         entries = catalogEntries(summaries, catalog)
@@ -191,6 +199,35 @@ class ExercisePickerViewModel(
     }
 
     /** The list for this state ([pickerEntries]): a search, else the chip's; a [newList] starts at the top. */
+    private var rowsJob: Job? = null
+
+    /** Catalog loads so far: a list worked out from an older one is stale. */
+    @Volatile
+    private var loads = 0
+
+    /**
+     * The list for the chip or search now showing, worked out off the main thread (a search over the
+     * whole catalog takes tens of milliseconds on the phone) and shown once it is ready, unless he has
+     * picked something else meanwhile. Called on Main.
+     */
+    private fun showRows() {
+        val asked = _uiState.value
+        // Before the catalog is in, the load works the list out for whatever he has picked by then.
+        if (!asked.loaded) return
+        val loadsAsked = loads
+        rowsJob?.cancel()
+        rowsJob = viewModelScope.launch(Dispatchers.Default) {
+            val withRows = asked.withRows()
+            _uiState.update { current ->
+                if (current.chip != asked.chip || current.searchQuery != asked.searchQuery || loads != loadsAsked) {
+                    current
+                } else {
+                    current.copy(rows = withRows.rows, showMuscles = withRows.showMuscles, listGeneration = current.listGeneration + 1)
+                }
+            }
+        }
+    }
+
     private fun UiState.withRows(newList: Boolean = true): UiState {
         val perf = Perf.start()
         val rows = pickerEntries(entries, recentIds, chip, searchQuery).map { it.toRow() }
