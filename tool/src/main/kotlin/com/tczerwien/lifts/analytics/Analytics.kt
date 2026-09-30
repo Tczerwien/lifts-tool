@@ -123,7 +123,8 @@ fun trendBlockStarts(todayEpochDay: Long, blocks: Int, blockDays: Int): List<Lon
  * most sets that give an e1RM in that window: record-eligible weighted sets of 1–12 reps
  * ([recordEligible], [epleyE1RmKg]). Bodyweight pull-ups or high-rep sets say nothing about the trend,
  * so they don't push a barbell lift out; a lift with no such set is left out. Ties in set count go by
- * exercise id. Pass the completed sets of finished workouts, by exercise id.
+ * exercise id. Pass the completed sets of finished workouts, by exercise id. A set counts on its
+ * workout's day ([startedAtOf], its start), as every workout list dates it; its own tick time without one.
  */
 fun e1RmTrend(
     setsByExercise: Map<String, List<SetEntity>>,
@@ -132,6 +133,7 @@ fun e1RmTrend(
     blocks: Int = 6,
     blockDays: Int = 28,
     top: Int = 8,
+    startedAtOf: (SetEntity) -> Long? = { null },
 ): List<LiftTrend> {
     val firstDay = trendBlockStarts(todayEpochDay, blocks, blockDays).first()
     data class Counted(val exerciseId: String, val sets: Int, val best: List<Double?>)
@@ -140,7 +142,8 @@ fun e1RmTrend(
         var qualifying = 0
         for (set in sets) {
             if (!recordEligible(set)) continue
-            val day = Instant.ofEpochMilli(set.completedAt ?: continue).atZone(zone).toLocalDate().toEpochDay()
+            val at = startedAtOf(set) ?: set.completedAt ?: continue
+            val day = Instant.ofEpochMilli(at).atZone(zone).toLocalDate().toEpochDay()
             if (day < firstDay || day > todayEpochDay) continue
             val weight = set.weightKg?.takeIf { it > 0.0 } ?: continue
             val e1Rm = epleyE1RmKg(weight, set.reps ?: continue) ?: continue
@@ -160,7 +163,8 @@ fun e1RmTrend(
  * Completed non-warmup set counts per muscle over the last [weeks] ISO weeks
  * (Monday-based, in [zone]), newest week last. The current week is the last element.
  * Each completed non-warmup set adds 1.0 to every primary muscle of its exercise
- * and 0.5 to every secondary muscle. Muscles with no contribution in the window
+ * and 0.5 to every secondary muscle, in the week its workout started (a Sunday workout
+ * that runs past midnight is all Sunday's week). Muscles with no contribution in the window
  * are omitted; keys are sorted alphabetically.
  */
 fun weeklySetsPerMuscle(
@@ -178,17 +182,17 @@ fun weeklySetsPerMuscle(
     val firstMonday = currentMonday.minusWeeks((weeks - 1).toLong())
 
     val exercisesById = exercises.associateBy { it.id }
-    val workoutIds = workouts.mapTo(HashSet()) { it.id }
-    val weById = workoutExercises.filter { it.workoutId in workoutIds }.associateBy { it.id }
+    val startedAt = workouts.associate { it.id to it.startedAt }
+    val weById = workoutExercises.filter { it.workoutId in startedAt }.associateBy { it.id }
 
     val buckets = HashMap<String, DoubleArray>()
     for (set in sets) {
-        val completedAt = set.completedAt ?: continue
+        if (set.completedAt == null) continue
         if (set.type == SET_TYPE_WARMUP) continue
         val slot = weById[set.workoutExerciseId] ?: continue
         val exercise = exercisesById[slot.exerciseId] ?: continue
 
-        val date = Instant.ofEpochMilli(completedAt).atZone(zone).toLocalDate()
+        val date = Instant.ofEpochMilli(startedAt.getValue(slot.workoutId)).atZone(zone).toLocalDate()
         val monday = date.minusDays((date.dayOfWeek.value - 1).toLong())
         val index = ChronoUnit.WEEKS.between(firstMonday, monday).toInt()
         if (index < 0 || index >= weeks) continue

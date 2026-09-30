@@ -258,6 +258,9 @@ fun buildSnapshot(
     val validSlots = workoutExercises.filter { it.workoutId in workoutIds }
     val slotsById = validSlots.associateBy { it.id }
     val completedSets = sets.filter { it.completedAt != null && it.workoutExerciseId in slotsById }
+    // A set's day is its workout's (its start), as every workout list dates it.
+    val startedAtById = workouts.associate { it.id to it.startedAt }
+    val startedAtBySlot = validSlots.associate { it.id to startedAtById.getValue(it.workoutId) }
 
     // PR flags: each exercise's history replayed in completion order by the shared records engine,
     // by how the exercise is measured.
@@ -440,6 +443,7 @@ fun buildSnapshot(
             lifts = e1RmTrend(
                 setsByExercise.filterKeys { (tracking[it] ?: Tracking.WEIGHT_REPS) == Tracking.WEIGHT_REPS },
                 todayEpochDay, zone, TREND_BLOCKS, TREND_BLOCK_DAYS, TREND_LIFTS,
+                startedAtOf = { set -> startedAtBySlot[set.workoutExerciseId] },
             ).map {
                 SnapshotLiftTrend(it.exerciseId, nameOf(it.exerciseId), it.bestE1RmKg)
             },

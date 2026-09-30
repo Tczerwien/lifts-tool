@@ -143,6 +143,31 @@ class AnalyticsTest {
         assertEquals(listOf(0.0, 0.0, 1.0, 0.5), weekly.getValue("shoulders"))
     }
 
+    @Test
+    fun weeklyBucketsASetAfterMidnightInItsWorkoutsWeek() {
+        // A Sunday workout (2026-07-12) that runs past midnight into Monday, the current week's first day.
+        val today = millis("2026-07-14T12:00:00Z")
+        val workouts = listOf(WorkoutEntity(id = 1, name = "Late", startedAt = millis("2026-07-12T23:30:00Z")))
+        val slots = listOf(WorkoutExerciseEntity(id = 1, workoutId = 1, exerciseId = bench.id, position = 0))
+        val sets = listOf(
+            SetEntity(id = 1, workoutExerciseId = 1, position = 0, type = "normal", weightKg = 100.0, reps = 5, completedAt = millis("2026-07-12T23:50:00Z")),
+            SetEntity(id = 2, workoutExerciseId = 1, position = 1, type = "normal", weightKg = 100.0, reps = 5, completedAt = millis("2026-07-13T00:10:00Z")),
+        )
+
+        val weekly = weeklySetsPerMuscle(listOf(bench), workouts, slots, sets, weeks = 2, todayEpochMillis = today, zone = ZoneOffset.UTC)
+
+        assertEquals(listOf(2.0, 0.0), weekly.getValue("chest"), "both sets in Sunday's week, where History lists the workout")
+    }
+
+    @Test
+    fun e1RmTrendCountsASetOnItsWorkoutsDay() {
+        // Blocks of 7 days ending 2026-07-14: the last starts 07-08. A workout started 07-07 23:30 with a set after midnight.
+        val today = day("2026-07-14")
+        val set = SetEntity(id = 1, workoutExerciseId = 1, position = 0, type = "normal", weightKg = 100.0, reps = 5, completedAt = millis("2026-07-08T00:10:00Z"))
+        val trend = e1RmTrend(mapOf("bench" to listOf(set)), today, ZoneOffset.UTC, blocks = 2, blockDays = 7, startedAtOf = { millis("2026-07-07T23:30:00Z") })
+        assertEquals(listOf(100.0 * (1 + 5 / 30.0), null), trend.single().bestE1RmKg)
+    }
+
     // --- bodyweightTrend ---
 
     @Test
