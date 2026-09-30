@@ -238,9 +238,9 @@ private fun Mono(text: String, variant: LightTextVariant, lighten: Boolean = fal
     )
 }
 
-/** "165 × 5", "× 15" for a pull-up record, "-25 × 8" with help, "45s" for a hold ([setNotation]). */
+/** "165 × 5", "× 15" for a pull-up record, "-25 × 8" with help, "45s" for a hold, "25 × 10/side" ([setNotation]). */
 private fun prSetDisplay(pr: PrRecord, units: WeightUnit): String =
-    setNotation(pr.weightKg, pr.reps, units, NotationStyle.SINGLE, durationSec = pr.durationSec).orEmpty()
+    setNotation(pr.weightKg, pr.reps, units, NotationStyle.SINGLE, durationSec = pr.durationSec, perSide = pr.perSide).orEmpty()
 
 /** Volume in display units with a thousands separator, e.g. "12,440". */
 private fun volumeDisplay(volumeKg: Double, units: WeightUnit): String =

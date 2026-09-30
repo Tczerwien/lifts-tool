@@ -174,7 +174,7 @@ class ActiveWorkoutScreen(
                                 navigateTo({ ExerciseDetailScreen(it, exerciseId = current.slot.exerciseId) })
                             },
                         )
-                        SetRowHeader(unit = uiState.units, tracking = current.tracking)
+                        SetRowHeader(unit = uiState.units, tracking = current.tracking, perSide = current.perSide)
 
                         // Each exercise gets its own scroll position, opening with the active row in view: the
                         // screen is rebuilt from nothing after the Rest Timer, and the next exercise

@@ -187,7 +187,10 @@ class RestTimerViewModel(
         val seed = seedFor(next.rows, next.index, aligned, units, exercise?.tracking ?: Tracking.WEIGHT_REPS)
         // Only the row's own RPE: a tick logs that, never last session's.
         val rpe = next.rows[next.index].rpe
-        val summary = setNotation(seed.weightKg, seed.reps, units, NotationStyle.SINGLE, durationSec = seed.durationSec, rpe = rpe)
+        val summary = setNotation(
+            seed.weightKg, seed.reps, units, NotationStyle.SINGLE,
+            durationSec = seed.durationSec, rpe = rpe, perSide = exercise?.perSide == true,
+        )
         val exerciseName = exercise?.let { displayName(it) } ?: exerciseId
         return summary?.let { "NEXT · $it" } to "$exerciseName · ${nextSetLabel(next.rows, next.index)}"
     }

@@ -169,13 +169,15 @@ data class PrRecord(
     val weightKg: Double?,
     val reps: Int?,
     val durationSec: Int? = null,
+    /** Its reps (or seconds) count one side ("× 10/side"). */
+    val perSide: Boolean = false,
 )
 
 /**
  * One [PrRecord] per exercise that flagged at least one PR set ([prIds] from [prSetIds]):
  * the latest-completed PR set is the current record holder. Ordered by the exercise's
  * first slot position in the workout; [exerciseNames] fall back to the exercise id. Each record
- * shows only what its exercise's [tracking] measures.
+ * shows only what its exercise's [tracking] measures, and says when its count is each side's ([perSide]).
  */
 fun prRecords(
     slots: List<WorkoutExerciseEntity>,
@@ -183,6 +185,7 @@ fun prRecords(
     prIds: Set<Long>,
     exerciseNames: Map<String, String>,
     tracking: Map<String, Tracking> = emptyMap(),
+    perSide: Set<String> = emptySet(),
 ): List<PrRecord> {
     val slotById = slots.associateBy { it.id }
     val bestByExercise = LinkedHashMap<String, SetEntity>()
@@ -213,6 +216,7 @@ fun prRecords(
                 weightKg = weight,
                 reps = reps,
                 durationSec = durationSec,
+                perSide = exerciseId in perSide,
             )
         }
 }

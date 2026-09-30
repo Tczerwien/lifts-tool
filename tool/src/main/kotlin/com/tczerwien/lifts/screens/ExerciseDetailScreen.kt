@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.PER_SIDE
 import com.tczerwien.lifts.analytics.SetRun
 import com.tczerwien.lifts.analytics.SetToken
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
@@ -131,6 +132,8 @@ class ExerciseDetailViewModel(
         val isCustom: Boolean = false,
         /** "Chest · Dumbbell": its primary muscle and equipment, for that row. */
         val musclesAndEquipment: String = "",
+        /** Done one side at a time: its reps (or seconds) count one side ("10/side"). */
+        val perSide: Boolean = false,
         /** Taken out of the picker ([com.tczerwien.lifts.library.Removal.HIDE]): About offers it back. */
         val hidden: Boolean = false,
     )
@@ -315,6 +318,21 @@ class ExerciseDetailViewModel(
         }
     }
 
+    /**
+     * About's Per Side row: from now on (and in its history, which reads the same) the reps or seconds
+     * count one side, "10/side" on every screen and in every export; tapping again takes it back.
+     */
+    fun togglePerSide() {
+        val state = _uiState.value
+        if (!state.loaded) return
+        val perSide = !state.perSide
+        _uiState.update { it.copy(perSide = perSide) }
+        LiftsIo.write({ repository.setPerSide(exerciseId, perSide) }) { changed ->
+            if (changed) share.logChanged()
+            refresh()
+        }
+    }
+
     /** About's "Show in picker": a hidden exercise of his goes back into the picker (workouts.json marks it). */
     fun showInPicker() {
         if (!_uiState.value.hidden) return
@@ -360,18 +378,19 @@ class ExerciseDetailViewModel(
         val allSets = perWorkout.flatMap { it.sets }
         val prSetIds = chronologicalPrSetIds(allSets, tracking)
 
+        val perSide = exercise?.perSide == true
         val history = perWorkout.map { entry ->
             HistoryRow(
                 workoutId = entry.workoutId,
                 dateLabel = Format.dateShort(entry.dateMillis),
-                runs = compactNotation(entry.sets.map { set -> set.toToken(unit, set.id in prSetIds) }),
+                runs = compactNotation(entry.sets.map { set -> set.toToken(unit, set.id in prSetIds, perSide) }),
                 inProgress = entry.inProgress,
             )
         }
 
         // Records count finished workouts only: a mistaken tick in today's workout isn't a record until
         // the workout is done. Today's row and its live stars stay, as Active Workout shows them.
-        val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit, tracking)
+        val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit, tracking, perSide)
         // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
         _uiState.update { state ->
             state.copy(
@@ -383,6 +402,7 @@ class ExerciseDetailViewModel(
                 records = records,
                 loaded = true,
                 isCustom = exercise?.isCustom == true,
+                perSide = exercise?.perSide == true,
                 musclesAndEquipment = listOfNotNull(exercise?.primaryMuscles?.firstOrNull(), exercise?.equipment)
                     .joinToString(" · ") { titleCaseLabel(it) }
                     .ifEmpty { "—" },
@@ -391,11 +411,11 @@ class ExerciseDetailViewModel(
         }
     }
 
-    private fun SetEntity.toToken(unit: WeightUnit, pr: Boolean) =
-        SetToken(setNotation(this, unit, NotationStyle.LIST) ?: "-", pr)
+    private fun SetEntity.toToken(unit: WeightUnit, pr: Boolean, perSide: Boolean) =
+        SetToken(setNotation(this, unit, NotationStyle.LIST, perSide = perSide) ?: "-", pr)
 
-    /** The Records tab, formatted from the shared records engine, as the exercise is measured. */
-    private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit, tracking: Tracking): Records? {
+    /** The Records tab, formatted from the shared records engine, as the exercise is measured ([perSide]: "× 10/side"). */
+    private fun recordsFor(sets: List<SetEntity>, unit: WeightUnit, tracking: Tracking, perSide: Boolean): Records? {
         val records = exerciseRecords(sets, REP_MAX_TARGETS, tracking) ?: return null
         fun weightLabel(kg: Double) = "${Format.weight(kg, unit)} ${unit.suffix}"
         val stats = buildList {
@@ -403,9 +423,9 @@ class ExerciseDetailViewModel(
                 val label = when (tracking) {
                     // The help as the machine's stack shows it; none at all is a plain pull-up.
                     Tracking.ASSISTED_BODYWEIGHT -> (-recordLoadKg(set, tracking)).takeIf { it > 0.0 }
-                        ?.let { setNotation(it, set.reps, unit, NotationStyle.SINGLE, withUnit = true) }
-                        ?: "None × ${set.reps ?: 0}"
-                    else -> setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true).orEmpty()
+                        ?.let { setNotation(it, set.reps, unit, NotationStyle.SINGLE, withUnit = true, perSide = perSide) }
+                        ?: "None × ${set.reps ?: 0}${if (perSide) PER_SIDE else ""}"
+                    else -> setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, withUnit = true, perSide = perSide).orEmpty()
                 }
                 val title = when (tracking) {
                     Tracking.WEIGHTED_BODYWEIGHT -> "Max Added"
@@ -415,7 +435,7 @@ class ExerciseDetailViewModel(
                 add(Stat(title, label, Format.dateWithYear(set.completedAt ?: 0L)))
             }
             records.longestSet?.let { set ->
-                add(Stat("Longest", "${set.durationSec ?: 0}s", Format.dateWithYear(set.completedAt ?: 0L)))
+                add(Stat("Longest", "${set.durationSec ?: 0}s${if (perSide) PER_SIDE else ""}", Format.dateWithYear(set.completedAt ?: 0L)))
             }
             val bestE1Rm = records.bestE1RmKg
             val bestE1RmSet = records.bestE1RmSet
@@ -426,13 +446,13 @@ class ExerciseDetailViewModel(
                 add(
                     Stat(
                         "Best Volume Set",
-                        setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE).orEmpty(),
+                        setNotation(set.weightKg, set.reps, unit, NotationStyle.SINGLE, perSide = perSide).orEmpty(),
                         Format.dateWithYear(set.completedAt ?: 0L),
                     ),
                 )
             }
             records.maxRepsSet?.let { set ->
-                add(Stat("Max Reps", "${set.reps ?: 0}", Format.dateWithYear(set.completedAt ?: 0L)))
+                add(Stat("Max Reps", "${set.reps ?: 0}${if (perSide) PER_SIDE else ""}", Format.dateWithYear(set.completedAt ?: 0L)))
             }
         }
         val repMaxes = records.repMaxes.map { repMax ->
@@ -575,6 +595,12 @@ class ExerciseDetailScreen(
         LightScrollView(modifier = modifier) {
             LiftsFieldRow(label = "Name", value = uiState.name, onClick = viewModel::openNameEditor, chevron = true)
             LiftsFieldRow(label = "Type", value = uiState.tracking.label, onClick = viewModel::openTypePicker, chevron = true)
+            // A split squat's 10 is 10 a leg: the count is each side's, written "10/side" everywhere.
+            LiftsFieldRow(
+                label = "Per Side",
+                value = if (!uiState.perSide) "No" else if (uiState.tracking.takesDuration) "Yes · seconds each side" else "Yes · reps each side",
+                onClick = viewModel::togglePerSide,
+            )
             if (uiState.isCustom) {
                 // His own: muscles, equipment and category too, and the trash (hidden, as it has history).
                 LiftsFieldRow(label = "Muscles & Equipment", value = uiState.musclesAndEquipment, onClick = ::editCustom, chevron = true)

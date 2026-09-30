@@ -86,16 +86,21 @@ private const val PR_STAR_UNITS = 1.1f
 private const val PAD_START_UNITS = 1f
 private const val MARKER_PAD_UNITS = 0.3f
 
+/** How far "REPS/SIDE" runs left of its column in [SetRowHeader]. */
+private const val PER_SIDE_OVERHANG_UNITS = 1.5f
+
 /** The set list's scrollbar floats over this much of the right edge; nothing tappable goes there. */
 private const val PAD_END_UNITS = 2f
 
 /**
  * Superfine column header, 1.5gu tall. [unit] picks the "Lbs"/"Kg" label, [tracking] what the columns
  * hold: "+LBS" is added weight, "-LBS" assistance, "SEC" a hold's seconds; no weight column for reps
- * only or a hold, and no RIR for a hold.
+ * only or a hold, and no RIR for a hold. One side at a time ([perSide]) the count's label reads
+ * "REPS/SIDE" ("SEC/SIDE"), wider than its column: it runs left over the weight column's start, and
+ * the weight's label moves left to make room.
  */
 @Composable
-fun SetRowHeader(unit: WeightUnit, tracking: Tracking, modifier: Modifier = Modifier) {
+fun SetRowHeader(unit: WeightUnit, tracking: Tracking, modifier: Modifier = Modifier, perSide: Boolean = false) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -110,7 +115,12 @@ fun SetRowHeader(unit: WeightUnit, tracking: Tracking, modifier: Modifier = Modi
             HeaderLabel("PREVIOUS")
         }
         Box(Modifier.weight(1f))
-        Box(Modifier.width(COL_WEIGHT_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.CenterEnd) {
+        Box(
+            Modifier
+                .width(COL_WEIGHT_UNITS.gridUnitsAsDp())
+                .padding(end = if (perSide) PER_SIDE_OVERHANG_UNITS.gridUnitsAsDp() else 0.dp),
+            contentAlignment = Alignment.CenterEnd,
+        ) {
             val label = unit.columnLabel.uppercase()
             when (tracking) {
                 Tracking.WEIGHT_REPS -> HeaderLabel(label)
@@ -120,7 +130,11 @@ fun SetRowHeader(unit: WeightUnit, tracking: Tracking, modifier: Modifier = Modi
             }
         }
         Box(Modifier.width(COL_REPS_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.CenterEnd) {
-            HeaderLabel(if (tracking.takesDuration) "SEC" else "REPS")
+            val count = if (tracking.takesDuration) "SEC" else "REPS"
+            HeaderLabel(
+                text = if (perSide) "$count/SIDE" else count,
+                modifier = Modifier.wrapContentWidth(Alignment.End, unbounded = true),
+            )
         }
         Box(Modifier.width(COL_RIR_UNITS.gridUnitsAsDp()), contentAlignment = Alignment.Center) {
             if (!tracking.takesDuration) HeaderLabel("RIR")
@@ -130,8 +144,8 @@ fun SetRowHeader(unit: WeightUnit, tracking: Tracking, modifier: Modifier = Modi
 }
 
 @Composable
-private fun HeaderLabel(text: String) {
-    LightText(text = text, variant = LightTextVariant.Superfine, lighten = true, maxLines = 1)
+private fun HeaderLabel(text: String, modifier: Modifier = Modifier) {
+    LightText(text = text, variant = LightTextVariant.Superfine, lighten = true, maxLines = 1, modifier = modifier)
 }
 
 /**

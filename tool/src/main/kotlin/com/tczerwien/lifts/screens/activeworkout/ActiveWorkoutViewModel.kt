@@ -19,6 +19,7 @@ import com.tczerwien.lifts.session.TypedWeight
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
 import com.tczerwien.lifts.session.autoAdvanceSlotId
+import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.nextRir
 import com.tczerwien.lifts.session.nextSetType
@@ -30,7 +31,6 @@ import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
-import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
@@ -40,6 +40,7 @@ import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.namesEquipment
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SimpleLightScreen
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -50,7 +51,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /** How long "SET WEIGHT OR REPS FIRST" shows after a tick on a row with nothing to log. */
 private const val EMPTY_TICK_HINT_MILLIS = 2_500L
@@ -79,6 +79,8 @@ class ActiveWorkoutViewModel(
         val unit: WeightUnit,
         /** How the exercise is measured: which numbers the rows and steppers take. */
         val tracking: Tracking = Tracking.WEIGHT_REPS,
+        /** Done one side at a time: the count is each side's ("REPS/SIDE"). */
+        val perSide: Boolean = false,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
@@ -1029,6 +1031,7 @@ class ActiveWorkoutViewModel(
                     lastTime = lastTimeBySlot[slot.id].orEmpty(),
                     unit = settings.units,
                     tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS,
+                    perSide = exercise?.perSide == true,
                 )
             }
             val prIds = prSetIds(slots, sets, priorHistoryByExercise, trackingOf(blocks))

@@ -504,7 +504,7 @@ class ActiveSession(
             durationSec = ((end - workout.startedAt) / 1000L).toInt().coerceAtLeast(0),
             completedSetCount = completedSetCount(sets),
             totalVolumeKg = totalVolumeKg(sets),
-            prs = prRecords(slots, sets, prIds, names, tracking),
+            prs = prRecords(slots, sets, prIds, names, tracking, perSide = exercises.filterValues { it.perSide }.keys),
             bodyweight = workoutBodyweight(workout.startedAt, weighIns, zone),
         )
     }

@@ -215,7 +215,8 @@ class WorkoutDetailViewModel(
                 exerciseId = slot.exerciseId,
                 name = exercises[slot.exerciseId]?.let { displayName(it) } ?: UNKNOWN_EXERCISE,
                 runs = completed.map { set ->
-                    SetRun(setNotation(set, unit, NotationStyle.LIST) ?: "-", set.id in prSetIds, 1)
+                    val perSide = exercises[slot.exerciseId]?.perSide == true
+                    SetRun(setNotation(set, unit, NotationStyle.LIST, perSide = perSide) ?: "-", set.id in prSetIds, 1)
                 },
                 notes = slot.notes?.takeIf { it.isNotBlank() },
             )
