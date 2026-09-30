@@ -42,6 +42,7 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.namesEquipment
@@ -1107,7 +1108,7 @@ class ActiveWorkoutViewModel(
             val setsBySlot = sets.groupBy { it.workoutExerciseId }
             val blocks = slots.map { slot ->
                 val exercise = catalog[slot.exerciseId]
-                val name = exercise?.let { displayName(it) } ?: slot.exerciseId
+                val name = exercise?.let { displayName(it) } ?: UNKNOWN_EXERCISE
                 ExerciseBlock(
                     slot = slot,
                     name = name,

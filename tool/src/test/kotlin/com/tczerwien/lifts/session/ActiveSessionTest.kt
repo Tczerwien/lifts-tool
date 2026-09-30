@@ -476,6 +476,14 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Workout Complete names an exercise whose row is missing as unknown, not by its id`() {
+        // A restored log whose slot names a custom exercise deleted before the backup.
+        val workoutId = store.addFinishedWorkout(startedAt = 1_000_000, "custom-gone" to listOf(Triple(n, 50.0, 5)))
+        val summary = assertNotNull(session.summarize(workoutId, ZoneOffset.UTC))
+        assertEquals(listOf(com.tczerwien.lifts.ui.UNKNOWN_EXERCISE), summary.prs.map { it.exerciseName })
+    }
+
+    @Test
     fun `save as template keeps the counts within what the editor's steppers reach`() {
         val source = store.addFinishedWorkout(
             startedAt = 1_000_000,

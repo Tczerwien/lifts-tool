@@ -15,6 +15,7 @@ import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
@@ -527,7 +528,7 @@ class ActiveSession(
         val exercises = exerciseIds.mapNotNull { repository.exerciseById(it) }.associateBy { it.id }
         val tracking = exercises.mapValues { (_, exercise) -> exercise.tracking }
         val prIds = prSetIds(slots, sets, priorHistory, tracking)
-        val names = exerciseIds.associateWith { id -> exercises[id]?.let(::displayName) ?: id }
+        val names = exerciseIds.associateWith { id -> exercises[id]?.let(::displayName) ?: UNKNOWN_EXERCISE }
         val end = workout.endedAt ?: workout.startedAt
         val day = workoutEpochDay(workout.startedAt, zone)
         val weighIns = repository.bodyweightBetween(day - WORKOUT_BODYWEIGHT_LOOKBACK_DAYS, day)

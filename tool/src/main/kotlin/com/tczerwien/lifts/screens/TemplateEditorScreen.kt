@@ -52,6 +52,7 @@ import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
@@ -389,7 +390,7 @@ class TemplateEditorViewModel(
             val catalog = catalogById[exercise.exerciseId]
             ExerciseRow(
                 id = exercise.id,
-                name = catalog?.let(::displayName) ?: exercise.exerciseId,
+                name = catalog?.let(::displayName) ?: UNKNOWN_EXERCISE,
                 hold = catalog?.tracking?.takesDuration == true,
                 targetSets = exercise.targetSets,
                 warmupSets = exercise.warmupSets,

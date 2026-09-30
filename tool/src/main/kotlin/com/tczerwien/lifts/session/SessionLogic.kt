@@ -205,7 +205,7 @@ data class PrRecord(
 /**
  * One [PrRecord] per exercise that flagged at least one PR set ([prIds] from [prSetIds]):
  * the latest-completed PR set is the current record holder. Ordered by the exercise's
- * first slot position in the workout; [exerciseNames] fall back to the exercise id. Each record
+ * first slot position in the workout; one missing from [exerciseNames] is named by its id. Each record
  * shows only what its exercise's [tracking] measures, and says when its count is each side's ([perSide]).
  */
 fun prRecords(

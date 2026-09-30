@@ -41,6 +41,7 @@ import com.tczerwien.lifts.session.seedFor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.msUntilNextSecond
 import com.tczerwien.lifts.ui.rememberSecondClock
@@ -204,7 +205,7 @@ class RestTimerViewModel(
             seed.weightKg, seed.reps, units, NotationStyle.SINGLE,
             durationSec = seed.durationSec, rpe = rpe, perSide = exercise?.perSide == true,
         )
-        val exerciseName = exercise?.let { displayName(it) } ?: exerciseId
+        val exerciseName = exercise?.let { displayName(it) } ?: UNKNOWN_EXERCISE
         return NextLines(summary?.let { "NEXT · $it" }, exerciseName, nextSetLabel(next.rows, next.index))
     }
 }
