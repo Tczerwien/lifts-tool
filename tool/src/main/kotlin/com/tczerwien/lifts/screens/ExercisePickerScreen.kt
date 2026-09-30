@@ -273,7 +273,7 @@ class ExercisePickerScreen(
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.searchOpen) {
             if (uiState.searchOpen) {
                 val textState = remember { TextFieldState(uiState.searchQuery ?: "") }
                 LightTextInputEditor(
