@@ -416,7 +416,7 @@ class ActiveSessionTest {
     fun `start again copies each done exercise's ticked pattern, rests and targets, not notes or skipped ones`() {
         val utc = ActiveSession(store, SettingsStore(dataStore), dataStore, alarm, ZoneOffset.UTC)
         val source = finishedEvening()
-        val again = utc.startFromWorkout(source, now = 3 * 24 * 3_600_000L + 7 * 3_600_000L)
+        val again = assertNotNull(utc.startFromWorkout(source, now = 3 * 24 * 3_600_000L + 7 * 3_600_000L))
         val workout = store.workoutById(again)!!
         assertEquals("Morning Workout", workout.name, "a time-of-day name follows the new start")
         assertNull(workout.notes)
@@ -431,7 +431,7 @@ class ActiveSessionTest {
         assertEquals(listOf(n), rows.filter { it.workoutExerciseId == slots[1].id }.map { it.type })
         assertTrue(rows.all { it.weightKg == null && it.reps == null && it.completedAt == null })
         // Nothing done yet: backing out leaves nothing.
-        assertTrue(utc.discardIfUntouched(again, startedFrom = source))
+        assertTrue(utc.discardIfUntouched(again))
         assertNull(store.workoutById(again))
     }
 
@@ -439,14 +439,34 @@ class ActiveSessionTest {
     fun `a workout started again keeps a name he gave the old one, and counts a tick as a change`() {
         val source = finishedEvening()
         store.updateWorkout(store.workoutById(source)!!.copy(name = "Upper A"))
-        val again = session.startFromWorkout(source, now = 5 * 24 * 3_600_000L)
+        val again = assertNotNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L))
         assertEquals("Upper A", store.workoutById(again)!!.name)
         val first = store.setsForWorkout(again).first()
         assertNotNull(session.completeSet(again, first, 20.0, 10, w, now = 5 * 24 * 3_600_000L + 1))
-        assertFalse(session.discardIfUntouched(again, startedFrom = source))
-        // Without its source it can't be told from a workout he built by hand: kept.
-        val other = session.startFromWorkout(source, now = 6 * 24 * 3_600_000L)
-        assertFalse(session.discardIfUntouched(other))
+        assertFalse(session.discardIfUntouched(again))
+    }
+
+    @Test
+    fun `an untouched copy is still known after a restart, so Home's tidy deletes it`() {
+        val source = finishedEvening()
+        val again = assertNotNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L))
+        // The app is killed on Active Workout: a new process, Home's cleanup.
+        val restarted = newSession()
+        val tidied = restarted.tidyOpenWorkouts(now = 5 * 24 * 3_600_000L + 60_000)
+        assertNull(tidied.open)
+        assertNull(store.workoutById(again), "compared with its source, not with an empty start")
+    }
+
+    @Test
+    fun `start again and save as template refuse an unfinished source, and start again another open workout`() {
+        val source = finishedEvening()
+        val open = session.startEmpty(now = 5 * 24 * 3_600_000L)
+        store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = open, exerciseId = "curl", position = 0))
+        assertNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L + 1), "one workout open at a time")
+        assertNull(session.startFromWorkout(open, now = 5 * 24 * 3_600_000L + 1), "an unfinished workout counts nowhere")
+        assertNull(session.saveAsTemplate(open, "Half done"))
+        assertEquals(1, store.listOpenWorkouts().size)
+        assertNull(session.startFromWorkout(9_999, now = 5 * 24 * 3_600_000L + 1), "gone")
     }
 
     @Test

@@ -114,8 +114,12 @@ class WorkoutDetailViewModel(
     private val _uiState = MutableStateFlow(UiState())
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
-    /** Queued behind any write still pending, so a rename made in Exercise Detail shows on the way back. */
+    /**
+     * Queued behind any write still pending, so a rename made in Exercise Detail shows on the way back.
+     * Back from a Start Again, its tap guard is released.
+     */
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
+        starting = false
         LiftsIo.write({}) { refresh() }
     }
 
@@ -177,15 +181,23 @@ class WorkoutDetailViewModel(
     /**
      * "Start again": a new workout with these exercises and this set pattern ([ActiveSession.startFromWorkout],
      * which Active Workout runs as it opens). Only one workout is ever open, so with another one open it
-     * says so for a moment instead; the check waits its turn on the write lane, behind anything queued.
+     * says so for a moment instead. The check waits its turn on the write lane, behind anything queued,
+     * and first tidies open workouts as Home does ([ActiveSession.tidyOpenWorkouts]): one Home would
+     * delete (untouched) or close (idle 4 h) is no reason to refuse. The tap guard holds until this screen
+     * shows again, so a second tap can't open a second workout.
      */
     fun tapStartAgain(onStart: () -> Unit) {
         if (deleting || starting || !_uiState.value.loaded) return
         deleteArm.disarm()
         starting = true
-        LiftsIo.write({ repository.listOpenWorkouts().isEmpty() }) { free ->
-            starting = false
+        LiftsIo.write({
+            val tidied = session.tidyOpenWorkouts()
+            // One it closed is history now: the exports take it in.
+            if (tidied.closed > 0) share.logChanged()
+            tidied.open == null
+        }) { free ->
             withContext(Dispatchers.Main) {
+                if (!free) starting = false
                 when {
                     cleared -> Unit
                     free -> onStart()

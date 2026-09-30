@@ -108,23 +108,32 @@ class ActiveSession(
      * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises, each with the set
      * pattern he ticked that day, its rests and its targets ([planFromWorkout]); the rows start empty,
      * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
-     * that name was only its time of day ([startAgainName]). A vanished workout degrades to an empty
-     * one. Written in one transaction; any leftover rest is cleared.
+     * that name was only its time of day ([startAgainName]). Written in one transaction; any leftover
+     * rest is cleared, and the source is remembered by the new workout's id, so the untouched check
+     * knows what it started as even after the app was killed. Null, starting nothing, when another
+     * workout is open (only one ever is) or the source is gone or not finished (an unfinished workout
+     * counts nowhere).
      */
-    fun startFromWorkout(sourceId: Long, now: Long = System.currentTimeMillis()): Long {
+    fun startFromWorkout(sourceId: Long, now: Long = System.currentTimeMillis()): Long? {
         val workoutId = repository.inTransaction {
-            val source = repository.workoutById(sourceId)
-            val workoutId = repository.addWorkout(
-                WorkoutEntity(
-                    name = source?.let { startAgainName(it, now, zone) } ?: defaultWorkoutName(now, zone),
-                    startedAt = now,
-                ),
-            )
-            source?.let { addPlannedSlots(workoutId, planOf(it.id)) }
+            val source = repository.workoutById(sourceId)?.takeIf { it.endedAt != null } ?: return@inTransaction null
+            if (repository.listOpenWorkouts().isNotEmpty()) return@inTransaction null
+            val workoutId = repository.addWorkout(WorkoutEntity(name = startAgainName(source, now, zone), startedAt = now))
+            addPlannedSlots(workoutId, planOf(source.id))
             workoutId
+        } ?: return null
+        runBlocking {
+            dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId" }
+            clearRest()
         }
-        runBlocking { clearRest() }
         return workoutId
+    }
+
+    /** The workout [workoutId] was started again from ([startFromWorkout]), or null. Blocking read. */
+    private fun startedFromSnapshot(workoutId: Long): Long? = runBlocking {
+        val saved = dataStore.data.first()[STARTED_FROM]?.split(':') ?: return@runBlocking null
+        if (saved.size != 2 || saved[0].toLongOrNull() != workoutId) return@runBlocking null
+        saved[1].toLongOrNull()
     }
 
     /** What [planFromWorkout] makes of stored workout [workoutId]. */
@@ -136,10 +145,10 @@ class ActiveSession(
      * workout's name), last in the list, with one exercise per slot he ticked a set in: that many work
      * sets (at least 1) and warm-ups, the slot's rep range and RIR target, and its rests, stored as
      * none where they equal Settings' defaults so they follow them. Returns the template's id, or null
-     * when the workout is gone. One transaction.
+     * when the workout is gone or not finished (an unfinished workout counts nowhere). One transaction.
      */
     fun saveAsTemplate(workoutId: Long, name: String): Long? = repository.inTransaction {
-        val workout = repository.workoutById(workoutId) ?: return@inTransaction null
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt != null } ?: return@inTransaction null
         val snapshot = settings.snapshot()
         val templateId = repository.addTemplate(
             TemplateEntity(
@@ -390,13 +399,11 @@ class ActiveSession(
 
     /**
      * Deletes the workout if it is still open and nothing has changed since it was started
-     * ([isUntouched]), so opening a template by mistake and backing out leaves no trace. A workout
-     * started again from another ([startFromWorkout]) names that one as [startedFrom]: it was started
-     * from it, not empty.
+     * ([isUntouched]), so opening a template by mistake and backing out leaves no trace.
      */
-    fun discardIfUntouched(workoutId: Long, startedFrom: Long? = null): Boolean {
+    fun discardIfUntouched(workoutId: Long): Boolean {
         val workout = repository.workoutById(workoutId) ?: return false
-        if (workout.endedAt != null || !untouched(workout, repository.setsForWorkout(workoutId), startedFrom)) return false
+        if (workout.endedAt != null || !untouched(workout, repository.setsForWorkout(workoutId))) return false
         return discardWorkout(workoutId)
     }
 
@@ -455,12 +462,12 @@ class ActiveSession(
 
     /**
      * [isUntouched] for a stored workout, against what its template would start with now
-     * ([planTemplate]), or the workout it was started again from ([startedFrom], [planFromWorkout]).
-     * Other workouts can't finish while this one is open, so last session is the same as at the start;
-     * if it somehow isn't, the workout counts as touched and is kept.
+     * ([planTemplate]), or the workout it was started again from ([startFromWorkout] remembers it,
+     * [planFromWorkout]). Other workouts can't finish while this one is open, so last session is the
+     * same as at the start; if it somehow isn't, the workout counts as touched and is kept.
      */
-    private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>, startedFrom: Long? = null): Boolean {
-        val source = startedFrom?.takeIf { workout.templateId == null }?.let { repository.workoutById(it) }
+    private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean {
+        val source = startedFromSnapshot(workout.id)?.takeIf { workout.templateId == null }?.let { repository.workoutById(it) }
         return isUntouched(
             workout = workout,
             slots = repository.exercisesForWorkout(workout.id),
@@ -551,17 +558,23 @@ class ActiveSession(
 
     companion object {
         /**
-         * Forgets the in-workout state kept in DataStore: the exercise last on screen and the saved
-         * rest. A restore calls it, because the restored database can reuse workout and slot ids, so a
-         * saved "workout:slot" or rest would point into the wrong data. The keys are named one by
+         * Forgets the in-workout state kept in DataStore: the exercise last on screen, the workout a
+         * Start Again copied, and the saved rest. A restore calls it, because the restored database can
+         * reuse workout and slot ids, so a saved "workout:slot" or rest would point into the wrong data. The keys are named one by
          * one: settings share the "lifts_" prefix (lifts_rest_beep among them) and must stay.
          */
         suspend fun forgetWorkoutState(dataStore: DataStore<Preferences>) {
-            dataStore.edit { prefs -> prefs.remove(CURRENT_SLOT) }
+            dataStore.edit { prefs ->
+                prefs.remove(CURRENT_SLOT)
+                prefs.remove(STARTED_FROM)
+            }
             RestStore(dataStore).clear()
         }
 
         /** "workoutId:slotId" of the exercise last on screen; tied to its workout, so a stale one is ignored. */
         private val CURRENT_SLOT = stringPreferencesKey("lifts_current_slot")
+
+        /** "workoutId:sourceId": the workout Start Again copied into that one; tied to it, so a stale one is ignored. */
+        private val STARTED_FROM = stringPreferencesKey("lifts_started_from")
     }
 }

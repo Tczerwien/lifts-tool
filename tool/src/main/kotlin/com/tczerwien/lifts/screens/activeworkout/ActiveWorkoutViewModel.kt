@@ -260,15 +260,16 @@ class ActiveWorkoutViewModel(
                 fromWorkoutId != null -> session.startFromWorkout(fromWorkoutId)
                 else -> session.startEmpty()
             }
-        }) { refresh() }
+        }) {
+            // Start Again refused (another workout open, or the source gone): nothing to show, so it leaves.
+            if (resolvedWorkoutId == null) _uiState.update { it.copy(loaded = true, leave = true) } else refresh()
+        }
     }
 
     /** Backing out of a workout nothing was done in leaves nothing behind (a template opened by mistake). */
     override fun onCleared() {
         if (!_uiState.value.finishing) {
-            // Started again from a past workout, it is compared with that one (not with an empty start).
-            val startedFrom = fromWorkoutId.takeIf { resumeWorkoutId == null && templateId == null }
-            LiftsIo.write { resolvedWorkoutId?.let { session.discardIfUntouched(it, startedFrom) } }
+            LiftsIo.write { resolvedWorkoutId?.let { session.discardIfUntouched(it) } }
         }
         super.onCleared()
     }
