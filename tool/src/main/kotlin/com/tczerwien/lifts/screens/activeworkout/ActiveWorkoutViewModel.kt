@@ -320,13 +320,13 @@ class ActiveWorkoutViewModel(
      * [beginAction] for a tap on the rows or the next-exercise row, which the screen moving on by itself
      * can change under his finger: in the second after such a move ([tapTooSoonAfterMove]) the tap was
      * aimed at what was there before, so it is dropped rather than applied to the new exercise. So is
-     * the second half of a double tap on a checkbox whose tick moved the rows ([tickMovedRowsAt]).
+     * the second half of a double tap whose first half moved the rows ([rowsShiftedAt]).
      */
     private fun beginRowAction(): Boolean = !rowsJustMoved(System.currentTimeMillis()) && beginAction()
 
     /** Whether a tap on the rows at [now] was aimed at rows that have since moved under his finger. */
     private fun rowsJustMoved(now: Long): Boolean =
-        tapTooSoonAfterMove(movedOnAt, now) || tickMovedRowsAt?.let { isDoubleTap(it, now) } == true
+        tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true
 
     /**
      * He opened a screen about this exercise or workout (Exercise Detail, the exercise list, the "…"
@@ -467,7 +467,7 @@ class ActiveWorkoutViewModel(
         lastTickAt = now
         // The exercise's last tick: no row is logged now, so the header's equipment line comes back
         // and every row slides down under his finger.
-        if (_uiState.value.activeSetId == null) tickMovedRowsAt = now
+        if (_uiState.value.activeSetId == null) rowsShiftedAt = now
         Perf.done("aw.tick.ui", perf)
         // The exercise's last set: move on once the rest that this tick starts is over.
         val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
@@ -681,22 +681,31 @@ class ActiveWorkoutViewModel(
     private var lastTickAt: Long? = null
 
     /**
-     * The tick that moved the rows under his finger, when it did: the list scrolled to the next row,
-     * or the exercise's last tick brought the header's equipment line back. A tap on the rows until
-     * [isDoubleTap] ends for it is the second half of a double tap aimed at the ticked row, and would
-     * land on another row (tick it, untick it, or pick it): it is dropped.
+     * When the rows last moved under his finger straight after a tap: a tick that scrolled the list
+     * ([rowsScrolled]), or the header's equipment line coming back or going ([headerShifted]; an
+     * exercise's last tick brings it back). A tap on the rows until [isDoubleTap] ends for it is the
+     * second half of a double tap aimed at the row that was there, and would land on another row
+     * (tick it, untick it, pick it, or change its marker): it is dropped.
      */
     @Volatile
-    private var tickMovedRowsAt: Long? = null
+    private var rowsShiftedAt: Long? = null
 
     /**
      * The set list scrolled by itself to show the active row. Right after a tick that is the tick
-     * moving the rows ([tickMovedRowsAt]); after a tap on a half-hidden row or PREVIOUS it is not,
+     * moving the rows ([rowsShiftedAt]); after a tap on a half-hidden row or PREVIOUS it is not,
      * and the next tap, aimed at the row where it now is, counts.
      */
     fun rowsScrolled() {
         val tick = lastTickAt ?: return
-        if (isDoubleTap(tick, System.currentTimeMillis())) tickMovedRowsAt = tick
+        if (isDoubleTap(tick, System.currentTimeMillis())) rowsShiftedAt = tick
+    }
+
+    /**
+     * The header's equipment line appeared or went (it shows while no row is logged): every row moved
+     * 48 px under his finger, whichever tap did it (a tick, a row or marker tap on a finished exercise).
+     */
+    fun headerShifted() {
+        rowsShiftedAt = System.currentTimeMillis()
     }
 
     /**

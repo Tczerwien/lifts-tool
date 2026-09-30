@@ -5,15 +5,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
@@ -21,10 +23,10 @@ import com.tczerwien.lifts.screens.ExerciseDetailScreen
 import com.tczerwien.lifts.screens.ExerciseJumpScreen
 import com.tczerwien.lifts.screens.ExercisePickerScreen
 import com.tczerwien.lifts.screens.JumpEntry
+import com.tczerwien.lifts.screens.PlateCalculatorScreen
 import com.tczerwien.lifts.screens.RestTimerScreen
 import com.tczerwien.lifts.screens.WorkoutCompleteResult
 import com.tczerwien.lifts.screens.WorkoutCompleteScreen
-import com.tczerwien.lifts.screens.PlateCalculatorScreen
 import com.tczerwien.lifts.screens.WorkoutMenuResult
 import com.tczerwien.lifts.screens.WorkoutMenuScreen
 import com.tczerwien.lifts.session.ActiveSession
@@ -32,18 +34,18 @@ import com.tczerwien.lifts.session.SET_TYPE_DROP
 import com.tczerwien.lifts.session.SET_TYPE_FAILURE
 import com.tczerwien.lifts.session.SET_TYPE_NORMAL
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
-import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.pendingSetCount
 import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
+import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
-import com.tczerwien.lifts.ui.rememberSecondClock
 import com.tczerwien.lifts.ui.SetRow
 import com.tczerwien.lifts.ui.SetRowHeader
 import com.tczerwien.lifts.ui.SetRowState
+import com.tczerwien.lifts.ui.rememberSecondClock
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.rememberKeyboardOptions
@@ -176,9 +178,21 @@ class ActiveWorkoutScreen(
 
                     else -> {
                         val activeSet = viewModel.activeSet(uiState)
+                        val logging = activeSet != null
+                        // The header's equipment line shows only while no row is logged: when that flips,
+                        // every row moves 48 px under his finger ([ActiveWorkoutViewModel.headerShifted]).
+                        key(current.slot.id) {
+                            var headerLogging by remember { mutableStateOf(logging) }
+                            LaunchedEffect(logging) {
+                                if (logging != headerLogging) {
+                                    headerLogging = logging
+                                    viewModel.headerShifted()
+                                }
+                            }
+                        }
                         ExerciseHeader(
                             block = current,
-                            logging = activeSet != null,
+                            logging = logging,
                             onOpenDetail = {
                                 viewModel.finishArm.disarm()
                                 viewModel.holdPosition()
