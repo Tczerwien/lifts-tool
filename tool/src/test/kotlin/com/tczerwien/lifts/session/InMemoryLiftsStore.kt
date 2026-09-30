@@ -24,9 +24,15 @@ class InMemoryLiftsStore : LiftsStore {
 
     private var nextId = 1L
 
+    /** The id the next new row gets, as SQLite would hand out a rolled-back one again. */
+    fun nextWorkoutId(): Long = nextId
+
     private fun newId(id: Long): Long = if (id != 0L) id.also { nextId = maxOf(nextId, id + 1) } else nextId++
 
-    override fun <T> inTransaction(block: () -> T): T = block()
+    /** Runs as each transaction's block has run, where Room would commit it (tests of what is saved first). */
+    var onCommit: (() -> Unit)? = null
+
+    override fun <T> inTransaction(block: () -> T): T = block().also { onCommit?.invoke() }
 
     override fun exerciseById(id: String): ExerciseEntity? = exercises[id]
 

@@ -3,6 +3,8 @@ package com.tczerwien.lifts.session
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.analytics.WorkoutBodyweight
 import com.tczerwien.lifts.data.BodyweightEntity
 import com.tczerwien.lifts.data.SetEntity
@@ -17,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -207,10 +211,10 @@ class ActiveSessionTest {
     fun `a moved rest is armed at its new end, and a minus 30 past zero stays quiet`() {
         kotlinx.coroutines.runBlocking {
             session.startRest(totalSec = 60, now = 0)
-            val later = session.adjustRest(30, now = 1_000)!!
+            val later = session.adjustRest(30, clock = { 1_000 })!!
             assertEquals(RestAlert.MISSED, alarm.check(later, later + 60_000))
             session.startRest(totalSec = 60, now = 200_000)
-            val clamped = session.adjustRest(-90, now = 210_000)!!
+            val clamped = session.adjustRest(-90, clock = { 210_000 })!!
             assertEquals(RestAlert.NONE, alarm.check(clamped, clamped + 60_000))
         }
     }
@@ -458,6 +462,34 @@ class ActiveSessionTest {
         session.discardWorkout(again)
         val template = assertNotNull(session.saveAsTemplate(source, "Push"))
         assertEquals(listOf("bench" to 1), store.exercisesForTemplate(template).map { it.exerciseId to it.targetSets })
+    }
+
+    /** What DataStore holds as the workout a Start Again copied ("workoutId:sourceId"), or null. */
+    private fun startedFrom(): String? = runBlocking {
+        dataStore.data.first()[stringPreferencesKey("lifts_started_from")]
+    }
+
+    @Test
+    fun `a start again's source is saved before its rows commit`() {
+        val source = finishedEvening()
+        val atCommit = mutableListOf<String?>()
+        store.onCommit = { atCommit += startedFrom() }
+        val again = assertNotNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L))
+        store.onCommit = null
+        // A kill right after the commit still leaves the source: never a saved copy Home can't tell is untouched.
+        assertEquals(listOf<String?>("$again:$source"), atCommit)
+    }
+
+    @Test
+    fun `an empty workout never takes a source left by a start again that didn't commit`() {
+        val source = finishedEvening()
+        // A Start Again saved its source under the id the next workout gets, and was killed before its rows committed.
+        runBlocking<Unit> {
+            dataStore.edit { prefs -> prefs[stringPreferencesKey("lifts_started_from")] = "${store.nextWorkoutId()}:$source" }
+        }
+        val empty = session.startEmpty(now = 5 * 24 * 3_600_000L)
+        assertNull(startedFrom())
+        assertTrue(session.discardIfUntouched(empty), "an empty workout backed out of leaves nothing")
     }
 
     @Test

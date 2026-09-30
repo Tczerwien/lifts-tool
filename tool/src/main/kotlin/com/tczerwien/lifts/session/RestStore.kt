@@ -68,13 +68,16 @@ class RestStore(private val dataStore: DataStore<Preferences>) {
     }
 
     /**
-     * Shifts the saved end by [deltaSec]; the end never moves before [now] (an over-subtraction just
+     * Shifts the saved end by [deltaSec]; the end never moves before now (an over-subtraction just
      * finishes the rest). Returns the new end, null when no rest is running or it is about to end
      * ([restAdjustable]): an ended rest stays ended, so a +30 that lands at 0:00 can't revive it.
+     * [clock] is read inside the edit, as it is applied: a save queued behind another can't be judged
+     * by the time the tap was made.
      */
-    suspend fun adjust(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? {
+    suspend fun adjust(deltaSec: Int, clock: () -> Long = System::currentTimeMillis): Long? {
         var newEnd: Long? = null
         dataStore.edit { prefs ->
+            val now = clock()
             val endMillis = prefs[REST_END_MILLIS]?.takeIf { restAdjustable(it, now) } ?: return@edit
             val adjusted = (endMillis + deltaSec * 1000L).coerceAtLeast(now)
             prefs[REST_END_MILLIS] = adjusted

@@ -110,7 +110,9 @@ class ActiveSession(
      * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
      * that name was only its time of day ([startAgainName]). Written in one transaction; any leftover
      * rest is cleared, and the source is remembered by the new workout's id, so the untouched check
-     * knows what it started as even after the app was killed. Null, starting nothing, when another
+     * knows what it started as even after the app was killed: it is saved before the rows commit, so a
+     * kill in between leaves at worst a source for a workout never saved, never a saved copy without
+     * its source (which the check would keep as touched: an empty copy to Resume). Null, starting nothing, when another
      * workout is open (only one ever is) or the source is gone or not finished (an unfinished workout
      * counts nowhere).
      */
@@ -120,12 +122,10 @@ class ActiveSession(
             if (repository.listOpenWorkouts().isNotEmpty()) return@inTransaction null
             val workoutId = repository.addWorkout(WorkoutEntity(name = startAgainName(source, now, zone), startedAt = now))
             addPlannedSlots(workoutId, planOf(source.id))
+            runBlocking { dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId" } }
             workoutId
         } ?: return null
-        runBlocking {
-            dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId" }
-            clearRest()
-        }
+        runBlocking { clearRest() }
         return workoutId
     }
 
@@ -181,6 +181,9 @@ class ActiveSession(
      * [startFromTemplate] it clears any leftover rest.
      */
     fun startEmpty(now: Long = System.currentTimeMillis()): Long {
+        // A Start Again killed before its rows committed can leave its source under the id SQLite will
+        // hand out again: an empty workout must not take it for its own.
+        runBlocking { dataStore.edit { prefs -> prefs.remove(STARTED_FROM) } }
         val workoutId = repository.addWorkout(WorkoutEntity(name = defaultWorkoutName(now, zone), startedAt = now))
         runBlocking { clearRest() }
         return workoutId
@@ -537,8 +540,8 @@ class ActiveSession(
     }
 
     /** See [RestStore.adjust]; the moved end is armed like a new rest. */
-    suspend fun adjustRest(deltaSec: Int, now: Long = System.currentTimeMillis()): Long? =
-        rest.adjust(deltaSec, now)?.also { alarm.arm(it, now) }
+    suspend fun adjustRest(deltaSec: Int, clock: () -> Long = System::currentTimeMillis): Long? =
+        rest.adjust(deltaSec, clock)?.also { alarm.arm(it, clock()) }
 
     /**
      * Saves which exercise Active Workout shows for [workoutId], so reopening after the app was
