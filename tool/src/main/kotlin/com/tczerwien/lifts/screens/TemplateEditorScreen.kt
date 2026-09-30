@@ -185,8 +185,8 @@ class TemplateEditorViewModel(
         if (name.isEmpty()) return
         mutate {
             repository.templateById(templateId)?.let { template ->
-                repository.updateTemplate(template.copy(name = name))
-            }
+                template.name != name && repository.updateTemplate(template.copy(name = name))
+            } == true
         }
     }
 
@@ -211,8 +211,8 @@ class TemplateEditorViewModel(
      */
     fun addExercise(exerciseId: String) = mutate {
         repository.inTransaction {
-            if (repository.templateById(templateId) == null) return@inTransaction
-            if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction
+            if (repository.templateById(templateId) == null) return@inTransaction false
+            if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction false
             val position =
                 (repository.exercisesForTemplate(templateId).maxOfOrNull { it.position } ?: -1) + 1
             repository.addTemplateExercise(
@@ -223,6 +223,7 @@ class TemplateEditorViewModel(
                     targetSets = DEFAULT_TARGET_SETS,
                 ),
             )
+            true
         }
     }
 
@@ -232,12 +233,13 @@ class TemplateEditorViewModel(
         mutate {
             val exercises = repository.exercisesForTemplate(templateId)
             val index = exercises.indexOfFirst { it.id == templateExerciseId }
-            val moves = reorderPositions(exercises, index, delta) { it.position } ?: return@mutate
+            val moves = reorderPositions(exercises, index, delta) { it.position } ?: return@mutate false
             repository.inTransaction {
                 moves.forEach { (exercise, position) ->
                     repository.updateTemplateExercise(exercise.copy(position = position))
                 }
             }
+            true
         }
     }
 
@@ -286,9 +288,9 @@ class TemplateEditorViewModel(
     private fun edit(templateExerciseId: Long, change: (TemplateExerciseEntity) -> TemplateExerciseEntity) {
         removeArm.disarm()
         mutate {
-            val exercise = templateExercise(templateExerciseId) ?: return@mutate
+            val exercise = templateExercise(templateExerciseId) ?: return@mutate false
             val changed = change(exercise)
-            if (changed != exercise) repository.updateTemplateExercise(changed)
+            changed != exercise && repository.updateTemplateExercise(changed)
         }
     }
 
@@ -304,10 +306,11 @@ class TemplateEditorViewModel(
         _uiState.update { it.copy(mode = Mode.Overview) }
         mutate {
             repository.inTransaction {
-                repository.deleteTemplateExercise(mode.templateExerciseId)
+                val deleted = repository.deleteTemplateExercise(mode.templateExerciseId)
                 renumber(repository.exercisesForTemplate(templateId)) { it.position }.forEach { (exercise, position) ->
                     repository.updateTemplateExercise(exercise.copy(position = position))
                 }
+                deleted
             }
         }
     }
@@ -365,13 +368,13 @@ class TemplateEditorViewModel(
     /**
      * Runs [block] and then a refresh together on the app-wide write queue (serial, survives Back),
      * so read-modify-writes never interleave and an older refresh can never land after a newer one.
-     * workouts.json holds the templates, so the exports catch up (a burst of edits folds into one or
-     * two rewrites).
+     * workouts.json holds the templates, so the exports catch up when [block] says it changed
+     * something (a stepper held at its end, or a move past the list's end, changes nothing; a burst of
+     * edits folds into one or two rewrites).
      */
-    private fun mutate(block: () -> Unit) {
+    private fun mutate(block: () -> Boolean) {
         LiftsIo.write {
-            block()
-            share.logChanged()
+            if (block()) share.logChanged()
             refresh()
         }
     }
@@ -379,8 +382,11 @@ class TemplateEditorViewModel(
     private fun refresh() {
         val template = repository.templateById(templateId)
         val settings = settingsStore.snapshot()
-        val rows = repository.exercisesForTemplate(templateId).map { exercise ->
-            val catalog = repository.exerciseById(exercise.exerciseId)
+        val exercises = repository.exercisesForTemplate(templateId)
+        // One query for every row's exercise, not one each: each stepper tap reloads.
+        val catalogById = repository.exercisesByIds(exercises.map { it.exerciseId })
+        val rows = exercises.map { exercise ->
+            val catalog = catalogById[exercise.exerciseId]
             ExerciseRow(
                 id = exercise.id,
                 name = catalog?.let(::displayName) ?: exercise.exerciseId,
