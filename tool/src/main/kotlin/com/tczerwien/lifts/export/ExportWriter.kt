@@ -95,6 +95,9 @@ class ExportWriter(
             requested.get() != servedUpTo -> Status.Preparing
             else -> Status.Idle
         }
+        // A request made just as Idle was worked out set Preparing before Idle landed over it: it is
+        // waiting for the next run, so say so (the Export screen offers REGENERATE only when Idle).
+        if (outcome == null && requested.get() != servedUpTo) _status.value = Status.Preparing
     }
 
     private fun writeAll(files: Map<String, String>) {
