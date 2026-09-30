@@ -77,10 +77,11 @@ fun setNotation(
         NotationStyle.SINGLE -> " × "
         NotationStyle.EXPORT -> "x"
     }
-    val side = if (perSide) PER_SIDE else ""
+    // After the set's marker: "25×10F/side", not "25×10/sideF".
+    val side = if (perSide && (reps != null || durationSec != null)) PER_SIDE else ""
     val amount = when {
-        reps != null -> "$reps$side"
-        durationSec != null -> "${durationSec}s$side"
+        reps != null -> "$reps"
+        durationSec != null -> "${durationSec}s"
         else -> null
     }
     val core = when {
@@ -96,6 +97,7 @@ fun setNotation(
         append(core)
         if (marked && type == TYPE_FAILURE) append('F')
         if (marked && type == TYPE_DROP) append('D')
+        append(side)
         rpe?.let {
             when (style) {
                 NotationStyle.EXPORT -> append(" @").append(plainNumber(it))

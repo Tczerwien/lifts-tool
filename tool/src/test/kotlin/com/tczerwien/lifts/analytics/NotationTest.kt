@@ -43,6 +43,10 @@ class NotationTest {
         assertEquals("×12/side", setNotation(set(reps = 12), lb, NotationStyle.LIST, perSide = true))
         assertEquals("25", setNotation(set(lb = 25.0), lb, NotationStyle.LIST, perSide = true), "no count, nothing per side")
         assertEquals("25×10", setNotation(splitSquat.copy(rpe = null), lb, NotationStyle.LIST), "both sides at once by default")
+        // The set's marker stays on the count, before the side.
+        val failed = splitSquat.copy(type = "failure", rpe = 10.0)
+        assertEquals("25×10F/side RIR0", setNotation(failed, lb, NotationStyle.LIST, perSide = true))
+        assertEquals("25x10F/side @10", setNotation(failed, lb, NotationStyle.EXPORT, perSide = true))
     }
 
     @Test
