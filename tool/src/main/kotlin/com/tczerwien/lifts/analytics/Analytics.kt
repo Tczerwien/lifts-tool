@@ -207,22 +207,35 @@ fun weeklySetsPerMuscle(
  * @property currentEpochDay epoch day of the most recent entry
  * @property weeklyAvgKg average weight per ISO week (Monday-based, UTC), one element per
  *   week ending at today's week, oldest first; null for weeks with no entry
- * @property rateKgPerWeek least-squares slope in kg/week over entries in the last
- *   28 days, null when fewer than 2 entries fall in that window
+ * @property rateKgPerWeek least-squares slope in kg/week over the entries of the last 28 days, null
+ *   unless they are enough to mean something ([TREND_MIN_ENTRIES] or more, [TREND_MIN_SPAN_DAYS] or
+ *   more days apart first to last): two weigh-ins a few days apart are water, not a trend
+ * @property rateSpanDays days from the first to the last entry the rate was worked out over, so it
+ *   can say "over 23 days" rather than claim four weeks it doesn't have; null with the rate
  */
 data class BodyweightTrend(
     val currentKg: Double,
     val currentEpochDay: Long,
     val weeklyAvgKg: List<Double?>,
     val rateKgPerWeek: Double?,
+    val rateSpanDays: Int? = null,
 )
+
+/** The rate window: the last 28 days, today included. */
+const val TREND_WINDOW_DAYS = 28
+
+/** A weekly rate needs at least this many weigh-ins in the window… */
+const val TREND_MIN_ENTRIES = 3
+
+/** …spread over at least this many days, first to last. */
+const val TREND_MIN_SPAN_DAYS = 14
 
 /**
  * Computes the [BodyweightTrend] over [entries], or null when [entries] is empty.
  *
  * [weeklyAvgKg][BodyweightTrend.weeklyAvgKg] covers the last [weeks] ISO weeks ending at
  * [todayEpochDay]'s week; entries before that window are ignored. The rate window is the
- * 28 days ending at [todayEpochDay] (inclusive).
+ * [TREND_WINDOW_DAYS] days ending at [todayEpochDay] (inclusive).
  */
 fun bodyweightTrend(
     entries: List<BodyweightEntity>,
@@ -250,8 +263,9 @@ fun bodyweightTrend(
     }
     val weeklyAvg = List(weeks) { i -> if (counts[i] > 0) sums[i] / counts[i] else null }
 
-    val window = entries.filter { it.epochDay in (todayEpochDay - 27)..todayEpochDay }
-    val rate = if (window.size < 2) {
+    val window = entries.filter { it.epochDay in (todayEpochDay - (TREND_WINDOW_DAYS - 1))..todayEpochDay }
+    val spanDays = if (window.isEmpty()) 0 else (window.maxOf { it.epochDay } - window.minOf { it.epochDay }).toInt()
+    val rate = if (window.size < TREND_MIN_ENTRIES || spanDays < TREND_MIN_SPAN_DAYS) {
         null
     } else {
         val xBar = window.sumOf { it.epochDay.toDouble() } / window.size
@@ -266,6 +280,7 @@ fun bodyweightTrend(
         currentEpochDay = latest.epochDay,
         weeklyAvgKg = weeklyAvg,
         rateKgPerWeek = rate,
+        rateSpanDays = spanDays.takeIf { rate != null },
     )
 }
 

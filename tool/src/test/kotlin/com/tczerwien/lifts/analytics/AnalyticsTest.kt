@@ -189,6 +189,62 @@ class AnalyticsTest {
         assertEquals(80.5, trend.currentKg)
     }
 
+    @Test
+    fun bodyweightTrendRateNeedsThreeEntriesSpanningTwoWeeks() {
+        // The review's case: two weigh-ins two days apart would read +3.5 lb/week.
+        val twoDays = listOf(
+            bw(id = 1, dateIso = "2026-07-11", weightKg = 82.0),
+            bw(id = 2, dateIso = "2026-07-13", weightKg = 82.5),
+        )
+        assertNull(bodyweightTrend(twoDays, todayEpochDay = day("2026-07-14"))!!.rateKgPerWeek)
+
+        // Two, however far apart: a line through two points is still two readings.
+        val twoWeeks = listOf(
+            bw(id = 1, dateIso = "2026-06-22", weightKg = 82.0),
+            bw(id = 2, dateIso = "2026-07-13", weightKg = 81.0),
+        )
+        assertNull(bodyweightTrend(twoWeeks, todayEpochDay = day("2026-07-14"))!!.rateKgPerWeek)
+
+        // Three, but only 13 days first to last: still water, not a trend.
+        val thirteenDays = listOf(
+            bw(id = 1, dateIso = "2026-06-30", weightKg = 82.0),
+            bw(id = 2, dateIso = "2026-07-06", weightKg = 82.3),
+            bw(id = 3, dateIso = "2026-07-13", weightKg = 82.5),
+        )
+        val short = bodyweightTrend(thirteenDays, todayEpochDay = day("2026-07-14"))!!
+        assertNull(short.rateKgPerWeek)
+        assertNull(short.rateSpanDays)
+
+        // Two weeks apart, first to last: a rate, and the span it covers.
+        val fourteenDays = listOf(
+            bw(id = 1, dateIso = "2026-06-29", weightKg = 82.0),
+            bw(id = 2, dateIso = "2026-07-06", weightKg = 82.5),
+            bw(id = 3, dateIso = "2026-07-13", weightKg = 83.0),
+        )
+        val trend = bodyweightTrend(fourteenDays, todayEpochDay = day("2026-07-14"))!!
+        assertEquals(0.5, trend.rateKgPerWeek!!, 1e-9)
+        assertEquals(14, trend.rateSpanDays)
+    }
+
+    @Test
+    fun bodyweightTrendSpanCountsOnlyTheWindow() {
+        // An entry from before the 28 days neither counts toward the three nor stretches the span.
+        val entries = listOf(
+            bw(id = 1, dateIso = "2026-05-01", weightKg = 84.0),
+            bw(id = 2, dateIso = "2026-06-10", weightKg = 82.0),
+            bw(id = 3, dateIso = "2026-07-01", weightKg = 81.8),
+            bw(id = 4, dateIso = "2026-07-13", weightKg = 81.4),
+        )
+        val trend = bodyweightTrend(entries, todayEpochDay = day("2026-07-14"))!!
+        assertNull(trend.rateKgPerWeek)
+
+        val later = bodyweightTrend(entries, todayEpochDay = day("2026-07-17"))!!
+        assertNull(later.rateKgPerWeek)
+
+        val inWindow = entries + bw(id = 5, dateIso = "2026-06-17", weightKg = 82.2)
+        assertEquals(26, bodyweightTrend(inWindow, todayEpochDay = day("2026-07-14"))!!.rateSpanDays)
+    }
+
     private fun day(iso: String): Long = LocalDate.parse(iso).toEpochDay()
 
     private fun bw(id: Long, dateIso: String, weightKg: Double) =

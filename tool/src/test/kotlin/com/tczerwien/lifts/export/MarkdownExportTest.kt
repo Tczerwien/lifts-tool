@@ -15,7 +15,7 @@ class MarkdownExportTest {
     @Test
     fun frontMatterIsFirstAndComplete() {
         assertTrue(markdown.startsWith("---\n"), "front matter must open the file")
-        assertContains(lines, "schema_version: \"2.2\"")
+        assertContains(lines, "schema_version: \"2.3\"")
         assertContains(lines, "exported_at: ${ExportFixtures.EXPORTED_AT}")
         assertContains(lines, "units:")
         assertContains(lines, "  weight: kg")
@@ -62,8 +62,8 @@ class MarkdownExportTest {
     fun bodyweightSubsectionIsExact() {
         assertContains(lines, "### Bodyweight")
         assertContains(lines, "- Current: 80.5 kg (2026-07-13)")
-        // Least-squares over the five entries of 2026-06-17..07-14: -0.3034 kg/week.
-        assertContains(lines, "- Rate: -0.30 kg/week over last 4 weeks")
+        // Least-squares over the five entries of 2026-06-17..07-14 (06-18 to 07-13): -0.3034 kg/week.
+        assertContains(lines, "- Rate: -0.30 kg/week over 25 days of weigh-ins")
         // Em-dash for the three empty leading weeks and the 2026-06-29 gap week.
         assertContains(lines, "- Weekly average, weeks starting 2026-05-25 … 2026-07-13 (oldest → newest): —, —, —, 81.9, 81.6, —, 81.1, 80.5")
     }
@@ -87,12 +87,13 @@ class MarkdownExportTest {
     fun bodyweightRateIsSignedWhenPositive() {
         val gaining = ExportFixtures.snapshot(
             bodyweight = listOf(
-                BodyweightEntity(id = 1, epochDay = LocalDate.parse("2026-07-06").toEpochDay(), weightKg = 80.0),
-                BodyweightEntity(id = 2, epochDay = LocalDate.parse("2026-07-13").toEpochDay(), weightKg = 80.25),
+                BodyweightEntity(id = 1, epochDay = LocalDate.parse("2026-06-29").toEpochDay(), weightKg = 80.0),
+                BodyweightEntity(id = 2, epochDay = LocalDate.parse("2026-07-06").toEpochDay(), weightKg = 80.25),
+                BodyweightEntity(id = 3, epochDay = LocalDate.parse("2026-07-13").toEpochDay(), weightKg = 80.5),
             ),
         )
 
-        assertContains(MarkdownExport.render(gaining).split("\n"), "- Rate: +0.25 kg/week over last 4 weeks")
+        assertContains(MarkdownExport.render(gaining).split("\n"), "- Rate: +0.25 kg/week over 14 days of weigh-ins")
     }
 
     @Test

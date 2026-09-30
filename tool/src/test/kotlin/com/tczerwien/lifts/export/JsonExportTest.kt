@@ -70,7 +70,8 @@ class JsonExportTest {
             "profile.equipment.bars[].weight_kg", "profile.goals", "profile.injuries",
             "schema_version",
             "summary", "summary.bodyweight", "summary.bodyweight.current_date", "summary.bodyweight.current_kg",
-            "summary.bodyweight.rate_kg_per_week_4w", "summary.bodyweight.weekly_avg_kg",
+            "summary.bodyweight.rate_kg_per_week_4w", "summary.bodyweight.rate_span_days",
+            "summary.bodyweight.weekly_avg_kg",
             "summary.e1rm_trend", "summary.e1rm_trend.block_days", "summary.e1rm_trend.block_starts",
             "summary.e1rm_trend.lifts", "summary.e1rm_trend.lifts[].best_e1rm_kg", "summary.e1rm_trend.lifts[].exercise_id",
             "summary.e1rm_trend.lifts[].name",
@@ -113,7 +114,7 @@ class JsonExportTest {
 
     @Test
     fun topLevelFields() {
-        assertEquals("2.2", decoded.schemaVersion)
+        assertEquals("2.3", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals(JsonUnits(weight = "kg", display = "kg"), decoded.units)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)
@@ -240,6 +241,7 @@ class JsonExportTest {
         assertEquals("2026-07-13", bodyweight.currentDate)
         // Least-squares over the five entries of 2026-06-17..07-14.
         assertEquals(-0.3034497090606799, assertNotNull(bodyweight.rateKgPerWeek4w), 1e-9)
+        assertEquals(25, bodyweight.rateSpanDays, "2026-06-18 to 07-13")
         assertEquals(8, bodyweight.weeklyAvgKg.size)
         assertNull(bodyweight.weeklyAvgKg[0], "week without entries must decode as null")
         assertNull(bodyweight.weeklyAvgKg[5], "the gap week must stay null")

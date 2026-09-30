@@ -55,7 +55,7 @@ import kotlinx.coroutines.launch
 /** Stepper row width: the design's 16gu left "182.4" 1px short of room between the targets, which hid the last digit. */
 private const val STEPPER_WIDTH_UNITS = 19f
 
-/** Trend copy window; the analytics rate itself is a fixed 28-day least-squares slope. */
+/** Weeks of weekly averages asked for; the rate itself is a 28-day least-squares slope ([bodyweightTrend]). */
 private const val TREND_WEEKS = 4
 
 /** Entries shown in the Recent list. */
@@ -78,7 +78,7 @@ class BodyweightViewModel(
         val unit: WeightUnit = SettingsStore.DEFAULT_UNITS,
         /** Stepper value in display units, rounded to 0.1. */
         val valueDisplay: Double = 0.0,
-        /** "+0.5 lb/week over last 4 weeks", null without enough data. */
+        /** "+0.5 lb/week over 23 days", null without enough data ([bodyweightTrend]). */
         val rateText: String? = null,
         val recent: List<RecentRow> = emptyList(),
     ) {
@@ -157,7 +157,7 @@ class BodyweightViewModel(
             unit = unit,
             valueDisplay = startDisplay,
             rateText = trend?.rateKgPerWeek?.let { rate ->
-                "${signedRate(rate, unit)} ${unit.suffix}/week over last $TREND_WEEKS weeks"
+                "${signedRate(rate, unit)} ${unit.suffix}/week over ${trend.rateSpanDays ?: 0} days"
             },
             recent = recent,
         )

@@ -125,7 +125,8 @@ object MarkdownExport {
             append(' ').append(unit.suffix).append(" (").append(bodyweight.currentDateIso).append(")\n")
             bodyweight.rateKgPerWeek?.let {
                 append("- Rate: ").append(ExportFormat.signed2(Format.kgToDisplay(it, unit)))
-                append(' ').append(unit.suffix).append("/week over last 4 weeks\n")
+                append(' ').append(unit.suffix).append("/week over ").append(bodyweight.rateSpanDays ?: 0)
+                append(" days of weigh-ins\n")
             }
             // Names its weeks itself: the weekly sets, which also list them, are left out without working sets.
             append("- Weekly average, weeks starting ").append(snapshot.weekStarts.first()).append(" … ")

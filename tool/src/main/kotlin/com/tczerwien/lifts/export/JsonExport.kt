@@ -28,6 +28,9 @@ import kotlinx.serialization.json.Json
  * 2.2 (B9) added exercises[].type, Hevy's exercise types: weight_reps, reps_only, bodyweight_reps
  * (weighted bodyweight: weight_kg is what was added), bodyweight_assisted_reps (weight_kg is the help,
  * negative) and duration (duration_seconds). An RPE is logged as reps in reserve: rpe = 10 − RIR.
+ *
+ * 2.3 (B10) added summary.bodyweight.rate_span_days (the rate now needs 3 weigh-ins 14+ days apart
+ * in the last 28 days, and says how many days it covers).
  */
 object JsonExport {
 
@@ -134,6 +137,7 @@ object JsonExport {
                         currentKg = it.currentKg,
                         currentDate = it.currentDateIso,
                         rateKgPerWeek4w = it.rateKgPerWeek,
+                        rateSpanDays = it.rateSpanDays,
                         weeklyAvgKg = it.weeklyAvgKg,
                     )
                 },
@@ -305,7 +309,10 @@ data class JsonLiftTrend(
 data class JsonBodyweightSummary(
     @SerialName("current_kg") val currentKg: Double,
     @SerialName("current_date") val currentDate: String,
+    /** Over the last 28 days; absent with fewer than 3 weigh-ins there, or under 14 days apart. */
     @SerialName("rate_kg_per_week_4w") val rateKgPerWeek4w: Double? = null,
+    /** Days from the first to the last weigh-in the rate covers. */
+    @SerialName("rate_span_days") val rateSpanDays: Int? = null,
     /** One per week_starts week, oldest first; null for weeks with no entry. */
     @SerialName("weekly_avg_kg") val weeklyAvgKg: List<Double?>,
 )

@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones. */
-const val EXPORT_SCHEMA_VERSION = "2.2"
+const val EXPORT_SCHEMA_VERSION = "2.3"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -89,8 +89,10 @@ data class SnapshotBodyweightTrend(
     val currentDateIso: String,
     /** [WEEKLY_SUMMARY_WEEKS] ISO-week averages, oldest first; null for weeks with no entry. */
     val weeklyAvgKg: List<Double?>,
-    /** Least-squares slope over the last 28 days; null with fewer than 2 entries there. */
+    /** Least-squares slope over the last 28 days; null with fewer than 3 entries there, or under 14 days apart. */
     val rateKgPerWeek: Double?,
+    /** Days from the first to the last weigh-in the rate covers; null with the rate. */
+    val rateSpanDays: Int? = null,
 )
 
 data class SnapshotExercise(
@@ -395,6 +397,7 @@ fun buildSnapshot(
                 currentDateIso = LocalDate.ofEpochDay(it.currentEpochDay).toString(),
                 weeklyAvgKg = it.weeklyAvgKg,
                 rateKgPerWeek = it.rateKgPerWeek,
+                rateSpanDays = it.rateSpanDays,
             )
         }
 
