@@ -74,7 +74,6 @@ object RestorePlan {
      */
     fun problems(rows: LiftsRows): List<String> = buildList {
         if (rows.exercises.isEmpty()) add("it has no exercises at all")
-        val exerciseIds = rows.exercises.map { it.id }.toSet()
         val workoutIds = rows.workouts.map { it.id }.toSet()
         val slotIds = rows.workoutExercises.map { it.id }.toSet()
         val templateIds = rows.templates.map { it.id }.toSet()
@@ -84,11 +83,9 @@ object RestorePlan {
         report(rows.workoutExercises.count { it.workoutId !in workoutIds }, "exercise slots with no workout")
         report(rows.sets.count { it.workoutExerciseId !in slotIds }, "sets with no exercise slot")
         report(rows.templateExercises.count { it.templateId !in templateIds }, "template rows with no template")
-        report(
-            rows.workoutExercises.count { it.exerciseId !in exerciseIds } +
-                rows.templateExercises.count { it.exerciseId !in exerciseIds },
-            "rows naming a missing exercise",
-        )
+        // A slot or template row naming an exercise that isn't there breaks no key (exerciseId has
+        // none), and every screen shows it as an unknown exercise: refusing the whole log for it would
+        // lose everything else in it.
         val badIds = rows.workouts.count { it.id <= 0 } + rows.workoutExercises.count { it.id <= 0 } +
             rows.sets.count { it.id <= 0 } + rows.templates.count { it.id <= 0 } +
             rows.templateExercises.count { it.id <= 0 } + rows.bodyweight.count { it.id <= 0 } +

@@ -112,11 +112,19 @@ class RestorePlanTest {
                 "exercise slots with no workout: 1",
                 "sets with no exercise slot: 1",
                 "template rows with no template: 1",
-                "rows naming a missing exercise: 1",
                 "rows with no id: 1",
             ),
             RestorePlan.problems(broken),
         )
+    }
+
+    @Test
+    fun `a slot or template row naming a missing exercise doesn't refuse the log`() {
+        val orphan = rows.copy(
+            workoutExercises = rows.workoutExercises + WorkoutExerciseEntity(id = 14, workoutId = 1, exerciseId = "custom-gone", position = 1),
+            templateExercises = rows.templateExercises + TemplateExerciseEntity(id = 2, templateId = 1, exerciseId = "custom-gone", position = 1, targetSets = 3),
+        )
+        assertEquals(emptyList(), RestorePlan.problems(orphan))
     }
 
     @Test
