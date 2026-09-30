@@ -409,12 +409,12 @@ class SessionLogicTest {
 
     @Test
     fun `an empty workout with no exercises is untouched`() {
-        assertTrue(isUntouched(workout(), emptyList(), emptyList(), planned = null))
+        assertTrue(isUntouched(workout(), emptyList(), emptyList(), planned = { null }))
     }
 
     @Test
     fun `adding an exercise to an empty workout touches it`() {
-        assertFalse(isUntouched(workout(), listOf(slot(id = 1)), listOf(set(id = 1)), planned = null))
+        assertFalse(isUntouched(workout(), listOf(slot(id = 1)), listOf(set(id = 1)), planned = { null }))
     }
 
     @Test
@@ -422,7 +422,7 @@ class SessionLogicTest {
         // Last session's warm-up is part of the start, so it doesn't make the workout look touched.
         assertEquals(SET_TYPE_WARMUP, benchAndSquatPlan.first().types.first())
         val (slots, sets) = startedFrom(benchAndSquatPlan)
-        assertTrue(isUntouched(workout(templateId = 7), slots, sets, benchAndSquatPlan))
+        assertTrue(isUntouched(workout(templateId = 7), slots, sets, { benchAndSquatPlan }))
     }
 
     @Test
@@ -437,21 +437,31 @@ class SessionLogicTest {
         )
         for (edit in changed) {
             val edited = sets.map { if (it.id == first.id) edit else it }
-            assertFalse(isUntouched(workout(templateId = 7), slots, edited, benchAndSquatPlan), "$edit")
+            assertFalse(isUntouched(workout(templateId = 7), slots, edited, { benchAndSquatPlan }), "$edit")
         }
         val extraSet = sets + set(id = 99, slotId = slots.first().id, position = 3)
-        assertFalse(isUntouched(workout(templateId = 7), slots, extraSet, benchAndSquatPlan))
-        assertFalse(isUntouched(workout(templateId = 7, notes = "felt heavy"), slots, sets, benchAndSquatPlan))
+        assertFalse(isUntouched(workout(templateId = 7), slots, extraSet, { benchAndSquatPlan }))
+        assertFalse(isUntouched(workout(templateId = 7, notes = "felt heavy"), slots, sets, { benchAndSquatPlan }))
+    }
+
+    @Test
+    fun `a note, a new name or a logged value decide before the plan is worked out`() {
+        val (slots, sets) = startedFrom(benchAndSquatPlan)
+        val notNeeded = { error("the template's plan is read only when nothing cheaper decides") }
+        assertFalse(isUntouched(workout(templateId = 7, notes = "felt heavy"), slots, sets, notNeeded))
+        assertFalse(isUntouched(workout(templateId = 7), slots.map { it.copy(notes = "belt") }, sets, notNeeded))
+        assertFalse(isUntouched(workout(templateId = 7).copy(name = "Heavy"), slots, sets, notNeeded, startName = "Upper A"))
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets.map { it.copy(reps = 8) }, notNeeded))
     }
 
     @Test
     fun `a removed exercise or a template edited since the start counts as touched`() {
         val (slots, sets) = startedFrom(benchAndSquatPlan)
         val withoutSquat = slots.filter { it.exerciseId != "squat" }
-        assertFalse(isUntouched(workout(templateId = 7), withoutSquat, sets, benchAndSquatPlan))
+        assertFalse(isUntouched(workout(templateId = 7), withoutSquat, sets, { benchAndSquatPlan }))
         val templateNow = benchAndSquat.map { if (it.exerciseId == "squat") it.copy(targetSets = 5) else it }
-        assertFalse(isUntouched(workout(templateId = 7), slots, sets, planTemplate(templateNow, benchLastTime)))
-        assertFalse(isUntouched(workout(templateId = 7), slots, sets, emptyList()), "template deleted")
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets, { planTemplate(templateNow, benchLastTime) }))
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets, { emptyList() }), "template deleted")
     }
 
     @Test
@@ -459,13 +469,13 @@ class SessionLogicTest {
         val plan = benchAndSquatPlan.map { it.copy(targetRepMin = 6, targetRepMax = 12, targetRir = 1) }
         val (slots, sets) = startedFrom(plan)
         val asStarted = slots.map { it.copy(targetRepMin = 6, targetRepMax = 12, targetRir = 1) }
-        assertTrue(isUntouched(workout(templateId = 7), asStarted, sets, plan))
+        assertTrue(isUntouched(workout(templateId = 7), asStarted, sets, { plan }))
         for (edit in listOf(
             asStarted[0].copy(targetRepMin = 8),
             asStarted[0].copy(targetRepMax = 15),
             asStarted[0].copy(targetRir = null),
         )) {
-            assertFalse(isUntouched(workout(templateId = 7), listOf(edit) + asStarted.drop(1), sets, plan), "$edit")
+            assertFalse(isUntouched(workout(templateId = 7), listOf(edit) + asStarted.drop(1), sets, { plan }), "$edit")
         }
     }
 

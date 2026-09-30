@@ -481,10 +481,12 @@ class ActiveSession(
             workout = workout,
             slots = repository.exercisesForWorkout(workout.id),
             sets = sets,
-            planned = workout.templateId?.let { templateId ->
-                val templateExercises = repository.exercisesForTemplate(templateId)
-                planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
-            } ?: source?.let { planOf(it.id) },
+            planned = {
+                workout.templateId?.let { templateId ->
+                    val templateExercises = repository.exercisesForTemplate(templateId)
+                    planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
+                } ?: source?.let { planOf(it.id) }
+            },
             // A name or a rest he set from the "…" menu is his: Back must not throw it away.
             startName = workout.templateId?.let { repository.templateById(it)?.name }
                 ?: source?.let { startAgainName(it, workout.startedAt, zone) }
