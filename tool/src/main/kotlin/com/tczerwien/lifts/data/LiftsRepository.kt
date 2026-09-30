@@ -331,6 +331,22 @@ class LiftsRepository private constructor(
     /** Every row of every table (the phone's side of a restore's summary). */
     fun readAll(): LiftsRows = readAll(db)
 
+    /** [readAll] with every exercise's instructions left empty, in one transaction: what the exports read. */
+    fun readForExport(): LiftsRows = db.runInTransaction<LiftsRows> {
+        with(db.bulkDao) {
+            LiftsRows(
+                exercises = exercisesWithoutInstructions(),
+                workouts = workouts(),
+                workoutExercises = workoutExercises(),
+                sets = sets(),
+                templates = templates(),
+                templateExercises = templateExercises(),
+                bodyweight = bodyweight(),
+                bars = bars(),
+            )
+        }
+    }
+
     /**
      * Replaces every row of every table with [rows], ids included, in one transaction: a failure (a
      * row that breaks a foreign key, say) leaves the database exactly as it was. Children are

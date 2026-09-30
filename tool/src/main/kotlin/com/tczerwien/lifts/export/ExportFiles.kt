@@ -7,13 +7,13 @@ import java.time.ZoneId
 
 /**
  * The export files for everything in [repository], by file name. Every table is read in one read
- * transaction ([LiftsRepository.readAll]) on the write lane, so the files agree with each other and
+ * transaction ([LiftsRepository.readForExport], no instructions) on the write lane, so the files agree with each other and
  * include every save made before the request, even the few made off the lane; the files are then
  * built off the lane, so a long history never holds up a tick. Storage is canonical kg and the
  * generators own all formatting.
  */
 suspend fun renderExports(repository: LiftsRepository, settings: SettingsStore): Map<String, String> {
-    val (rows, unit) = LiftsIo.inLane { repository.readAll() to settings.snapshot().units }
+    val (rows, unit) = LiftsIo.inLane { repository.readForExport() to settings.snapshot().units }
     val snapshot = buildSnapshot(
         rows = rows,
         exportedAtMillis = System.currentTimeMillis(),

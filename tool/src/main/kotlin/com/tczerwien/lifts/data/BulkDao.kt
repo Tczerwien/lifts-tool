@@ -13,6 +13,16 @@ interface BulkDao {
     @Query("SELECT * FROM exercises ORDER BY id")
     fun exercises(): List<ExerciseEntity>
 
+    /**
+     * Every exercise with its instructions left empty: the exports never show them, and they are most
+     * of the catalog's text (873 JSON lists to decode on every export run).
+     */
+    @Query(
+        "SELECT id, name, equipment, primaryMuscles, secondaryMuscles, category, level, '' AS instructions, " +
+            "isCustom, pinnedNote, trackingType, perSide, hidden FROM exercises ORDER BY id"
+    )
+    fun exercisesWithoutInstructions(): List<ExerciseEntity>
+
     @Query("SELECT * FROM workouts ORDER BY id")
     fun workouts(): List<WorkoutEntity>
 
