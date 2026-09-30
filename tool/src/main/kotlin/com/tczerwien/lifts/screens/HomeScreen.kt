@@ -262,7 +262,8 @@ class HomeViewModel(
 /**
  * Home (design/screens/home.html): start a template, an empty workout, or resume; two
  * most recent finished workouts; bottom bar to History / Bodyweight / Consistency /
- * Settings. Top-bar right (pencil) manages templates. Only one workout is ever open: while
+ * Settings. The last Start row, "Templates" ("Create a Template" before he has one), manages
+ * templates: a pencil there hid them from a first-time user, and meant "edit" everywhere else. Only one workout is ever open: while
  * one is, a Start row offers to resume it or (two taps) discard it and start. On a cold
  * start with a workout used in the last two hours, Home opens it straight away.
  */
@@ -328,13 +329,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
-                LightTopBar(
-                    center = LightTopBarCenter.Text("LIFTS"),
-                    rightButton = LightBarButton.LightIcon(
-                        icon = LightIcons.PENCIL,
-                        onClick = { navigateTo(::TemplatesScreen) },
-                    ),
-                )
+                LightTopBar(center = LightTopBarCenter.Text("LIFTS"))
 
                 LightScrollView(
                     modifier = Modifier
@@ -398,7 +393,7 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                             },
                             right = {
                                 LightText(
-                                    text = "${template.exerciseCount} exercises",
+                                    text = Format.count(template.exerciseCount, "exercise"),
                                     variant = LightTextVariant.Detail,
                                     lighten = true,
                                     maxLines = 1,
@@ -422,6 +417,20 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                         right = { LightIcon(icon = LightIcons.ADD, size = 1.6f) },
                     )
                     choiceUnder(null)
+                    RowDivider()
+                    // Where templates are made and changed; until he has one, what to do first.
+                    LiftsListRow(
+                        onClick = { navigateTo(::TemplatesScreen) },
+                        left = {
+                            LightText(
+                                text = if (uiState.ready && uiState.templates.isEmpty()) "Create a Template" else "Templates",
+                                variant = LightTextVariant.Copy,
+                                lighten = true,
+                                maxLines = 1,
+                            )
+                        },
+                        right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.2f) },
+                    )
 
                     if (uiState.recent.isNotEmpty()) {
                         SectionLabel("Recent")
