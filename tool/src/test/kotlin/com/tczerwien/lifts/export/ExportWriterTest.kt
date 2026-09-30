@@ -54,6 +54,14 @@ class ExportWriterTest {
     }
 
     @Test
+    fun `a request waits what is left of the settle time, never more`() {
+        assertEquals(0L, ExportWriter.settleWait(1_000, now = 10_000, lastRunEnded = 5_000), "after a quiet spell: at once")
+        assertEquals(600L, ExportWriter.settleWait(1_000, now = 10_400, lastRunEnded = 10_000), "close behind a run")
+        // The clock set back an hour after the run: not an hour's wait.
+        assertEquals(1_000L, ExportWriter.settleWait(1_000, now = 10_000 - 3_600_000, lastRunEnded = 10_000))
+    }
+
+    @Test
     fun `a run writes every file and leaves no temp file behind`() = runBlocking {
         val writer = ExportWriter(dir, scope) { mapOf("a.md" to "one", "b.csv" to "two") }
         writer.request()

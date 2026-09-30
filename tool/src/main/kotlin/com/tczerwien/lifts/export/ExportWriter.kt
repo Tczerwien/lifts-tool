@@ -63,7 +63,7 @@ class ExportWriter(
             for (request in requests) {
                 // Straight away after a quiet spell (Finish's run starts at once); a request close behind
                 // a run waits for the rest of the burst, and the ones made meanwhile are served by it.
-                val wait = settleMillis - (System.currentTimeMillis() - lastRunEnded)
+                val wait = settleWait(settleMillis, System.currentTimeMillis(), lastRunEnded)
                 if (wait > 0) {
                     delay(wait)
                     requests.tryReceive()
@@ -121,6 +121,14 @@ class ExportWriter(
     private fun tempFor(name: String) = File(dir, ".$name.tmp")
 
     companion object {
+        /**
+         * How long a request at [now] waits for the rest of a burst, the last run having ended at
+         * [lastRunEnded]: what is left of [settleMillis], never more. A clock set back after a run
+         * would otherwise hold the next one for as long as the jump.
+         */
+        internal fun settleWait(settleMillis: Long, now: Long, lastRunEnded: Long): Long =
+            (settleMillis - (now - lastRunEnded)).coerceIn(0L, settleMillis)
+
         /** How long a run waits for more requests: short, so the files are rarely behind. */
         const val SETTLE_MS = 1_000L
 
