@@ -202,8 +202,10 @@ class ExerciseDetailViewModel(
      * changing under an open workout, so its cached history is dropped ([HistoryVersion]).
      */
     fun chooseType(tracking: Tracking) {
+        aboutFloor.saveQueued()
         _uiState.update { it.copy(pickingType = false, tracking = tracking) }
         LiftsIo.write({ repository.setTracking(exerciseId, tracking) }) { changed ->
+            aboutFloor.saveLanded()
             if (changed) {
                 HistoryVersion.bump()
                 share.logChanged()
@@ -264,6 +266,9 @@ class ExerciseDetailViewModel(
      * on screen (the one just saved) stands ([ReloadFloor]).
      */
     private val noteFloor = ReloadFloor()
+
+    /** [noteFloor] for About's Type, Per Side and Show: a reload that read before their save can't put them back. */
+    private val aboutFloor = ReloadFloor()
 
     /**
      * Renames the exercise ([renameTarget]): the new name shows everywhere, exports included, over any
@@ -327,8 +332,10 @@ class ExerciseDetailViewModel(
         val state = _uiState.value
         if (!state.loaded) return
         val perSide = !state.perSide
+        aboutFloor.saveQueued()
         _uiState.update { it.copy(perSide = perSide) }
         LiftsIo.write({ repository.setPerSide(exerciseId, perSide) }) { changed ->
+            aboutFloor.saveLanded()
             if (changed) share.logChanged()
             refresh()
         }
@@ -337,8 +344,10 @@ class ExerciseDetailViewModel(
     /** About's "Show in picker": a hidden exercise of his goes back into the picker (workouts.json marks it). */
     fun showInPicker() {
         if (!_uiState.value.hidden) return
+        aboutFloor.saveQueued()
         _uiState.update { it.copy(hidden = false) }
         LiftsIo.write({ repository.setExerciseHidden(exerciseId, hidden = false) }) { changed ->
+            aboutFloor.saveLanded()
             if (changed) share.logChanged()
             refresh()
         }
@@ -356,6 +365,7 @@ class ExerciseDetailViewModel(
 
     private fun refresh() {
         val reload = noteFloor.reloadStarted()
+        val aboutReload = aboutFloor.reloadStarted()
         val exercise = repository.exerciseById(exerciseId)
         val unit = settings.snapshot().units
         val tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS
@@ -395,20 +405,22 @@ class ExerciseDetailViewModel(
         val records = recordsFor(perWorkout.filterNot { it.inProgress }.flatMap { it.sets }, unit, tracking, perSide)
         // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
         _uiState.update { state ->
+            // A Type, Per Side or Show tapped while this read stands until its save is read back.
+            val keepAbout = aboutFloor.keepsShown(aboutReload)
             state.copy(
                 name = exercise?.let(::displayName) ?: "Exercise",
-                tracking = tracking,
+                tracking = if (keepAbout) state.tracking else tracking,
                 pinnedNote = if (noteFloor.keepsShown(reload)) state.pinnedNote else exercise?.pinnedNote,
                 instructions = exercise?.instructions ?: emptyList(),
                 history = history,
                 records = records,
                 loaded = true,
                 isCustom = exercise?.isCustom == true,
-                perSide = exercise?.perSide == true,
+                perSide = if (keepAbout) state.perSide else exercise?.perSide == true,
                 musclesAndEquipment = listOfNotNull(exercise?.primaryMuscles?.firstOrNull(), exercise?.equipment)
                     .joinToString(" · ") { titleCaseLabel(it) }
                     .ifEmpty { "—" },
-                hidden = exercise?.hidden == true,
+                hidden = if (keepAbout) state.hidden else exercise?.hidden == true,
             )
         }
     }
