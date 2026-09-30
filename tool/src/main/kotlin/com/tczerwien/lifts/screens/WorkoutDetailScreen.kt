@@ -144,6 +144,12 @@ class WorkoutDetailViewModel(
     /** A delete is under way: rows and the pencil do nothing until it lands and the screen leaves. */
     val busyDeleting: Boolean get() = deleting
 
+    /**
+     * A Start Again or Save as Template is on its way: rows do nothing, so nothing lands on top of this
+     * screen before Active Workout (whose finish pops this screen through its callback).
+     */
+    val busyStarting: Boolean get() = starting
+
     override fun onBackPressed(): Boolean {
         // Leaving because the workout is gone: an armed trash or an open editor must not swallow it.
         if (deleting || _uiState.value.gone) return false
@@ -255,8 +261,9 @@ class WorkoutDetailViewModel(
     }
 
     fun startEditNotes() {
-        // Not before the note has loaded: the editor would open blank and SUBMIT replace it.
-        if (deleting || !_uiState.value.loaded) return
+        // Not before the note has loaded: the editor would open blank and SUBMIT replace it. Not while a
+        // Start Again is being checked: its callback's goBack would close the editor, not this screen.
+        if (deleting || starting || !_uiState.value.loaded) return
         deleteArm.disarm()
         _uiState.update {
             it.copy(editingNotes = true, notesEditSession = it.notesEditSession + 1)
@@ -476,7 +483,7 @@ class WorkoutDetailScreen(
                                         .fillMaxWidth()
                                         .lightClickable {
                                             // Not while our own delete lands: its goBack would pop that screen instead.
-                                            if (!viewModel.busyDeleting) {
+                                            if (!viewModel.busyDeleting && !viewModel.busyStarting) {
                                                 navigateTo({ ExerciseDetailScreen(it, exerciseId = block.exerciseId) })
                                             }
                                         }
