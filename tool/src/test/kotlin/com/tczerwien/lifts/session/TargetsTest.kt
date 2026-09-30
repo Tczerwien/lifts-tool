@@ -161,6 +161,13 @@ class TargetsTest {
         assertEquals(HINT_ADD_LOAD, progressionHint(Tracking.WEIGHTED_BODYWEIGHT, 12, listOf(done(SET_TYPE_NORMAL, 10.0, 12))))
     }
 
+    @Test
+    fun `an assisted lift already done without help has no help to take away`() {
+        assertNull(progressionHint(Tracking.ASSISTED_BODYWEIGHT, 12, listOf(done(SET_TYPE_NORMAL, null, 12), done(SET_TYPE_NORMAL, 0.0, 12))))
+        // One set of the two without help: the next step isn't less help either.
+        assertNull(progressionHint(Tracking.ASSISTED_BODYWEIGHT, 12, listOf(done(SET_TYPE_NORMAL, -9.1, 12), done(SET_TYPE_NORMAL, null, 12))))
+    }
+
     // --- Template list line ---
 
     @Test

@@ -113,6 +113,7 @@ const val HINT_LESS_HELP = "LESS HELP"
  * no load to add (reps only, a hold), or today's work rows ([todayWeightsKg], what each would log)
  * already start heavier than last time's heaviest: he has added the load. On an assisted exercise,
  * less help is the load ([HINT_LESS_HELP]); weights are stored signed, so "heavier" means that too.
+ * With no help left to take away (a set last time done without any), there is no cue.
  * RIR plays no part: it isn't logged reliably enough to hold a cue back.
  */
 fun progressionHint(
@@ -126,6 +127,7 @@ fun progressionHint(
     val work = lastTime.filter { it.completedAt != null && it.type != SET_TYPE_WARMUP && it.type != SET_TYPE_DROP }
     if (work.isEmpty() || work.any { (it.reps ?: 0) < repMax }) return null
     val lastHeaviest = work.maxOf { it.weightKg ?: 0.0 }
+    if (tracking == Tracking.ASSISTED_BODYWEIGHT && lastHeaviest >= 0.0) return null
     val todayHeaviest = todayWeightsKg.filterNotNull().maxOrNull()
     if (todayHeaviest != null && todayHeaviest > lastHeaviest + WEIGHT_EPSILON_KG) return null
     return if (tracking == Tracking.ASSISTED_BODYWEIGHT) HINT_LESS_HELP else HINT_ADD_LOAD
