@@ -67,8 +67,9 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
  * derived from wall-clock timestamps; each ticks in its own small composable, once a second,
  * and only while the app is in the foreground ([rememberSecondClock]).
  *
- * Constructor contract (FROZEN): [workoutId] resumes; else [templateId] creates the
- * session from a template inside this screen; both null starts an empty workout.
+ * Constructor contract (FROZEN; [fromWorkoutId] added in B10 with a default): [workoutId] resumes; else
+ * [templateId] creates the session from a template inside this screen; else [fromWorkoutId] starts a
+ * past workout again (Workout Detail); all null starts an empty workout.
  */
 class ActiveWorkoutScreen(
     private val sealedActivity: SealedLightActivity,
@@ -76,6 +77,8 @@ class ActiveWorkoutScreen(
     private val workoutId: Long? = null,
     /** Create a new session from this template; null with null [workoutId] = empty workout. */
     private val templateId: Long? = null,
+    /** Create a new session with this finished workout's exercises and set pattern ("Start again"). */
+    private val fromWorkoutId: Long? = null,
 ) : LightScreen<Unit, ActiveWorkoutViewModel>(sealedActivity) {
 
     private val repository = lightContext.liftsRepository()
@@ -90,7 +93,7 @@ class ActiveWorkoutScreen(
         get() = ActiveWorkoutViewModel::class.java
 
     override fun createViewModel() =
-        ActiveWorkoutViewModel(repository, session, settingsStore, share, workoutId, templateId)
+        ActiveWorkoutViewModel(repository, session, settingsStore, share, workoutId, templateId, fromWorkoutId)
 
     @Composable
     override fun Content() {

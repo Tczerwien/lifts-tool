@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
@@ -29,6 +31,8 @@ import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
+import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
+import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
@@ -37,6 +41,9 @@ import com.tczerwien.lifts.ui.ArmedAction
 import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
+import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.RowDivider
+import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.SetLine
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
@@ -47,6 +54,7 @@ import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
+import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
@@ -60,10 +68,13 @@ import com.thelightphone.sdk.ui.lightClickable
 import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class WorkoutDetailViewModel(
@@ -71,6 +82,7 @@ class WorkoutDetailViewModel(
     private val settings: SettingsStore,
     private val share: LiftsShare,
     private val workoutId: Long,
+    private val session: ActiveSession,
 ) : LightViewModel<Unit>() {
 
     /**
@@ -89,10 +101,14 @@ class WorkoutDetailViewModel(
         /** "182.4 lb", or "182.4 lb (Sep 11)" from an earlier day ([workoutBodyweight]); null without one. */
         val bodyweightText: String? = null,
         val editingNotes: Boolean = false,
+        /** "Save as template" is asking for the template's name. */
+        val namingTemplate: Boolean = false,
         /** The workout was deleted while this screen was underneath another one: it leaves. */
         val gone: Boolean = false,
         /** Bumped per edit session so the editor state resets. */
         val notesEditSession: Int = 0,
+        /** A moment's note above the bottom bar: why Start again didn't start. */
+        val hint: String? = null,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -128,6 +144,10 @@ class WorkoutDetailViewModel(
             cancelEditNotes()
             return true
         }
+        if (_uiState.value.namingTemplate) {
+            _uiState.update { it.copy(namingTemplate = false) }
+            return true
+        }
         if (deleteArm.armed.value) {
             deleteArm.disarm()
             return true
@@ -145,6 +165,69 @@ class WorkoutDetailViewModel(
         LiftsIo.write({ repository.deleteWorkout(workoutId) }) {
             share.workoutDeleted()
             withContext(Dispatchers.Main) { if (!cleared) onDeleted() }
+        }
+    }
+
+    /** A Start again or Save as template is on its way: a second tap waits for it. */
+    @Volatile
+    private var starting = false
+
+    private var hintJob: Job? = null
+
+    /**
+     * "Start again": a new workout with these exercises and this set pattern ([ActiveSession.startFromWorkout],
+     * which Active Workout runs as it opens). Only one workout is ever open, so with another one open it
+     * says so for a moment instead; the check waits its turn on the write lane, behind anything queued.
+     */
+    fun tapStartAgain(onStart: () -> Unit) {
+        if (deleting || starting || !_uiState.value.loaded) return
+        deleteArm.disarm()
+        starting = true
+        LiftsIo.write({ repository.listOpenWorkouts().isEmpty() }) { free ->
+            starting = false
+            withContext(Dispatchers.Main) {
+                when {
+                    cleared -> Unit
+                    free -> onStart()
+                    else -> showHint("A WORKOUT IS OPEN · FINISH IT FIRST")
+                }
+            }
+        }
+    }
+
+    private fun showHint(text: String) {
+        hintJob?.cancel()
+        _uiState.update { it.copy(hint = text) }
+        hintJob = viewModelScope.launch {
+            delay(HINT_MILLIS)
+            _uiState.update { it.copy(hint = null) }
+        }
+    }
+
+    /** "Save as template": asks for its name, filled in with the workout's. */
+    fun startNamingTemplate() {
+        if (deleting || starting || !_uiState.value.loaded) return
+        deleteArm.disarm()
+        _uiState.update { it.copy(namingTemplate = true, notesEditSession = it.notesEditSession + 1) }
+    }
+
+    fun cancelNamingTemplate() {
+        _uiState.update { it.copy(namingTemplate = false) }
+    }
+
+    /**
+     * Saves the workout as a template named [raw] (blank: the workout's name) on the write lane
+     * ([ActiveSession.saveAsTemplate]), then opens it in the Template Editor ([onSaved], on Main), unless
+     * this screen has gone meanwhile. workouts.json lists templates, so the exports catch up.
+     */
+    fun saveAsTemplate(raw: String, onSaved: (Long) -> Unit) {
+        _uiState.update { it.copy(namingTemplate = false) }
+        if (starting) return
+        starting = true
+        LiftsIo.write({ session.saveAsTemplate(workoutId, raw) }) { templateId ->
+            starting = false
+            if (templateId != null) share.logChanged()
+            withContext(Dispatchers.Main) { if (!cleared && templateId != null) onSaved(templateId) }
         }
     }
 
@@ -246,6 +329,10 @@ class WorkoutDetailViewModel(
         }
     }
 
+    private companion object {
+        const val HINT_MILLIS = 3_000L
+    }
+
     /**
      * Ids of sets (across all workouts) that were PRs when logged, for the exercises in
      * [exerciseIds]: the shared records engine over one history query, each exercise by its [tracking].
@@ -271,8 +358,12 @@ class WorkoutDetailScreen(
     override val viewModelClass: Class<WorkoutDetailViewModel>
         get() = WorkoutDetailViewModel::class.java
 
-    override fun createViewModel() =
-        WorkoutDetailViewModel(repository, SettingsStore(lightContext.dataStore), lightContext.liftsShare(), workoutId)
+    override fun createViewModel(): WorkoutDetailViewModel {
+        val settings = SettingsStore(lightContext.dataStore)
+        return WorkoutDetailViewModel(
+            repository, settings, lightContext.liftsShare(), workoutId, ActiveSession(repository, settings, lightContext.dataStore),
+        )
+    }
 
     @Composable
     override fun Content() {
@@ -290,7 +381,26 @@ class WorkoutDetailScreen(
                     .fillMaxSize()
                     .background(LightThemeTokens.colors.background),
             ) {
-                if (uiState.editingNotes) {
+                if (uiState.namingTemplate) {
+                    key(uiState.notesEditSession) {
+                        val nameState = rememberTextFieldState(uiState.name)
+                        LightTextInputEditor(
+                            title = "Template Name",
+                            state = nameState,
+                            onSubmit = { name ->
+                                viewModel.saveAsTemplate(name.toString()) { templateId ->
+                                    navigateTo({ TemplateEditorScreen(it, templateId = templateId) })
+                                }
+                            },
+                            onBack = { viewModel.cancelNamingTemplate() },
+                            keyboardOptionsFlow = keyboardOptionsFlow,
+                            singleLine = true,
+                            initialCaps = uiState.name.isBlank(),
+                            editorKey = "template-from-workout-${uiState.notesEditSession}",
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                } else if (uiState.editingNotes) {
                     key(uiState.notesEditSession) {
                         val notesState = rememberTextFieldState(uiState.notes.orEmpty())
                         LightTextInputEditor(
@@ -404,8 +514,30 @@ class WorkoutDetailScreen(
                                     ),
                                 )
                             }
+
+                            if (uiState.loaded) {
+                                // Do it again, or keep it: the same exercises and set pattern, rests and targets.
+                                Spacer(modifier = Modifier.height(1f.gridUnitsAsDp()))
+                                RowDivider()
+                                LiftsListRow(
+                                    onClick = {
+                                        viewModel.tapStartAgain {
+                                            navigateTo({ ActiveWorkoutScreen(it, fromWorkoutId = workoutId) })
+                                        }
+                                    },
+                                    right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },
+                                    left = { RowName("Start Again") },
+                                )
+                                RowDivider()
+                                LiftsListRow(
+                                    onClick = viewModel::startNamingTemplate,
+                                    right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },
+                                    left = { RowName("Save as Template") },
+                                )
+                            }
                         }
 
+                        uiState.hint?.let { ArmedHint(text = it) }
                         if (deleteArmed) {
                             ArmedHint(text = "TAP AGAIN TO DELETE THIS WORKOUT")
                         }

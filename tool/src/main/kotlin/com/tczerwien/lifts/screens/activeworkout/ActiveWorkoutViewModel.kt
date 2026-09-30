@@ -64,6 +64,8 @@ class ActiveWorkoutViewModel(
     private val share: LiftsShare,
     private val resumeWorkoutId: Long?,
     private val templateId: Long?,
+    /** Start again from this finished workout ([ActiveSession.startFromWorkout]). */
+    private val fromWorkoutId: Long? = null,
 ) : LightViewModel<Unit>() {
 
     /** One exercise of the session: its rows, and what last session did in the matching slot. */
@@ -255,6 +257,7 @@ class ActiveWorkoutViewModel(
             resolvedWorkoutId = when {
                 resumeWorkoutId != null -> resumeWorkoutId
                 templateId != null -> session.startFromTemplate(templateId)
+                fromWorkoutId != null -> session.startFromWorkout(fromWorkoutId)
                 else -> session.startEmpty()
             }
         }) { refresh() }
@@ -263,7 +266,9 @@ class ActiveWorkoutViewModel(
     /** Backing out of a workout nothing was done in leaves nothing behind (a template opened by mistake). */
     override fun onCleared() {
         if (!_uiState.value.finishing) {
-            LiftsIo.write { resolvedWorkoutId?.let { session.discardIfUntouched(it) } }
+            // Started again from a past workout, it is compared with that one (not with an empty start).
+            val startedFrom = fromWorkoutId.takeIf { resumeWorkoutId == null && templateId == null }
+            LiftsIo.write { resolvedWorkoutId?.let { session.discardIfUntouched(it, startedFrom) } }
         }
         super.onCleared()
     }
