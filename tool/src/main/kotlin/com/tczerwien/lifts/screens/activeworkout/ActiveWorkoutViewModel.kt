@@ -646,9 +646,11 @@ class ActiveWorkoutViewModel(
     /**
      * The next-exercise row: moves to the exercise it offers. The row sits in the same place on every
      * exercise, so a bounce would move on again: the rows ignore taps for a moment, as after a jump.
+     * It sits below the steppers, so the rows shifting ([rowsShiftedAt]) doesn't move it: only the
+     * screen moving on does.
      */
     fun goToNextExercise() {
-        if (!beginRowAction()) return
+        if (tapTooSoonAfterMove(movedOnAt, System.currentTimeMillis()) || !beginAction()) return
         val next = nextExercise(_uiState.value) ?: return
         showExercise(next.slot.id)
         rowsMovedUnderFinger()
