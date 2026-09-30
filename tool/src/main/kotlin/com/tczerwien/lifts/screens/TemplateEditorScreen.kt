@@ -81,6 +81,9 @@ private const val MAX_REST_SEC = 600
 
 private const val LIST_ROW_HEIGHT_UNITS = 3f
 
+/** The gap under each overlay stepper's label: a quarter of the usual, so four rows fit. */
+private const val STEPPER_LABEL_GAP_UNITS = 0.25f
+
 class TemplateEditorViewModel(
     private val repository: LiftsRepository,
     private val settingsStore: SettingsStore,
@@ -554,12 +557,13 @@ class TemplateEditorScreen(
                 ),
             )
 
-            // Seven steppers in pairs, so the whole prescription fits one screen with nothing to scroll.
+            // Seven steppers in pairs, so the whole prescription fits one screen with nothing to scroll
+            // (labels sit close to their targets: four rows at the usual 1gu gap overflowed the 1240px screen).
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(horizontal = 1f.gridUnitsAsDp(), vertical = 0.5f.gridUnitsAsDp()),
+                    .padding(horizontal = 1f.gridUnitsAsDp(), vertical = 0.25f.gridUnitsAsDp()),
                 verticalArrangement = Arrangement.spacedBy(0.5f.gridUnitsAsDp()),
             ) {
                 StepperPair(
@@ -679,6 +683,7 @@ private fun TemplateStepper(
         label = label,
         decrementEnabled = decrementEnabled,
         incrementEnabled = incrementEnabled,
+        labelGapUnits = STEPPER_LABEL_GAP_UNITS,
         modifier = Modifier.fillMaxWidth(),
     ) {
         LightText(text = value, variant = LightTextVariant.Copy, monospace = true, maxLines = 1)

@@ -80,6 +80,7 @@ fun holdSchedule(repeat: Int, bigSteps: Boolean = false): HoldStep = HoldStep(
  *   the stepper room for it: five monospace characters ("182.4") need about 8gu between the targets
  *   at Subtitle, 5gu at Copy.
  * @param onValueClick a tap on the value between the targets, e.g. to type a number in; null for none.
+ * @param labelGapUnits the gap under [label]: 1gu, or less where many steppers share a screen.
  */
 @Composable
 fun Stepper(
@@ -90,6 +91,7 @@ fun Stepper(
     incrementEnabled: Boolean = true,
     bigSteps: Boolean = false,
     onValueClick: (() -> Unit)? = null,
+    labelGapUnits: Float = 1f,
     value: @Composable () -> Unit,
 ) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
@@ -99,7 +101,7 @@ fun Stepper(
                 variant = LightTextVariant.Superfine,
                 lighten = true,
                 maxLines = 1,
-                modifier = Modifier.padding(bottom = 1f.gridUnitsAsDp()),
+                modifier = Modifier.padding(bottom = labelGapUnits.gridUnitsAsDp()),
             )
         }
         Row(
