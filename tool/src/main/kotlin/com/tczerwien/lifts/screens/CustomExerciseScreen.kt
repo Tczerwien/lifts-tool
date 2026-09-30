@@ -57,12 +57,10 @@ import com.thelightphone.sdk.ui.LightTopBar
 import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import java.util.UUID
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 class CustomExerciseViewModel(
     private val repository: LiftsRepository,
@@ -136,9 +134,13 @@ class CustomExerciseViewModel(
     @Volatile
     private var hiddenIds: Set<String> = emptySet()
 
-    /** Loads here only: the SDK calls this straight after creating the view model, so init needn't. */
+    /**
+     * Loads here only: the SDK calls this straight after creating the view model, so init needn't.
+     * Behind any write still queued: an exercise edited from Exercise Detail just after its Type was
+     * changed must fill in the new Type, or saving the form would put the old one back ([save]).
+     */
     override fun onScreenShow(screen: SimpleLightScreen<String>) {
-        viewModelScope.launch(Dispatchers.IO) { loadOptions() }
+        LiftsIo.write({}) { loadOptions() }
     }
 
     /**
