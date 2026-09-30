@@ -5,8 +5,8 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 
-/** A template's number of exercises, for [TemplateDao.exerciseCounts]. */
-data class TemplateExerciseCount(val templateId: Long, val exercises: Int)
+/** A template's number of exercises and of their work sets, for [TemplateDao.exerciseCounts]. */
+data class TemplateExerciseCount(val templateId: Long, val exercises: Int, val sets: Int)
 
 /** Blocking DAO — call from Dispatchers.IO. */
 @Dao
@@ -41,8 +41,8 @@ interface TemplateDao {
     @Query("SELECT * FROM template_exercises WHERE templateId = :templateId ORDER BY position")
     fun exercisesForTemplate(templateId: Long): List<TemplateExerciseEntity>
 
-    /** How many exercises each template has, in one query (templates with none are left out). */
-    @Query("SELECT templateId, COUNT(*) AS exercises FROM template_exercises GROUP BY templateId")
+    /** How many exercises and work sets each template has, in one query (templates with none are left out). */
+    @Query("SELECT templateId, COUNT(*) AS exercises, SUM(targetSets) AS sets FROM template_exercises GROUP BY templateId")
     fun exerciseCounts(): List<TemplateExerciseCount>
 
     /** The templates that ask for [exerciseId], each once. */

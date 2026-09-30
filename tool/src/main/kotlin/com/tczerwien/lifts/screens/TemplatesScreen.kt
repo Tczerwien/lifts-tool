@@ -170,14 +170,16 @@ class TemplatesViewModel(
         return false
     }
 
+    /** Two queries whatever the number of templates: the list, and every template's counts at once. */
     private fun refresh() {
+        val counts = repository.templateCounts()
         val templates = repository.listTemplates().map { template ->
-            val exercises = repository.exercisesForTemplate(template.id)
+            val count = counts[template.id]
             TemplateRow(
                 id = template.id,
                 name = template.name,
-                exerciseCount = exercises.size,
-                estimatedMinutes = estimateMinutes(exercises.sumOf { it.targetSets }),
+                exerciseCount = count?.exercises ?: 0,
+                estimatedMinutes = estimateMinutes(count?.sets ?: 0),
             )
         }
         _uiState.update { it.copy(loaded = true, templates = templates) }
