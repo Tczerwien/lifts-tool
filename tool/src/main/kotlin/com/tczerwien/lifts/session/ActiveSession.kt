@@ -168,8 +168,9 @@ class ActiveSession(
                     templateId = templateId,
                     exerciseId = planned.exerciseId,
                     position = index,
-                    targetSets = planned.types.count { it != SET_TYPE_WARMUP }.coerceAtLeast(1),
-                    warmupSets = planned.types.count { it == SET_TYPE_WARMUP }.takeIf { it > 0 },
+                    // Within what the Template Editor's steppers reach, so its first − is one set less.
+                    targetSets = planned.types.count { it != SET_TYPE_WARMUP }.coerceIn(MIN_TEMPLATE_SETS, MAX_TEMPLATE_SETS),
+                    warmupSets = planned.types.count { it == SET_TYPE_WARMUP }.takeIf { it > 0 }?.coerceAtMost(MAX_TEMPLATE_WARMUPS),
                     restSecWork = planned.restSecWork?.let { restOverride(it, snapshot.defaultRestSec) },
                     restSecWarmup = planned.restSecWarmup?.let { restOverride(it, snapshot.warmupRestSec) },
                     repMin = planned.targetRepMin,

@@ -22,6 +22,10 @@ const val DEFAULT_RANGE_WIDTH = 4
 /** The most warm-ups a template can ask for. */
 const val MAX_TEMPLATE_WARMUPS = 5
 
+/** The work sets a template exercise can ask for. */
+const val MIN_TEMPLATE_SETS = 1
+const val MAX_TEMPLATE_SETS = 10
+
 /** A rep range as the editor holds it; either end may be open (null). */
 data class RepRange(val min: Int?, val max: Int?)
 

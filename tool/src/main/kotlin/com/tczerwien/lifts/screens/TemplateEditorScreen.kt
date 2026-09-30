@@ -28,7 +28,9 @@ import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.MAX_REST_SEC
 import com.tczerwien.lifts.session.MAX_RIR
 import com.tczerwien.lifts.session.MAX_TARGET_REPS
+import com.tczerwien.lifts.session.MAX_TEMPLATE_SETS
 import com.tczerwien.lifts.session.MAX_TEMPLATE_WARMUPS
+import com.tczerwien.lifts.session.MIN_TEMPLATE_SETS
 import com.tczerwien.lifts.session.RepRange
 import com.tczerwien.lifts.session.restOverride
 import com.tczerwien.lifts.session.stepRepMax
@@ -76,8 +78,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
 private const val DEFAULT_TARGET_SETS = 3
-private const val MIN_TARGET_SETS = 1
-private const val MAX_TARGET_SETS = 10
 private const val REST_STEP_SEC = 15
 private const val MIN_REST_SEC = 0
 
@@ -244,7 +244,7 @@ class TemplateEditorViewModel(
     }
 
     fun stepSets(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
-        exercise.copy(targetSets = (exercise.targetSets + delta).coerceIn(MIN_TARGET_SETS, MAX_TARGET_SETS))
+        exercise.copy(targetSets = (exercise.targetSets + delta).coerceIn(MIN_TEMPLATE_SETS, MAX_TEMPLATE_SETS))
     }
 
     /** Warm-ups: last session's (none stored), then 0 to 5 ([stepTemplateWarmups]). */
@@ -597,8 +597,8 @@ class TemplateEditorScreen(
                         TemplateStepper(
                             label = "Sets",
                             value = row.targetSets.toString(),
-                            decrementEnabled = row.targetSets > MIN_TARGET_SETS,
-                            incrementEnabled = row.targetSets < MAX_TARGET_SETS,
+                            decrementEnabled = row.targetSets > MIN_TEMPLATE_SETS,
+                            incrementEnabled = row.targetSets < MAX_TEMPLATE_SETS,
                             onStep = { viewModel.stepSets(row.id, it) },
                         )
                     },

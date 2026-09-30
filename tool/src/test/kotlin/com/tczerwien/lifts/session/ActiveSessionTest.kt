@@ -476,6 +476,17 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `save as template keeps the counts within what the editor's steppers reach`() {
+        val source = store.addFinishedWorkout(
+            startedAt = 1_000_000,
+            "row" to List(7) { Triple(w, 40.0, 10) } + List(12) { Triple(n, 60.0, 8) },
+        )
+        val template = assertNotNull(session.saveAsTemplate(source, "Volume"))
+        val row = store.exercisesForTemplate(template).single()
+        assertEquals(MAX_TEMPLATE_SETS to MAX_TEMPLATE_WARMUPS, row.targetSets to row.warmupSets)
+    }
+
+    @Test
     fun `an exercise he removed comes back in neither a start again nor a template`() {
         val source = store.addFinishedWorkout(
             startedAt = 1_000_000,
