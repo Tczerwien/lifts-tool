@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -259,17 +260,22 @@ class RestTimerScreen(
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
 
-        // On each second of the countdown, so 0:00 shows as the rest ends.
-        val nowMillis by rememberSecondClock(uiState.endMillis)
-
-        val remainingSec = if (uiState.loaded) restRemainingSec(uiState.endMillis, nowMillis) else -1
-        // Latched: once 0:00 shows, a late +30 result can't bring the countdown back mid-pulse.
-        var finished by remember { mutableStateOf(false) }
-        val done = finished || (uiState.loaded && remainingSec == 0)
+        // Latched as the rest ends: once 0:00 shows, a late +30 result can't bring the countdown back
+        // mid-pulse. Timed by the rest's end, not by a clock read here, so only the countdown redraws
+        // each second ([Countdown]). Frames time it, as they do the clock: in the background it waits.
+        var done by remember { mutableStateOf(false) }
+        val loaded = uiState.loaded
+        val endMillis = uiState.endMillis
+        LaunchedEffect(loaded, endMillis) {
+            if (!loaded) return@LaunchedEffect
+            while (!done) {
+                val now = withFrameMillis { System.currentTimeMillis() }
+                if (restRemainingSec(endMillis, now) == 0) done = true else delay(endMillis - now)
+            }
+        }
 
         LaunchedEffect(done) {
             if (done) {
-                finished = true
                 // As long as the pulse, which LiftsFrame runs on this screen. Back may have left meanwhile.
                 delay(REST_PULSE_TOTAL_MS)
                 if (onTop) goBack()
@@ -306,12 +312,7 @@ class RestTimerScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(1f.gridUnitsAsDp()),
                         ) {
-                            LightText(
-                                text = Format.clock(if (done) 0 else remainingSec.coerceAtLeast(0)),
-                                variant = LightTextVariant.Title,
-                                monospace = true,
-                                maxLines = 1,
-                            )
+                            Countdown(endMillis = uiState.endMillis, done = done)
                             if (done) {
                                 LightText(text = "REST OVER", variant = LightTextVariant.Button)
                             } else {
@@ -360,6 +361,21 @@ class RestTimerScreen(
     private companion object {
         const val ADJUST_STEP_SEC = 30
     }
+}
+
+/**
+ * The rest's minutes and seconds, 0:00 once [done]. It alone reads the second clock
+ * ([rememberSecondClock]), so the rest of the Rest Timer doesn't redraw every second.
+ */
+@Composable
+private fun Countdown(endMillis: Long, done: Boolean) {
+    val nowMillis by rememberSecondClock(endMillis)
+    LightText(
+        text = Format.clock(if (done) 0 else restRemainingSec(endMillis, nowMillis)),
+        variant = LightTextVariant.Title,
+        monospace = true,
+        maxLines = 1,
+    )
 }
 
 /**
