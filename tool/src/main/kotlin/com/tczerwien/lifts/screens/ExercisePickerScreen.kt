@@ -182,12 +182,13 @@ class ExercisePickerViewModel(
      * A reload after an edit ([keepPlace]) keeps the list where he left it.
      */
     private fun load(keepPlace: Boolean = false) {
-        loads++
         val summaries = repository.exerciseSummaries().filterNot { it.hidden }
         customIds = summaries.filter { it.isCustom }.mapTo(HashSet()) { it.id }
         entries = catalogEntries(summaries, catalog)
         val shown = entries.mapTo(HashSet()) { it.id }
         recentIds = repository.recentExerciseIds(RECENT_LIMIT).filter { it in shown }
+        // Only now: a list worked out meanwhile from the old catalog is dropped, not one from this.
+        loads++
         val hasRecent = recentIds.isNotEmpty()
         _uiState.update { state ->
             state.copy(
