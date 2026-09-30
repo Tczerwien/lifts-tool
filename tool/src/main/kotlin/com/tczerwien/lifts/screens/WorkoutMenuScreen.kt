@@ -179,7 +179,7 @@ class WorkoutMenuScreen(
     override fun Content() {
         val mode by viewModel.mode.collectAsState()
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = mode::class) {
             when (val current = mode) {
                 WorkoutMenuViewModel.Mode.Rows -> Rows()
                 is WorkoutMenuViewModel.Mode.EditText -> TextEditor(current)

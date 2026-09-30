@@ -409,7 +409,7 @@ class CustomExerciseScreen(
             if (createdId != null) goBack(createdId)
         }
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.mode) {
             when (uiState.mode) {
                 CustomExerciseViewModel.Mode.FORM -> FormContent(uiState)
 

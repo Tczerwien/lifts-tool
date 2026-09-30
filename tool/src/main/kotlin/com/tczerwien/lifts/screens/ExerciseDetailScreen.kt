@@ -551,7 +551,7 @@ class ExerciseDetailScreen(
             if (uiState.leave) goBack()
         }
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.pickingType to uiState.editing) {
             val editing = uiState.editing
             if (editing != null) {
                 val naming = editing == ExerciseDetailViewModel.Editing.NAME

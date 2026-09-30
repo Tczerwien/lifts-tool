@@ -277,7 +277,7 @@ class BarWeightsScreen(
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.mode::class) {
             when (val mode = uiState.mode) {
                 is BarWeightsViewModel.Mode.BarList -> BarList(uiState)
 

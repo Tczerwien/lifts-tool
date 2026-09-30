@@ -219,7 +219,7 @@ class TemplatesScreen(
         val uiState by viewModel.uiState.collectAsState()
         val keyboardOptionsFlow = rememberKeyboardOptions()
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.mode::class) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

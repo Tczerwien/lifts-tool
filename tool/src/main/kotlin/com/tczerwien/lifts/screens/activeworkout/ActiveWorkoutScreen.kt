@@ -157,7 +157,7 @@ class ActiveWorkoutScreen(
             })
         }
 
-        LiftsFrame(sealedActivity, lightContext) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.weightEntry != null) {
             val entry = uiState.weightEntry
             if (entry != null && current != null) {
                 WeightEntryEditor(entry, current.tracking, uiState)

@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.ui
 
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,12 +10,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.keepScreenOn
-import com.tczerwien.lifts.session.RestAlert
 import com.tczerwien.lifts.session.RestAlarm
+import com.tczerwien.lifts.session.RestAlert
 import com.tczerwien.lifts.session.RestStore
 import com.tczerwien.lifts.session.keepAwake
 import com.tczerwien.lifts.session.msToNextPulsePhase
@@ -72,8 +76,27 @@ private val beepScope = CoroutineScope(
 fun LiftsFrame(
     sealedActivity: SealedLightActivity,
     lightContext: SealedLightContext,
+    /**
+     * What the screen is showing, when it has modes (an editor over its list, a picker over its rows):
+     * each change drops taps for a moment ([tapTooSoonAfterSwitch]), as the screen appearing does.
+     */
+    switchKey: Any? = null,
     content: @Composable () -> Unit,
 ) {
+    // The screen appeared, or switched mode, under his finger: a double tap's second half, a bounce,
+    // was aimed at what was there before (a confirm, SUBMIT, a row) and lands on whatever is there
+    // now (Sets −, a trash, Finish, Start Again). It is dropped before any control sees it.
+    val switchedAt = remember(switchKey) { SystemClock.uptimeMillis() }
+    val lastSwitch by rememberUpdatedState(switchedAt)
+    val tapGuard = Modifier.pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val at = event.changes.firstOrNull()?.uptimeMillis ?: continue
+                if (tapTooSoonAfterSwitch(lastSwitch, at)) event.changes.forEach { it.consume() }
+            }
+        }
+    }
     val themeColors by LightThemeController.colors.collectAsState()
     val restStore = remember(lightContext) { RestStore(lightContext.dataStore) }
     val restEnd by restStore.endMillis.collectAsState(initial = null)
@@ -118,11 +141,17 @@ fun LiftsFrame(
     }
 
     LightTheme(colors = if (inverted) invertedColors(themeColors) else themeColors) {
-        Box(modifier = Modifier.fillMaxSize().then(if (awake) Modifier.keepScreenOn() else Modifier)) {
+        Box(modifier = Modifier.fillMaxSize().then(tapGuard).then(if (awake) Modifier.keepScreenOn() else Modifier)) {
             content()
         }
     }
 }
+
+/** How long after a screen appears, or switches mode, a tap is taken as the bounce of the one before. */
+const val SWITCH_TAP_GUARD_MS = 400L
+
+/** Whether a touch at [eventAt] comes too soon after the screen switched at [switchedAt] (both uptime ms). */
+fun tapTooSoonAfterSwitch(switchedAt: Long, eventAt: Long): Boolean = eventAt - switchedAt in 0 until SWITCH_TAP_GUARD_MS
 
 /** Swap background and content for the full-screen alert pulse. */
 private fun invertedColors(base: LightColors): LightColors = LightColors(
