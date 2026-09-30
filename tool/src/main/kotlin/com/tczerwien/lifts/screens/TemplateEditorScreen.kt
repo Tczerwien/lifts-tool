@@ -44,6 +44,7 @@ import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
+import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.ReorderArrows
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
@@ -706,7 +707,10 @@ private fun StepperPair(left: @Composable () -> Unit, right: (@Composable () -> 
     }
 }
 
-/** One of the overlay's steppers: its label above, the value in Copy mono between the 4gu targets. */
+/**
+ * One of the overlay's steppers: its label above, the value in Copy between the 4gu targets, its digits
+ * monospace and the colon not ([MonoDigits]): a rest of 10:00 or more in full monospace ran over them.
+ */
 @Composable
 private fun TemplateStepper(
     label: String,
@@ -723,7 +727,7 @@ private fun TemplateStepper(
         labelGapUnits = STEPPER_LABEL_GAP_UNITS,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        LightText(text = value, variant = LightTextVariant.Copy, monospace = true, maxLines = 1)
+        MonoDigits(text = value, variant = LightTextVariant.Copy)
     }
 }
 
