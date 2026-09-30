@@ -138,13 +138,13 @@ class RestTimerViewModel(
 
     /**
      * −30 / +30: shift the persisted end (never before now — over-subtracting finishes). In the last
-     * half second and at 0:00 a tap does nothing, here and in the store ([restAdjustable]).
+     * half second and at 0:00 a tap does nothing, here and in the store ([restAdjustable]). Saved on
+     * the write lane, so Back right after the tap can't drop it.
      */
     fun adjust(deltaSec: Int) {
         if (!restAdjustable(_uiState.value.endMillis, System.currentTimeMillis())) return
-        viewModelScope.launch(Dispatchers.IO) {
-            val newEnd = session.adjustRest(deltaSec) ?: return@launch
-            _uiState.update { it.copy(endMillis = newEnd) }
+        LiftsIo.write({ session.adjustRest(deltaSec) }) { newEnd ->
+            newEnd?.let { end -> _uiState.update { it.copy(endMillis = end) } }
         }
     }
 
