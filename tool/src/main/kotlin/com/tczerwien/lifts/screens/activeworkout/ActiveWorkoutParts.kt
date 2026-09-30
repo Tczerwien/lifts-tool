@@ -72,9 +72,10 @@ internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, la
 }
 
 /**
- * The exercise's name, the equipment and muscles under it, and its pinned cue. While a row is being
- * logged ([logging]) the equipment and muscles line gives its height to the set list; the cue stays.
- * The whole header is one tap target for Exercise Detail ([onOpenDetail]), which the "›" signals.
+ * The exercise's name, the equipment and muscles under it, the template's target ("8–12 REPS · RIR 1 ·
+ * ADD LOAD") and its pinned cue. While a row is being logged ([logging]) the equipment and muscles line
+ * gives its height to the set list; the target and the cue stay. The whole header is one tap target
+ * for Exercise Detail ([onOpenDetail]), which the "›" signals.
  */
 @Composable
 internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging: Boolean, onOpenDetail: () -> Unit) {
@@ -100,6 +101,15 @@ internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging
                 text = block.detailLine,
                 variant = LightTextVariant.Detail,
                 lighten = true,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        block.targetLine?.let { target ->
+            // Full contrast, unlike the cue: it is what today's sets aim at.
+            LightText(
+                text = target,
+                variant = LightTextVariant.Superfine,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

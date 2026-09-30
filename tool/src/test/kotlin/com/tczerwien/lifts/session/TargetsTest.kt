@@ -89,6 +89,7 @@ class TargetsTest {
         assertEquals("6–12 REPS · RIR 1", targetLine(6, 12, 1))
         assertEquals("8–12 REPS · ADD LOAD", targetLine(8, 12, null, HINT_ADD_LOAD))
         assertEquals("RIR 0", targetLine(null, null, 0))
+        assertEquals("10–12 REPS/SIDE · RIR 2", targetLine(10, 12, 2, perSide = true))
         assertNull(targetLine(null, null, null))
     }
 

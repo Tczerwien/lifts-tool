@@ -27,10 +27,12 @@ import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.parseTypedWeight
 import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
+import com.tczerwien.lifts.session.progressionHint
 import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
+import com.tczerwien.lifts.session.targetLine
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
@@ -87,6 +89,24 @@ class ActiveWorkoutViewModel(
 
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
         val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking)
+
+        /**
+         * The template's target for this slot, "8–12 REPS · RIR 1", and "ADD LOAD" once every work set last
+         * time reached the top of the range, until today's rows start heavier ([progressionHint]); null
+         * without a target.
+         */
+        val targetLine: String? = targetLine(
+            repMin = slot.targetRepMin,
+            repMax = slot.targetRepMax,
+            targetRir = slot.targetRir,
+            hint = progressionHint(
+                tracking = tracking,
+                repMax = slot.targetRepMax,
+                lastTime = lastTime,
+                todayWeightsKg = seeds.filterIndexed { index, _ -> sets[index].type != SET_TYPE_WARMUP }.map { it.weightKg },
+            ),
+            perSide = perSide,
+        )
     }
 
     data class UiState(

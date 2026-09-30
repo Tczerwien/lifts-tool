@@ -90,12 +90,12 @@ private fun stepOptional(value: Int?, delta: Int, max: Int): Int? = when {
 fun restOverride(restSec: Int, defaultSec: Int): Int? = restSec.coerceAtLeast(0).takeIf { it != defaultSec }
 
 /**
- * The Active Workout header's target line: "6–12 REPS · RIR 1", with [hint] after it; null when the
- * slot has no target and there is no hint.
+ * The Active Workout header's target line: "6–12 REPS · RIR 1" ("REPS/SIDE" on an exercise done one
+ * side at a time, [perSide]), with [hint] after it; null when the slot has no target and there is no hint.
  */
-fun targetLine(repMin: Int?, repMax: Int?, targetRir: Int?, hint: String? = null): String? {
+fun targetLine(repMin: Int?, repMax: Int?, targetRir: Int?, hint: String? = null, perSide: Boolean = false): String? {
     val parts = listOfNotNull(
-        repRangeText(repMin, repMax)?.let { "$it REPS" },
+        repRangeText(repMin, repMax)?.let { if (perSide) "$it REPS/SIDE" else "$it REPS" },
         targetRir?.let { "RIR $it" },
         hint,
     )
