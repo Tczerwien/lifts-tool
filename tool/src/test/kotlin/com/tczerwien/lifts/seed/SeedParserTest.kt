@@ -105,6 +105,16 @@ class SeedParserTest {
     }
 
     @Test
+    fun `a repeated dataset id gets the same app id from the names as from the parse`() {
+        val raw = """[{"id":"Push_Up","name":"Push Up","category":"strength"},""" +
+            """{"id":"push-up","name":"Push-Up (Wide)","category":"strength"},""" +
+            """{"id":"Push_Up","name":"Push Up Again","category":"strength"}]"""
+        val names = SeedParser.parseNames(raw)
+        assertEquals(mapOf("push-up" to "Push Up", "push-up-2" to "Push-Up (Wide)", "push-up-3" to "Push Up Again"), names)
+        assertEquals(SeedParser.parse(raw).associate { it.id to it.name }, names)
+    }
+
+    @Test
     fun `catalog names are the parse's names, read once per process`() {
         val names = SeedParser.parseNames(TestCatalog.json)
         assertEquals(entities.associate { it.id to it.name }, names, "same ids, repeats included, same names")
