@@ -95,12 +95,13 @@ class ActiveWorkoutViewModel(
         /**
          * The template's target for this slot, "8–12 REPS · RIR 1", and "ADD LOAD" once every work set last
          * time reached the top of the range, until today's rows start heavier ([progressionHint]); null
-         * without a target.
+         * without a target, and for a hold.
          */
         val targetLine: String? = targetLine(
-            repMin = slot.targetRepMin,
-            repMax = slot.targetRepMax,
-            targetRir = slot.targetRir,
+            // A hold is seconds: a rep range or RIR (set before its type changed) says nothing about it.
+            repMin = slot.targetRepMin?.takeIf { tracking.takesReps },
+            repMax = slot.targetRepMax?.takeIf { tracking.takesReps },
+            targetRir = slot.targetRir?.takeIf { tracking.takesReps },
             hint = progressionHint(
                 tracking = tracking,
                 repMax = slot.targetRepMax,

@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.renumber
 import com.tczerwien.lifts.library.reorderPositions
 import com.tczerwien.lifts.session.LiftsIo
@@ -118,6 +119,8 @@ class TemplateEditorViewModel(
         /** The work rest follows Settings' default (none stored). */
         val restIsDefault: Boolean = true,
         val warmupRestIsDefault: Boolean = true,
+        /** A hold (Duration): seconds, so no rep range or RIR. */
+        val hold: Boolean = false,
     )
 
     data class UiState(
@@ -364,9 +367,11 @@ class TemplateEditorViewModel(
         val template = repository.templateById(templateId)
         val settings = settingsStore.snapshot()
         val rows = repository.exercisesForTemplate(templateId).map { exercise ->
+            val catalog = repository.exerciseById(exercise.exerciseId)
             ExerciseRow(
                 id = exercise.id,
-                name = repository.exerciseById(exercise.exerciseId)?.let(::displayName) ?: exercise.exerciseId,
+                name = catalog?.let(::displayName) ?: exercise.exerciseId,
+                hold = catalog?.tracking?.takesDuration == true,
                 targetSets = exercise.targetSets,
                 warmupSets = exercise.warmupSets,
                 repMin = exercise.repMin,
@@ -493,9 +498,11 @@ class TemplateEditorScreen(
                             Column {
                                 RowName(row.name)
                                 LightText(
-                                    text = templateSlotSummary(
-                                        row.targetSets, row.warmupSets, row.repMin, row.repMax, row.targetRir, row.restSec,
-                                    ),
+                                    text = if (row.hold) {
+                                        templateSlotSummary(row.targetSets, row.warmupSets, null, null, null, row.restSec)
+                                    } else {
+                                        templateSlotSummary(row.targetSets, row.warmupSets, row.repMin, row.repMax, row.targetRir, row.restSec)
+                                    },
                                     variant = LightTextVariant.Detail,
                                     lighten = true,
                                     maxLines = 1,
@@ -587,58 +594,66 @@ class TemplateEditorScreen(
                         )
                     },
                 )
-                StepperPair(
-                    left = {
-                        TemplateStepper(
-                            label = "Reps From",
-                            value = row.repMin?.toString() ?: "—",
-                            decrementEnabled = row.repMin != null,
-                            incrementEnabled = (row.repMin ?: 0) < MAX_TARGET_REPS,
-                            onStep = { viewModel.stepRepMin(row.id, it) },
-                        )
-                    },
-                    right = {
-                        TemplateStepper(
-                            label = "Reps To",
-                            value = row.repMax?.toString() ?: "—",
-                            decrementEnabled = row.repMax != null,
-                            incrementEnabled = (row.repMax ?: 0) < MAX_TARGET_REPS,
-                            onStep = { viewModel.stepRepMax(row.id, it) },
-                        )
-                    },
-                )
-                StepperPair(
-                    left = {
-                        TemplateStepper(
-                            label = "RIR",
-                            value = row.targetRir?.toString() ?: "—",
-                            decrementEnabled = row.targetRir != null,
-                            incrementEnabled = (row.targetRir ?: -1) < MAX_RIR,
-                            onStep = { viewModel.stepRir(row.id, it) },
-                        )
-                    },
-                    right = {
-                        TemplateStepper(
-                            label = if (row.restIsDefault) "Rest · Default" else "Rest",
-                            value = Format.clock(row.restSec),
-                            decrementEnabled = row.restSec > MIN_REST_SEC,
-                            incrementEnabled = row.restSec < MAX_REST_SEC,
-                            onStep = { viewModel.stepWorkRest(row.id, it) },
-                        )
-                    },
-                )
-                StepperPair(
-                    left = {
-                        TemplateStepper(
-                            label = if (row.warmupRestIsDefault) "Warm-up Rest · Default" else "Warm-up Rest",
-                            value = Format.clock(row.warmupRestSec),
-                            decrementEnabled = row.warmupRestSec > MIN_REST_SEC,
-                            incrementEnabled = row.warmupRestSec < MAX_REST_SEC,
-                            onStep = { viewModel.stepWarmupRest(row.id, it) },
-                        )
-                    },
-                    right = null,
-                )
+                if (!row.hold) {
+                    StepperPair(
+                        left = {
+                            TemplateStepper(
+                                label = "Reps From",
+                                value = row.repMin?.toString() ?: "—",
+                                decrementEnabled = row.repMin != null,
+                                incrementEnabled = (row.repMin ?: 0) < MAX_TARGET_REPS,
+                                onStep = { viewModel.stepRepMin(row.id, it) },
+                            )
+                        },
+                        right = {
+                            TemplateStepper(
+                                label = "Reps To",
+                                value = row.repMax?.toString() ?: "—",
+                                decrementEnabled = row.repMax != null,
+                                incrementEnabled = (row.repMax ?: 0) < MAX_TARGET_REPS,
+                                onStep = { viewModel.stepRepMax(row.id, it) },
+                            )
+                        },
+                    )
+                    StepperPair(
+                        left = {
+                            TemplateStepper(
+                                label = "RIR",
+                                value = row.targetRir?.toString() ?: "—",
+                                decrementEnabled = row.targetRir != null,
+                                incrementEnabled = (row.targetRir ?: -1) < MAX_RIR,
+                                onStep = { viewModel.stepRir(row.id, it) },
+                            )
+                        },
+                        right = {
+                            TemplateStepper(
+                                label = if (row.restIsDefault) "Rest · Default" else "Rest",
+                                value = Format.clock(row.restSec),
+                                decrementEnabled = row.restSec > MIN_REST_SEC,
+                                incrementEnabled = row.restSec < MAX_REST_SEC,
+                                onStep = { viewModel.stepWorkRest(row.id, it) },
+                            )
+                        },
+                    )
+                    StepperPair(
+                        left = {
+                            TemplateStepper(
+                                label = if (row.warmupRestIsDefault) "Warm-up Rest · Default" else "Warm-up Rest",
+                                value = Format.clock(row.warmupRestSec),
+                                decrementEnabled = row.warmupRestSec > MIN_REST_SEC,
+                                incrementEnabled = row.warmupRestSec < MAX_REST_SEC,
+                                onStep = { viewModel.stepWarmupRest(row.id, it) },
+                            )
+                        },
+                        right = null,
+                    )
+                } else {
+                    // A hold is seconds: no rep range and no RIR, so its rests pair up.
+                    StepperPair(
+                        left = { WorkRestStepper(row) },
+                        right = { WarmupRestStepper(row) },
+                    )
+                }
             }
 
             if (removeArmed) {
@@ -654,6 +669,28 @@ class TemplateEditorScreen(
                 ),
             )
         }
+    }
+
+    @Composable
+    private fun WorkRestStepper(row: TemplateEditorViewModel.ExerciseRow) {
+        TemplateStepper(
+            label = if (row.restIsDefault) "Rest · Default" else "Rest",
+            value = Format.clock(row.restSec),
+            decrementEnabled = row.restSec > MIN_REST_SEC,
+            incrementEnabled = row.restSec < MAX_REST_SEC,
+            onStep = { viewModel.stepWorkRest(row.id, it) },
+        )
+    }
+
+    @Composable
+    private fun WarmupRestStepper(row: TemplateEditorViewModel.ExerciseRow) {
+        TemplateStepper(
+            label = if (row.warmupRestIsDefault) "Warm-up Rest · Default" else "Warm-up Rest",
+            value = Format.clock(row.warmupRestSec),
+            decrementEnabled = row.warmupRestSec > MIN_REST_SEC,
+            incrementEnabled = row.warmupRestSec < MAX_REST_SEC,
+            onStep = { viewModel.stepWarmupRest(row.id, it) },
+        )
     }
 }
 
