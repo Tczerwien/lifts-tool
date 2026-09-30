@@ -758,7 +758,9 @@ class ActiveWorkoutViewModel(
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         rowsMovedUnderFinger()
-        LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) {
+        LiftsIo.write({ session.addExercise(workoutId, exerciseId) }) { slotId ->
+            // Refused (the exercise was deleted or removed as the picker showed it): nothing new to show.
+            if (slotId == null) return@write refresh()
             // The rows change when this reload lands, which a busy lane can put past the guard's second.
             rowsMovedUnderFinger()
             refresh(focusLastExercise = true)
