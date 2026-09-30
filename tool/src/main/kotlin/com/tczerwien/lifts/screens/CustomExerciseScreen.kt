@@ -353,7 +353,8 @@ class CustomExerciseViewModel(
             }
             filled.copy(inTemplates = inTemplates, hasHistory = hasHistory, inWorkouts = inWorkouts).withClash()
         }
-        val all = repository.listExercises()
+        // Muscles, equipment and categories only: without the 873 instruction lists to decode.
+        val all = repository.listExercisesWithoutInstructions()
         val muscles = (all.flatMap { it.primaryMuscles } + all.flatMap { it.secondaryMuscles })
             .distinct()
             .sorted()

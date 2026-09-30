@@ -58,7 +58,8 @@ class LiftsRepository private constructor(
 
     fun updateExercise(exercise: ExerciseEntity): Boolean = db.exerciseDao.update(exercise) > 0
 
-    fun listExercises(): List<ExerciseEntity> = db.exerciseDao.listAll()
+    /** Every exercise with its instructions left empty ([BulkDao.exercisesWithoutInstructions]): most of the catalog's text. */
+    fun listExercisesWithoutInstructions(): List<ExerciseEntity> = db.bulkDao.exercisesWithoutInstructions()
 
     override fun exerciseById(id: String): ExerciseEntity? = db.exerciseDao.byId(id)
 
