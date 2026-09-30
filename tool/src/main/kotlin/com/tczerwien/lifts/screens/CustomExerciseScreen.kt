@@ -95,6 +95,8 @@ class CustomExerciseViewModel(
         val nameTaken: Taken? = null,
         /** The edited exercise is in a workout or template, so removing it hides it ([Removal.HIDE]). */
         val inUse: Boolean = false,
+        /** ...and a workout has it: history the hide keeps. In use without it, only a template has it. */
+        val hasHistory: Boolean = false,
         /**
          * Leaving with this result, via goBack: the new exercise once the insert succeeded, the existing
          * one he chose over a taken name, the edited one once saved or hidden, or "" once deleted.
@@ -324,6 +326,7 @@ class CustomExerciseViewModel(
         hiddenIds = summaries.filter { it.hidden }.mapTo(HashSet()) { it.id }
         val edited = editId?.let { repository.exerciseById(it) }
         val inUse = editId?.let { repository.isExerciseInUse(it) } ?: false
+        val hasHistory = editId?.let { repository.exerciseHasHistory(it) } ?: false
         _uiState.update { state ->
             val filled = if (edited != null && !state.loaded) {
                 state.copy(
@@ -338,7 +341,7 @@ class CustomExerciseViewModel(
             } else {
                 state
             }
-            filled.copy(inUse = inUse).withClash()
+            filled.copy(inUse = inUse, hasHistory = hasHistory).withClash()
         }
         val all = repository.listExercises()
         val muscles = (all.flatMap { it.primaryMuscles } + all.flatMap { it.secondaryMuscles })
@@ -556,8 +559,14 @@ class CustomExerciseScreen(
 
             if (uiState.editing) {
                 if (removeArmed) {
-                    // In use, it leaves the picker but stays in his history; otherwise it is gone.
-                    ArmedHint(text = if (uiState.inUse) "TAP AGAIN TO HIDE · HISTORY KEPT" else "TAP AGAIN TO DELETE")
+                    // In use, it leaves the picker and stays where it is used; otherwise it is gone.
+                    ArmedHint(
+                        text = when {
+                            !uiState.inUse -> "TAP AGAIN TO DELETE"
+                            uiState.hasHistory -> "TAP AGAIN TO HIDE · HISTORY KEPT"
+                            else -> "TAP AGAIN TO HIDE · IT'S IN A TEMPLATE"
+                        },
+                    )
                 }
                 LightBottomBar(
                     items = listOf(
