@@ -84,6 +84,22 @@ class ExerciseOrderTest {
         assertEquals(false, tapTooSoonAfterMove(moved, moved - 1), "clock set back")
     }
 
+    @Test
+    fun `after a tick the steppers go to the next unticked row, not back to one he skipped`() {
+        // W1 ticked, W2 skipped, sets 1-3: set 1 just ticked.
+        val rows = listOf(row(11, 1, done = true), row(12, 1), row(13, 1, done = true), row(14, 1), row(15, 1))
+        assertEquals(14L, activeRowAfterTick(rows, tickedSetId = 13), "set 2, not the skipped W2")
+        // Ticked out of order: the one after it.
+        assertEquals(15L, activeRowAfterTick(rows.map { if (it.id == 14L) it.copy(completedAt = 9L) else it }, tickedSetId = 14))
+    }
+
+    @Test
+    fun `after the last row's tick the steppers wrap to the first unticked, or none`() {
+        val rows = listOf(row(11, 1), row(12, 1, done = true), row(13, 1, done = true))
+        assertEquals(11L, activeRowAfterTick(rows, tickedSetId = 13), "nothing after it: back to the skipped one")
+        assertNull(activeRowAfterTick(rows.map { it.copy(completedAt = 9L) }, tickedSetId = 13), "all done: the move to the next exercise")
+    }
+
     private fun slot(id: Long, position: Int) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position)
 

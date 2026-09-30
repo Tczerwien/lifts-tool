@@ -31,6 +31,17 @@ const val DOUBLE_TAP_MS = 600L
 /** Whether a checkbox tap at [now], after the one at [firstTapAt] on the same set, is a double tap to ignore ([DOUBLE_TAP_MS]). */
 fun isDoubleTap(firstTapAt: Long, now: Long): Boolean = now - firstTapAt in 0 until DOUBLE_TAP_MS
 
+/**
+ * The row the steppers go to after a tick on [tickedSetId], [rows] being one exercise's rows in order
+ * with the tick applied: the first unticked row after it, so a set he left out above (a skipped
+ * warm-up) doesn't pull the steppers and the list back up, and the next +5 lands on the next set; the
+ * first unticked row only when none follows. Null once every row is ticked.
+ */
+fun activeRowAfterTick(rows: List<SetEntity>, tickedSetId: Long): Long? {
+    val after = rows.drop(rows.indexOfFirst { it.id == tickedSetId } + 1)
+    return (after.firstOrNull { it.completedAt == null } ?: rows.firstOrNull { it.completedAt == null })?.id
+}
+
 /** [slots] in order starting just after [currentSlotId] and wrapping round, without it; all of them when it isn't one. */
 private fun slotsAfter(slots: List<WorkoutExerciseEntity>, currentSlotId: Long?): List<WorkoutExerciseEntity> {
     val ordered = slots.sortedBy { it.position }

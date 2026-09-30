@@ -18,6 +18,7 @@ import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.TypedWeight
+import com.tczerwien.lifts.session.activeRowAfterTick
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
 import com.tczerwien.lifts.session.autoAdvanceSlotId
@@ -417,9 +418,10 @@ class ActiveWorkoutViewModel(
     /**
      * Checkbox toggle. Completing logs exactly what the row shows: its starting value ([seedRows])
      * wherever it has none of its own. A row with nothing to log shows a hint instead. Completing
-     * advances the active row and starts rest per the completion result. Uncompleting keeps the
-     * logged values. A tap right after the one that ticked or unticked the same set ([isDoubleTap]) is
-     * a double tap or a bounce: it is ignored before anything else, so it cancels no pending move either.
+     * moves the steppers to the next unticked row ([activeRowAfterTick]) and starts rest per the
+     * completion result. Uncompleting keeps the logged values. A tap right after the one that ticked
+     * or unticked the same set ([isDoubleTap]) is a double tap or a bounce: it is ignored before
+     * anything else, so it cancels no pending move either.
      */
     fun toggleComplete(setId: Long) {
         val perf = Perf.start()
@@ -448,7 +450,7 @@ class ActiveWorkoutViewModel(
         } ?: return
         _uiState.update { state ->
             val block = state.exercises.firstOrNull { it.slot.id == set.workoutExerciseId }
-            state.copy(activeSetId = block?.sets?.firstOrNull { it.completedAt == null }?.id)
+            state.copy(activeSetId = block?.let { activeRowAfterTick(it.sets, setId) })
         }
         Perf.done("aw.tick.ui", perf)
         // The exercise's last set: move on once the rest that this tick starts is over.
