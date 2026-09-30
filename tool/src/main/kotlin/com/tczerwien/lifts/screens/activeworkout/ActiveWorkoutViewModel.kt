@@ -257,7 +257,13 @@ class ActiveWorkoutViewModel(
                     // restEnd is already the tick's rest here: DataStore updates its data before the save
                     // returns, so the rest emission reaches this collector before restSaved does. If that
                     // ever changes, a save stuck for 2 s could time the move from an older rest.
-                    delay((autoAdvanceAt(pending.tickedAt, restEnd) - System.currentTimeMillis()).coerceAtLeast(0L))
+                    // Never one long wait: delays count uptime, which stops while the phone sleeps. Checked
+                    // against the wall clock at least each second, the move comes within a second of waking.
+                    while (true) {
+                        val wait = autoAdvanceAt(pending.tickedAt, restEnd) - System.currentTimeMillis()
+                        if (wait <= 0) break
+                        delay(minOf(wait, 1_000L))
+                    }
                     autoAdvance(pending)
                 }
         }
