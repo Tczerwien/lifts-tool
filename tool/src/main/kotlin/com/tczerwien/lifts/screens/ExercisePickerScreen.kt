@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -64,7 +65,8 @@ class ExercisePickerViewModel(
     private val repository: LiftsRepository,
 ) : LightViewModel<String>() {
 
-    data class ExerciseRow(val id: String, val name: String, val muscleLabel: String)
+    /** [custom]: one he made, which the row's pencil edits. */
+    data class ExerciseRow(val id: String, val name: String, val muscleLabel: String, val custom: Boolean = false)
 
     data class UiState(
         /** The active chip, shown while no search is. */
@@ -99,16 +101,32 @@ class ExercisePickerViewModel(
     @Volatile
     private var recentIds: List<String> = emptyList()
 
+    /** The exercises he made: their rows carry a pencil. */
+    @Volatile
+    private var customIds: Set<String> = emptySet()
+
     private var loadStarted = false
 
+    /** He went to edit one of his exercises: the catalog may have changed by the time he is back. */
+    private var editOpened = false
+
     /**
-     * Loads the catalog the first time only; the SDK calls this straight after creating the view model,
-     * and again on every return. Behind any write still queued, so a rename saved a moment ago shows.
+     * Loads the catalog the first time, and again on the way back from editing one of his exercises
+     * (renamed, retyped, deleted or hidden), keeping his place; the SDK calls this straight after
+     * creating the view model, and again on every return. Behind any write still queued, so a rename
+     * saved a moment ago shows.
      */
     override fun onScreenShow(screen: SimpleLightScreen<String>) {
-        if (loadStarted) return
+        if (loadStarted && !editOpened) return
+        val reload = loadStarted
         loadStarted = true
-        LiftsIo.write({}) { load() }
+        editOpened = false
+        LiftsIo.write({}) { load(keepPlace = reload) }
+    }
+
+    /** The pencil on a row of his own: the edit screen opens, and the list reloads on the way back. */
+    fun onEditOpened() {
+        editOpened = true
     }
 
     /**
@@ -143,9 +161,14 @@ class ExercisePickerViewModel(
         _uiState.update { it.copy(searchQuery = null).withRows() }
     }
 
-    /** From the light projection, without the instructions ([catalogEntries]). */
-    private fun load() {
-        catalog = catalogEntries(repository.exerciseSummaries().filterNot { it.hidden })
+    /**
+     * From the light projection, without the instructions ([catalogEntries]); hidden exercises stay out.
+     * A reload after an edit ([keepPlace]) keeps the list where he left it.
+     */
+    private fun load(keepPlace: Boolean = false) {
+        val summaries = repository.exerciseSummaries().filterNot { it.hidden }
+        customIds = summaries.filter { it.isCustom }.mapTo(HashSet()) { it.id }
+        catalog = catalogEntries(summaries)
         val shown = catalog.mapTo(HashSet()) { it.id }
         recentIds = repository.recentExerciseIds(RECENT_LIMIT).filter { it in shown }
         val hasRecent = recentIds.isNotEmpty()
@@ -154,17 +177,17 @@ class ExercisePickerViewModel(
                 chip = chipAfterLoad(state.chip, state.chipChosen, hasRecent),
                 hasRecent = hasRecent,
                 loaded = true,
-            ).withRows()
+            ).withRows(newList = !keepPlace)
         }
     }
 
-    /** A new list for this state ([pickerEntries]): a search, else the chip's. */
-    private fun UiState.withRows(): UiState {
+    /** The list for this state ([pickerEntries]): a search, else the chip's; a [newList] starts at the top. */
+    private fun UiState.withRows(newList: Boolean = true): UiState {
         val rows = pickerEntries(catalog, recentIds, chip, searchQuery).map { it.toRow() }
         return copy(
             rows = rows,
             showMuscles = rows.mapTo(HashSet()) { it.muscleLabel }.size > 1,
-            listGeneration = listGeneration + 1,
+            listGeneration = if (newList) listGeneration + 1 else listGeneration,
         )
     }
 
@@ -172,6 +195,7 @@ class ExercisePickerViewModel(
         id = id,
         name = shown,
         muscleLabel = primaryMuscles.firstOrNull()?.let(::titleCaseLabel) ?: "—",
+        custom = id in customIds,
     )
 }
 
@@ -275,7 +299,12 @@ class ExercisePickerScreen(
                             item(key = NO_MATCH_KEY) { NoMatchRow() }
                         }
                         items(uiState.rows, key = { it.id }) { row ->
-                            ExerciseRow(row = row, showMuscle = uiState.showMuscles, onClick = { goBack(row.id) })
+                            ExerciseRow(
+                                row = row,
+                                showMuscle = uiState.showMuscles,
+                                onClick = { goBack(row.id) },
+                                onEdit = { editExercise(row.id) },
+                            )
                         }
                         // After the results, not instead of them: none may be the one he means.
                         if (query != null && uiState.loaded) {
@@ -301,6 +330,12 @@ class ExercisePickerScreen(
     /** Opens New Exercise with [name] filled in; the exercise he saves is the pick. */
     private fun createExercise(name: String) {
         navigateTo({ CustomExerciseScreen(it, initialName = name) }) { createdId -> goBack(createdId) }
+    }
+
+    /** Edits one of his exercises: saving or removing it is not a pick; the list reloads on the way back. */
+    private fun editExercise(id: String) {
+        viewModel.onEditOpened()
+        navigateTo({ CustomExerciseScreen(it, editId = id) })
     }
 
     /**
@@ -374,11 +409,17 @@ private const val ROW_DIVIDER_ALPHA = 0.3f
 /**
  * Uniform 3gu catalog row (design .exrow): the name left, cut in the middle when too long so the words
  * that tell variants apart stay ("Decline Dumb…Flyes"); the primary muscle right in contentSecondary
- * when [showMuscle]; a full-width hairline divider at the bottom edge (inside the row so the
+ * when [showMuscle]; on an exercise he made, a pencil at the end that edits it ([onEdit]) rather than
+ * picking it; a full-width hairline divider at the bottom edge (inside the row so the
  * LightLazyScrollView uniform-height contract holds). The 2gu end padding holds the scrollbar.
  */
 @Composable
-private fun ExerciseRow(row: ExercisePickerViewModel.ExerciseRow, showMuscle: Boolean, onClick: () -> Unit) {
+private fun ExerciseRow(
+    row: ExercisePickerViewModel.ExerciseRow,
+    showMuscle: Boolean,
+    onClick: () -> Unit,
+    onEdit: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -406,6 +447,18 @@ private fun ExerciseRow(row: ExercisePickerViewModel.ExerciseRow, showMuscle: Bo
                     lighten = true,
                     maxLines = 1,
                 )
+            }
+            if (row.custom) {
+                // Its own 3gu target, the row's full height, so a tap beside it still picks.
+                Box(
+                    modifier = Modifier
+                        .padding(start = 0.5f.gridUnitsAsDp())
+                        .size(EXERCISE_ROW_HEIGHT_UNITS.gridUnitsAsDp())
+                        .lightClickable(onClick = onEdit),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    LightIcon(icon = LightIcons.PENCIL, size = 1.4f, contentDescription = "edit exercise")
+                }
             }
         }
         Box(

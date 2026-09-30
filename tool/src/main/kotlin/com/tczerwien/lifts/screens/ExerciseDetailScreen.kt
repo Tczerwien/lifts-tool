@@ -127,6 +127,12 @@ class ExerciseDetailViewModel(
         val loaded: Boolean = false,
         /** Opened only to rename, and the rename is done or dropped: the screen goes back. */
         val leave: Boolean = false,
+        /** One he made: About offers the whole form ([CustomExerciseScreen]). */
+        val isCustom: Boolean = false,
+        /** "Chest · Dumbbell": its primary muscle and equipment, for that row. */
+        val musclesAndEquipment: String = "",
+        /** Taken out of the picker ([com.tczerwien.lifts.library.Removal.HIDE]): About offers it back. */
+        val hidden: Boolean = false,
     )
 
     enum class Editing { NOTE, NAME }
@@ -309,6 +315,16 @@ class ExerciseDetailViewModel(
         }
     }
 
+    /** About's "Show in picker": a hidden exercise of his goes back into the picker (workouts.json marks it). */
+    fun showInPicker() {
+        if (!_uiState.value.hidden) return
+        _uiState.update { it.copy(hidden = false) }
+        LiftsIo.write({ repository.setExerciseHidden(exerciseId, hidden = false) }) { changed ->
+            if (changed) share.logChanged()
+            refresh()
+        }
+    }
+
     /** How a rename on the lane went. */
     private sealed interface RenameResult {
         data object Saved : RenameResult
@@ -366,6 +382,11 @@ class ExerciseDetailViewModel(
                 history = history,
                 records = records,
                 loaded = true,
+                isCustom = exercise?.isCustom == true,
+                musclesAndEquipment = listOfNotNull(exercise?.primaryMuscles?.firstOrNull(), exercise?.equipment)
+                    .joinToString(" · ") { titleCaseLabel(it) }
+                    .ifEmpty { "—" },
+                hidden = exercise?.hidden == true,
             )
         }
     }
@@ -554,6 +575,13 @@ class ExerciseDetailScreen(
         LightScrollView(modifier = modifier) {
             LiftsFieldRow(label = "Name", value = uiState.name, onClick = viewModel::openNameEditor, chevron = true)
             LiftsFieldRow(label = "Type", value = uiState.tracking.label, onClick = viewModel::openTypePicker, chevron = true)
+            if (uiState.isCustom) {
+                // His own: muscles, equipment and category too, and the trash (hidden, as it has history).
+                LiftsFieldRow(label = "Muscles & Equipment", value = uiState.musclesAndEquipment, onClick = ::editCustom, chevron = true)
+            }
+            if (uiState.hidden) {
+                LiftsFieldRow(label = "Hidden From Picker", value = "Show", onClick = viewModel::showInPicker, chevron = true)
+            }
             if (uiState.loaded && note == null && uiState.instructions.isEmpty()) {
                 LightText(
                     text = "No instructions",
@@ -589,6 +617,11 @@ class ExerciseDetailScreen(
                 }
             }
         }
+    }
+
+    /** The whole form for one he made; the screen reloads on the way back, and leaves if it was deleted. */
+    private fun editCustom() {
+        navigateTo({ CustomExerciseScreen(it, editId = exerciseId) }) { result -> if (result.isEmpty()) goBack() }
     }
 
     /** The ways to measure an exercise, each with what it is for; the current one says so. */
