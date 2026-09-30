@@ -74,8 +74,9 @@ internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, la
 
 /**
  * Whether scrolling to [target] moves the rows from where they are ([firstVisibleIndex] at the top,
- * [firstVisibleOffset] px scrolled into it): then a tap already on its way lands on another row
- * ([ActiveWorkoutViewModel.rowsScrolled]). A list built on the target (a new exercise) doesn't move.
+ * [firstVisibleOffset] px scrolled into it): right after a tick, a double tap's second tap then lands
+ * on another row ([ActiveWorkoutViewModel.rowsScrolled]). A list built on the target (a new exercise)
+ * doesn't move.
  */
 internal fun scrollMovesRows(target: Int?, firstVisibleIndex: Int, firstVisibleOffset: Int): Boolean =
     target != null && (target != firstVisibleIndex || firstVisibleOffset != 0)
