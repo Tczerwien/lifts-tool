@@ -7,6 +7,7 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.settings.barAfterUnitSwitch
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
 
@@ -95,19 +96,19 @@ object RestorePlan {
     }
 
     /** [summary] as the Restore screen's lines, e.g. "26 workouts · 350 sets". */
-    fun lines(summary: Summary, zone: ZoneId = ZoneId.systemDefault()): List<String> = buildList {
+    fun lines(summary: Summary, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): List<String> = buildList {
         add("${count(summary.workouts, "workout")} · ${count(summary.loggedSets, "set")}")
         val first = summary.firstWorkoutAt
         val last = summary.lastWorkout
         if (first != null && last != null) {
             add("${Format.dateWithYear(first, zone)} – ${Format.dateWithYear(last.startedAt, zone)}")
-            add("last: ${last.name} · ${Format.dateShort(last.startedAt, zone)}")
+            add("last: ${last.name} · ${Format.dateShort(last.startedAt, zone, today)}")
         }
         add(
             "${count(summary.templates, "template")} · ${count(summary.customExercises, "custom exercise")} · " +
                 count(summary.weighIns, "weigh-in"),
         )
-        summary.openWorkout?.let { add("in progress: ${it.name} · ${Format.dateShort(it.startedAt, zone)}") }
+        summary.openWorkout?.let { add("in progress: ${it.name} · ${Format.dateShort(it.startedAt, zone, today)}") }
     }
 
     private fun count(n: Int, noun: String) =

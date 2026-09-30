@@ -14,6 +14,7 @@ import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,7 +81,7 @@ class RestorePlanTest {
                 "1 template · 1 custom exercise · 2 weigh-ins",
                 "in progress: Upper A · Sep 28",
             ),
-            RestorePlan.lines(RestorePlan.summarize(rows), utc),
+            RestorePlan.lines(RestorePlan.summarize(rows), utc, LocalDate.of(2026, 9, 29)),
         )
     }
 
@@ -89,7 +90,7 @@ class RestorePlanTest {
         val empty = rows.copy(workouts = emptyList(), workoutExercises = emptyList(), sets = emptyList(), templates = emptyList(), templateExercises = emptyList(), bodyweight = emptyList())
         assertEquals(
             listOf("0 workouts · 0 sets", "0 templates · 1 custom exercise · 0 weigh-ins"),
-            RestorePlan.lines(RestorePlan.summarize(empty), utc),
+            RestorePlan.lines(RestorePlan.summarize(empty), utc, LocalDate.of(2026, 9, 29)),
         )
     }
 
