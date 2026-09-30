@@ -27,6 +27,8 @@ import com.tczerwien.lifts.session.parseTypedWeight
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
+import com.tczerwien.lifts.ui.ArmedAction
+import com.tczerwien.lifts.ui.ArmedHint
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.LiftsListRow
@@ -139,6 +141,7 @@ class BarWeightsViewModel(
 
     /** Moves the weight [delta] of Settings' weight steps along the grid ([Format.stepWeight]). */
     fun stepWeight(delta: Int) {
+        deleteArm.disarm()
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
         val next = Format.stepWeight(mode.displayWeight, delta, state.weightStep)
@@ -147,6 +150,7 @@ class BarWeightsViewModel(
 
     /** A tap on the weight: the keyboard, opening on the weight as it shows. */
     fun openWeightEntry() {
+        deleteArm.disarm()
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
         val prefill = Format.weight(Format.displayToKg(mode.displayWeight, state.units), state.units)
@@ -169,6 +173,7 @@ class BarWeightsViewModel(
     }
 
     fun save() {
+        deleteArm.disarm()
         val state = _uiState.value
         val mode = state.mode as? Mode.EditWeight ?: return
         // Close the editor synchronously so a double-tap on ACCEPT cannot insert twice.
@@ -194,9 +199,14 @@ class BarWeightsViewModel(
         }
     }
 
+    /** The weight editor's trash: two taps, the second 0.4 to 3 s after the first ([ArmedAction]). */
+    val deleteArm = ArmedAction(viewModelScope)
+
+    /** First tap arms ("tap again to delete"); the second deletes the bar and goes back to the list. */
     fun delete() {
         val state = _uiState.value
         val barId = (state.mode as? Mode.EditWeight)?.barId ?: return
+        if (!deleteArm.tap()) return
         _uiState.update { it.copy(mode = Mode.BarList) }
         LiftsIo.write {
             repository.deleteBar(barId)
@@ -208,6 +218,7 @@ class BarWeightsViewModel(
 
     /** Back from an editor: the keyboard goes back to the stepper, anything else to the list. */
     fun closeEditor() {
+        deleteArm.disarm()
         _uiState.update { state ->
             val mode = state.mode
             state.copy(mode = if (mode is Mode.TypeWeight) mode.editing else Mode.BarList)
@@ -216,6 +227,10 @@ class BarWeightsViewModel(
 
     override fun onBackPressed(): Boolean {
         if (_uiState.value.mode == Mode.BarList) return false
+        if (deleteArm.armed.value) {
+            deleteArm.disarm()
+            return true
+        }
         closeEditor()
         return true
     }
@@ -364,6 +379,7 @@ class BarWeightsScreen(
 
     @Composable
     private fun WeightEditor(mode: BarWeightsViewModel.Mode.EditWeight, units: WeightUnit) {
+        val deleteArmed by viewModel.deleteArm.armed.collectAsState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -407,6 +423,7 @@ class BarWeightsScreen(
                 )
             }
             if (mode.barId != null) {
+                if (deleteArmed) ArmedHint(text = "TAP AGAIN TO DELETE")
                 LightBottomBar(
                     items = listOf(
                         LightBarButton.LightIcon(
