@@ -196,9 +196,14 @@ class ActiveWorkoutViewModel(
      * reload is four queries, not a scan of the whole history.
      */
     private val history = HistoryCache { missing ->
+        // Replayed here, before the cache publishes it: after a delete or a type change mid-workout a tap
+        // could otherwise meet an un-replayed history and replay years of it on the main thread.
+        val tracking = repository.exercisesByIds(missing).mapValues { it.value.tracking }
         HistoryCache.Snapshot(
             lastTime = session.previousGroupsByExercise(missing),
-            prior = session.priorHistory(missing, resolvedWorkoutId ?: -1).mapValues { PriorHistory(it.value) },
+            prior = session.priorHistory(missing, resolvedWorkoutId ?: -1).mapValues { (id, sets) ->
+                PriorHistory(sets).also { it.warm(tracking[id] ?: Tracking.WEIGHT_REPS) }
+            },
         )
     }
 
