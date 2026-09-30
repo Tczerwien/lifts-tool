@@ -170,7 +170,7 @@ class ExerciseSearchTest {
     }
 
     /**
-     * Everyday lifts (from a private note), in plain gym words: 28 exercises, each
+     * Everyday lifts, in plain gym words: 28 exercises, each
      * alternative ("hack squat or leg press") searched on its own. Every one is found first, or second
      * where the catalog has two right answers.
      */
