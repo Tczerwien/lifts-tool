@@ -264,6 +264,26 @@ data class WorkoutSummary(
     val bodyweight: WorkoutBodyweight?,
 )
 
+/**
+ * Record lines Workout Complete has room for, a "+N MORE" line included: a first session of an
+ * eight-exercise template sets a record on every one, and a column cuts what doesn't fit without a word.
+ */
+const val MAX_RECORD_LINES = 6
+
+/** The records Workout Complete lists ([shown]), and how many it leaves to "+[more] MORE". */
+data class RecordLines(val shown: List<PrRecord>, val more: Int)
+
+/**
+ * [records] as Workout Complete lists them in [maxLines] lines: all when they fit, else the first
+ * [maxLines] − 1 and a "+N MORE" line for the rest (Workout Detail stars every one).
+ */
+fun recordLines(records: List<PrRecord>, maxLines: Int = MAX_RECORD_LINES): RecordLines =
+    if (records.size <= maxLines) {
+        RecordLines(records, more = 0)
+    } else {
+        RecordLines(records.take(maxLines - 1), more = records.size - (maxLines - 1))
+    }
+
 /** The set the lifter is resting toward, with its 1-based number within its exercise. */
 data class NextPendingSet(
     val slot: WorkoutExerciseEntity,

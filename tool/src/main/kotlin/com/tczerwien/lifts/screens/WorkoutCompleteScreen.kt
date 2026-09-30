@@ -23,6 +23,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.PrRecord
 import com.tczerwien.lifts.session.WorkoutSummary
+import com.tczerwien.lifts.session.recordLines
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -186,7 +187,9 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
             Gap(1.5f)
             LightText(text = "NEW RECORDS", variant = LightTextVariant.Superfine, lighten = true)
             Gap(0.5f)
-            summary.prs.forEach { pr ->
+            // Six lines at most: the column would cut the rest off without a word.
+            val lines = recordLines(summary.prs)
+            lines.shown.forEach { pr ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     LightText(
                         text = "${pr.exerciseName} ",
@@ -203,6 +206,10 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
                         modifier = Modifier.padding(start = 0.4f.gridUnitsAsDp()),
                     )
                 }
+            }
+            if (lines.more > 0) {
+                // Workout Detail stars every one.
+                LightText(text = "+${lines.more} MORE", variant = LightTextVariant.Superfine, lighten = true)
             }
         }
 

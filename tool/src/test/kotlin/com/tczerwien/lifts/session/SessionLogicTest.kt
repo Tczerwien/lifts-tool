@@ -134,6 +134,15 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `Workout Complete lists six records, or five and a line for the rest`() {
+        val records = (1..8).map { PrRecord("e$it", "Lift $it", weightKg = 100.0, reps = 5) }
+        assertEquals(RecordLines(records.take(6), more = 0), recordLines(records.take(6)))
+        assertEquals(RecordLines(records.take(5), more = 2), recordLines(records.take(7)))
+        assertEquals(RecordLines(records.take(5), more = 3), recordLines(records))
+        assertEquals(RecordLines(emptyList(), more = 0), recordLines(emptyList()))
+    }
+
+    @Test
     fun `RIR starts at the target, counts down to 0, then up, then blank, and is stored as RPE`() {
         // No target: the usual 2 is one tap, 1 two, 0 three.
         assertEquals(listOf(null, 2, 1, 0, 3, 4, 5, null), rirCycle(null))
