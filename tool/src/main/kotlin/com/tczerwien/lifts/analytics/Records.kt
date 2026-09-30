@@ -216,9 +216,16 @@ class PriorHistory(sets: List<SetEntity>) {
     private val replayed = HashMap<Tracking, RecordTracker>()
 
     /** The record state after every set in [ordered], as a copy to go on from. */
-    fun after(tracking: Tracking): RecordTracker = synchronized(replayed) {
+    fun after(tracking: Tracking): RecordTracker = replay(tracking).copy()
+
+    /** Replays [ordered] for [tracking] now (off the main thread), so the first [after] doesn't have to. */
+    fun warm(tracking: Tracking) {
+        replay(tracking)
+    }
+
+    private fun replay(tracking: Tracking): RecordTracker = synchronized(replayed) {
         replayed.getOrPut(tracking) { RecordTracker(tracking).also { tracker -> ordered.forEach(tracker::record) } }
-    }.copy()
+    }
 
     /** Whether [set] comes after every set in [ordered] in completion order (it can go on from [after]). */
     fun isBefore(set: SetEntity): Boolean = ordered.lastOrNull()?.let { COMPLETION_ORDER.compare(it, set) < 0 } ?: true

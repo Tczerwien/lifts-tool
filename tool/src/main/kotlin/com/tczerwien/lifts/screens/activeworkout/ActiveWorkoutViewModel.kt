@@ -1083,6 +1083,9 @@ class ActiveWorkoutViewModel(
         val catalog = repository.exercisesByIds(exerciseIds)
         history.ensure(exerciseIds)
         val cached = history.snapshot
+        // Each exercise's history replayed here, on IO and outside the lock taps take: otherwise the
+        // first tick of an exercise with nothing ticked yet replays years of it on the main thread.
+        for (exerciseId in exerciseIds) cached.prior[exerciseId]?.warm(catalog[exerciseId]?.tracking ?: Tracking.WEIGHT_REPS)
         val lastTimeBySlot = previousForSlots(slots, cached.lastTime)
         // Only the first load picks the exercise; after that the lifter's choice stands.
         val savedSlotId = if (_uiState.value.loaded) null else session.currentSlotSnapshot(workoutId)
