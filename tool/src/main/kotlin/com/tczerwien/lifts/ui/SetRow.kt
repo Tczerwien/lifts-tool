@@ -86,8 +86,11 @@ private const val PR_STAR_UNITS = 1.1f
 private const val PAD_START_UNITS = 1f
 private const val MARKER_PAD_UNITS = 0.3f
 
-/** How far "REPS/SIDE" runs left of its column in [SetRowHeader]. */
-private const val PER_SIDE_OVERHANG_UNITS = 1.5f
+/**
+ * Room kept left of the count's column for "REPS/SIDE" in [SetRowHeader]: it measured 164 px in its 160 px
+ * column on the emulator, so half a unit covers a wider font and leaves LBS near its numbers.
+ */
+private const val PER_SIDE_OVERHANG_UNITS = 0.5f
 
 /** The set list's scrollbar floats over this much of the right edge; nothing tappable goes there. */
 private const val PAD_END_UNITS = 2f

@@ -252,6 +252,7 @@ class ActiveWorkoutScreen(
                             tracking = current.tracking,
                             activeSet = activeSet,
                             seed = activeSet?.let { current.seeds[current.sets.indexOf(it)] },
+                            perSide = current.perSide,
                         )
 
                         viewModel.nextExercise(uiState)?.let { next ->

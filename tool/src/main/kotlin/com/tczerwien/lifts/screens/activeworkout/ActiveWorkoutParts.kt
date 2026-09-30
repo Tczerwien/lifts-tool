@@ -159,6 +159,8 @@ internal fun StepperStrip(
     activeSet: SetEntity?,
     /** The active row's starting values; shown dimmed where the row has none of its own. */
     seed: RowValues?,
+    /** One side at a time: the count stepper says so ("Reps/side"). */
+    perSide: Boolean = false,
 ) {
     val active = activeSet != null
     Row(
@@ -202,7 +204,7 @@ internal fun StepperStrip(
                 onStep = viewModel::stepDuration,
                 bigSteps = true,
                 modifier = Modifier.weight(1.2f),
-                label = "Time (sec)",
+                label = if (perSide) "Time/side (sec)" else "Time (sec)",
                 decrementEnabled = active && viewModel.durationDecrementEnabled(uiState),
                 incrementEnabled = active,
             ) {
@@ -219,7 +221,7 @@ internal fun StepperStrip(
             Stepper(
                 onStep = viewModel::stepReps,
                 modifier = Modifier.weight(if (tracking.takesWeight) 1f else 1.2f),
-                label = "Reps",
+                label = if (perSide) "Reps/side" else "Reps",
                 decrementEnabled = active && viewModel.repsDecrementEnabled(uiState),
                 incrementEnabled = active,
             ) {
