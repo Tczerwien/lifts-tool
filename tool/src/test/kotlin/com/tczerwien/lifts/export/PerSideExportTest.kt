@@ -98,5 +98,22 @@ class PerSideExportTest {
         assertEquals(null, exercises[1]["rep_min"], "absent without one")
     }
 
+    @Test
+    fun aHoldLeavesOutARangeSetBeforeItsTypeChanged() {
+        val plank = exercise("plank", "Plank", perSide = false).copy(trackingType = "duration")
+        val held = ExportFixtures.snapshot(
+            exercises = listOf(plank),
+            workouts = listOf(workout),
+            slots = listOf(WorkoutExerciseEntity(id = 1, workoutId = 1, exerciseId = "plank", position = 0, targetRepMin = 30, targetRepMax = 60, targetRir = 1)),
+            sets = listOf(set(1, 1, 0, 0.0, 0, "2026-07-13T10:05:00Z").copy(weightKg = null, reps = null, durationSec = 45)),
+            unit = WeightUnit.LB,
+        )
+        assertTrue(MarkdownExport.render(held).contains("- **Plank** [quadriceps]\n"), "no target tag on a hold")
+        val exercise = Json.parseToJsonElement(JsonExport.render(held)).jsonObject.getValue("workouts").jsonArray
+            .single().jsonObject.getValue("exercises").jsonArray.single().jsonObject
+        assertEquals(null, exercise["rep_min"])
+        assertEquals(null, exercise["target_rir"])
+    }
+
     private fun at(iso: String): Long = ExportFixtures.millis(iso)
 }

@@ -295,9 +295,10 @@ fun buildSnapshot(
                         secondaryMuscles = exercise?.secondaryMuscles ?: emptyList(),
                         notes = slot.notes,
                         perSide = exercise?.perSide == true,
-                        targetRepMin = slot.targetRepMin,
-                        targetRepMax = slot.targetRepMax,
-                        targetRir = slot.targetRir,
+                        // A hold is seconds: a range or RIR set before its type changed says nothing about it.
+                        targetRepMin = slot.targetRepMin?.takeIf { exercise?.tracking?.takesReps != false },
+                        targetRepMax = slot.targetRepMax?.takeIf { exercise?.tracking?.takesReps != false },
+                        targetRir = slot.targetRir?.takeIf { exercise?.tracking?.takesReps != false },
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,
