@@ -59,6 +59,17 @@ class ActiveSessionTest {
 
     private fun newSession() = ActiveSession(store, SettingsStore(dataStore), dataStore, alarm)
 
+    init {
+        // The exercises the tests pick, as the catalog holds them (weight × reps): a pick of one the
+        // log doesn't have is refused. A test that needs a type or a custom exercise puts its own over these.
+        for (id in listOf("bench", "squat", "fly", "curl", "row", "pullup", "plank")) {
+            store.exercises[id] = com.tczerwien.lifts.data.ExerciseEntity(
+                id = id, name = id, equipment = null, primaryMuscles = emptyList(), secondaryMuscles = emptyList(),
+                category = "strength", level = null, instructions = emptyList(),
+            )
+        }
+    }
+
     // --- Starting a workout ---
 
     @Test
@@ -481,6 +492,16 @@ class ActiveSessionTest {
         session.discardWorkout(again)
         val template = assertNotNull(session.saveAsTemplate(source, "Push"))
         assertEquals(listOf("bench"), store.exercisesForTemplate(template).map { it.exerciseId })
+    }
+
+    @Test
+    fun `a pick of an exercise deleted or removed since the picker read its list adds nothing`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        assertNull(session.addExercise(workoutId, "custom-gone"), "deleted: a slot would name a missing exercise")
+        store.exercises["sled"] = store.exercises.getValue("bench").copy(id = "sled", name = "Sled Push", isCustom = true, hidden = true)
+        assertNull(session.addExercise(workoutId, "sled"), "removed: hidden, kept only for its history")
+        assertTrue(store.exercisesForWorkout(workoutId).isEmpty())
+        assertNotNull(session.addExercise(workoutId, "bench"))
     }
 
     @Test

@@ -205,11 +205,14 @@ class TemplateEditorViewModel(
 
     /**
      * Appends the picked exercise with [DEFAULT_TARGET_SETS] sets and settings-default rests; nothing
-     * when the template is gone (deleted while the picker was open), which would break the foreign key.
+     * when the template is gone (deleted while the picker was open), which would break the foreign key,
+     * or the exercise is (deleted or removed after the picker read its list): a row naming a missing
+     * exercise would make every backup of the log refused.
      */
     fun addExercise(exerciseId: String) = mutate {
         repository.inTransaction {
             if (repository.templateById(templateId) == null) return@inTransaction
+            if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction
             val position =
                 (repository.exercisesForTemplate(templateId).maxOfOrNull { it.position } ?: -1) + 1
             repository.addTemplateExercise(

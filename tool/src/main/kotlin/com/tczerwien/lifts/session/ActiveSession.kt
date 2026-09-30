@@ -205,6 +205,9 @@ class ActiveSession(
      */
     fun addExercise(workoutId: Long, exerciseId: String): Long? = repository.inTransaction {
         if (repository.workoutById(workoutId)?.takeIf { it.endedAt == null } == null) return@inTransaction null
+        // Picked from a list read before he deleted or removed it: a slot for it would name an
+        // exercise that isn't there (or one he took out), and a backup of that log is refused.
+        if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction null
         val slots = repository.exercisesForWorkout(workoutId)
         val position = slots.maxOfOrNull { it.position + 1 } ?: 0
         val occurrence = slots.count { it.exerciseId == exerciseId }
