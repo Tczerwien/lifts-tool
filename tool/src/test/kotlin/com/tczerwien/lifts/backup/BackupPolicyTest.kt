@@ -88,17 +88,33 @@ class BackupPolicyTest {
     }
 
     @Test
-    fun `files from a wrong clock count as oldest, so later backups survive the next prune`() {
+    fun `files from a clock that was ahead stay until it passes them, and later backups survive`() {
         // The clock ran a month ahead for three pre-restore copies, then was fixed.
         val future = (1..3).map { d -> stored("pre-restore-2026-10-%02d-0800.db".format(d), sep1 + (30 + d) * day) }
         val fresh = stored("pre-restore-2026-09-01-0800.db", sep1)
-        assertEquals(listOf(future.first().name), BackupPolicy.toDelete(future + fresh, now = sep1, justWritten = fresh.name))
-        // At the next backup a future-dated copy goes, not the fresh one (before, the fresh one looked oldest).
-        val next = stored("pre-restore-2026-09-02-0800.db", sep1 + day)
+        assertEquals(emptyList(), BackupPolicy.toDelete(future + fresh, now = sep1, justWritten = fresh.name))
+        // Later copies are pruned among themselves, never pushed out by the future-dated ones.
+        val later = (2..4).map { d -> stored("pre-restore-2026-09-%02d-0800.db".format(d), sep1 + (d - 1) * day) }
         assertEquals(
-            listOf(future[1].name),
-            BackupPolicy.toDelete(future.drop(1) + fresh + next, now = sep1 + day, justWritten = next.name),
+            listOf(fresh.name),
+            BackupPolicy.toDelete(future + fresh + later, now = later.last().writtenAt, justWritten = later.last().name),
         )
+        // Once the clock passes them they are ordinary copies again: the newest three, so the rest go.
+        val pastThem = sep1 + 40 * day
+        assertEquals(later.map { it.name }.toSet(), BackupPolicy.toDelete(future + later, now = pastThem).toSet())
+    }
+
+    @Test
+    fun `a clock reset to months ago prunes none of the real backups`() {
+        // A year of daily backups to 2026-09-29; the battery ran out and the phone came back thinking it
+        // is 2026-06-01. Home finds no backup it believes and writes one; nothing written later goes.
+        val first = millis("2025-09-30T20:00:00Z")
+        val daily = (0 until 365).map { d -> (first + d * day).let { stored(BackupPolicy.fileName(Kind.DATED, it, utc), it) } }
+        val now = millis("2026-06-01T09:00:00Z")
+        val wrong = stored(BackupPolicy.fileName(Kind.DATED, now, utc), now)
+        val deleted = BackupPolicy.toDelete(daily + wrong, now = now, justWritten = wrong.name, zone = utc).toSet()
+        assertTrue(deleted.isNotEmpty(), "copies before the wrong date are pruned as usual")
+        assertTrue(daily.filter { it.writtenAt > now }.none { it.name in deleted }, "every copy from after the wrong date stays")
     }
 
     @Test
@@ -148,9 +164,11 @@ class BackupPolicyTest {
         val now = millis("2026-09-29T20:00:00Z")
         val recent = (0 until 10).map { d -> stored("lifts-2026-09-%02d-2000.db".format(29 - d), now - d * day) }
         val future = stored("lifts-2026-12-01-2000.db", now + 60 * day)
+        // August's newest real copy stays as its month's, whatever the future file's date.
         val lastMonth = stored("lifts-2026-08-15-2000.db", now - 45 * day)
-        val deleted = BackupPolicy.toDelete(recent + future + lastMonth, now = now, zone = utc)
-        assertEquals(listOf(future.name), deleted)
+        val older = stored("lifts-2026-08-10-2000.db", now - 50 * day)
+        val deleted = BackupPolicy.toDelete(recent + future + lastMonth + older, now = now, zone = utc)
+        assertEquals(listOf(older.name), deleted)
     }
 
     @Test

@@ -71,9 +71,11 @@ object BackupPolicy {
      * The files of a backups folder ([stored]) to delete: every dated copy but the newest [KEEP_DATED]
      * and every pre-restore copy but the newest [KEEP_PRE_RESTORE], newest by when they were written;
      * the dated copies that are the newest of one of the last [KEEP_WEEKLY] weeks or [KEEP_MONTHLY]
-     * months (local calendar in [zone]) stay too. A file written in the future (the clock was wrong,
-     * then fixed) counts as oldest, and never as a week's or month's copy: it predates the fix.
-     * [justWritten] is never on the list and counts toward its kind's limit. Names in [keep] (the
+     * months (local calendar in [zone]) stay too. A file written in the future is never on the list
+     * and doesn't count: either it came from a clock that was ahead (it waits until the clock passes
+     * it, and meanwhile never stands for a week or a month), or the clock is behind now (a phone that
+     * lost its time when the battery ran out), and then it is one of his real restore points, which a
+     * wrong clock must not prune. [justWritten] is never on the list and counts toward its kind's limit. Names in [keep] (the
      * file a restore is reading) are never on the list either, but don't count: the limit may be
      * passed for a while, and a later backup trims the extra copy. [LATEST] and files Lifts didn't
      * name are never on the list.
@@ -94,11 +96,9 @@ object BackupPolicy {
                 Kind.PRE_RESTORE -> KEEP_PRE_RESTORE
             }
             val kept = if (justWritten != null && kindOf(justWritten) == kind) 1 else 0
-            val ordered = byKind[kind].orEmpty().sortedWith(
-                compareBy<Stored> { it.writtenAt > now + CLOCK_SLACK_MS }
-                    .thenByDescending { it.writtenAt }
-                    .thenByDescending { it.name },
-            )
+            val ordered = byKind[kind].orEmpty()
+                .filter { it.writtenAt <= now + CLOCK_SLACK_MS }
+                .sortedWith(compareByDescending<Stored> { it.writtenAt }.thenByDescending { it.name })
             val recent = ordered.take((limit - kept).coerceAtLeast(0)).mapTo(HashSet()) { it.name }
             val longer = if (kind == Kind.DATED) newestPerWeekAndMonth(distinct.filter { kindOf(it.name) == kind }, now, zone) else emptySet()
             ordered.filter { it.name !in recent && it.name !in longer }.map { it.name }
