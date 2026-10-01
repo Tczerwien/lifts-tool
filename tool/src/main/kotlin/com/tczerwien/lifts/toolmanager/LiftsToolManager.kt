@@ -2,8 +2,8 @@ package com.tczerwien.lifts.toolmanager
 
 import com.thelightphone.toolmanager.ClientLeafNode
 import com.thelightphone.toolmanager.ClientToolManifest
-import com.thelightphone.toolmanager.DropboxSpec
 import com.thelightphone.toolmanager.FileBrowserSpec
+import com.thelightphone.toolmanager.UploadSpec
 
 /**
  * What Lifts shows in Tool Manager, the browser page LightOS serves for moving files on and off the
@@ -42,7 +42,7 @@ object LiftsToolManager {
                 readOnly = true,
             ),
             ClientLeafNode(
-                spec = DropboxSpec(
+                spec = UploadSpec(
                     label = "Restore",
                     path = RESTORE,
                     headerText = "Upload a Lifts backup (.db) here, then open Lifts: it shows what the file holds " +

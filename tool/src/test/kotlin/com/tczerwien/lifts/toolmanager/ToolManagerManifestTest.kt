@@ -36,7 +36,7 @@ class ToolManagerManifestTest {
             listOf(
                 Folder("FileBrowserSpec", "Exports", LiftsToolManager.EXPORTS, readOnly = true),
                 Folder("FileBrowserSpec", "Backups", LiftsToolManager.BACKUPS, readOnly = true),
-                Folder("DropboxSpec", "Restore", LiftsToolManager.RESTORE, readOnly = false),
+                Folder("UploadSpec", "Restore", LiftsToolManager.RESTORE, readOnly = false),
             ),
             folders,
         )
