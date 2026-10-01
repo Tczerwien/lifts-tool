@@ -548,6 +548,8 @@ class ActiveWorkoutViewModel(
         val located = locate(set.id) ?: return
         val shows = set.weightKg ?: located.block.seeds[located.index].weightKg
         val prefill = shows?.let { Format.weight(currentTracking(state).shownWeight(it)!!, state.units) }.orEmpty()
+        // The keyboard covers the screen, as another screen would: an armed Finish doesn't outlive it.
+        finishArm.disarm()
         _uiState.update { it.copy(weightEntry = WeightEntry(set.id, prefill, ++weightEntrySession)) }
     }
 
