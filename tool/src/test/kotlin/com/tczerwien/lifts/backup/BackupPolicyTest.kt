@@ -183,9 +183,22 @@ class BackupPolicyTest {
 
     @Test
     fun `a Finish since the newest backup makes Home back up, whatever the day`() {
-        assertTrue(BackupPolicy.behindLog(lastMillis = 1_000, lastWorkoutEnd = 2_000), "finished after the last copy")
-        assertFalse(BackupPolicy.behindLog(lastMillis = 3_000, lastWorkoutEnd = 2_000), "copied since")
-        assertTrue(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = 2_000), "no copy yet")
-        assertFalse(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = null), "nothing finished")
+        val now = 10_000L
+        assertTrue(BackupPolicy.behindLog(lastMillis = 1_000, lastWorkoutEnd = 2_000, now), "finished after the last copy")
+        assertFalse(BackupPolicy.behindLog(lastMillis = 3_000, lastWorkoutEnd = 2_000, now), "copied since")
+        assertFalse(BackupPolicy.behindLog(lastMillis = 2_000, lastWorkoutEnd = 2_000, now), "copied as it ended")
+        assertTrue(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = 2_000, now), "no copy yet")
+        assertFalse(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = null, now), "nothing finished")
+    }
+
+    @Test
+    fun `a workout that ends in the future doesn't make every Home show back up`() {
+        // Set back an hour mid-workout: Finish ended it at its last tick, an hour ahead of the clock now.
+        val now = millis("2026-09-30T20:00:00Z")
+        val end = now + 60 * 60 * 1000L
+        assertFalse(BackupPolicy.behindLog(lastMillis = now - 1_000, lastWorkoutEnd = end, now), "copies made now look older")
+        assertFalse(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = end, now), "isDue covers no copy at all")
+        // A few seconds of drift still counts as ended.
+        assertTrue(BackupPolicy.behindLog(lastMillis = now - 1_000, lastWorkoutEnd = now + 30_000, now))
     }
 }

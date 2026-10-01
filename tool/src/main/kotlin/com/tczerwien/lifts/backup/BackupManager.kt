@@ -96,9 +96,10 @@ class BackupManager(
             delay(HOME_CHECK_DELAY_MS)
             LiftsIo.write({
                 dueCheck.started()
-                val last = lastBackupMillis()
-                if (lastFailure != null || BackupPolicy.isDue(last, System.currentTimeMillis()) ||
-                    BackupPolicy.behindLog(last, repository.lastWorkoutEndedAt())
+                val now = System.currentTimeMillis()
+                val last = lastBackupMillis(now)
+                if (lastFailure != null || BackupPolicy.isDue(last, now) ||
+                    BackupPolicy.behindLog(last, repository.lastWorkoutEndedAt(), now)
                 ) {
                     runCatching { backUp(BackupPolicy.Kind.DATED) }
                 }

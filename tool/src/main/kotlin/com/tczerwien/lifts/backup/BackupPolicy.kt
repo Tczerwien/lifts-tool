@@ -138,8 +138,12 @@ object BackupPolicy {
 
     /**
      * Whether the newest dated backup ([lastMillis]) is older than the last finished workout's end
-     * ([lastWorkoutEnd]): a Finish since, not yet copied. Home's check then backs up too.
+     * ([lastWorkoutEnd]): a Finish since, not yet copied. Home's check then backs up too. An end in
+     * the future (the clock was ahead at Finish, or set back mid-workout: Finish never ends before the
+     * last tick) doesn't count: every copy made until the clock passes it would look older, and each
+     * Home show would back up again. [isDue] still backs up daily until then.
      */
-    fun behindLog(lastMillis: Long?, lastWorkoutEnd: Long?): Boolean =
-        lastWorkoutEnd != null && (lastMillis == null || lastMillis < lastWorkoutEnd)
+    fun behindLog(lastMillis: Long?, lastWorkoutEnd: Long?, now: Long): Boolean =
+        lastWorkoutEnd != null && lastWorkoutEnd <= now + CLOCK_SLACK_MS &&
+            (lastMillis == null || lastMillis < lastWorkoutEnd)
 }
