@@ -46,13 +46,28 @@ class LiftsShare private constructor(
     val restorer = Restorer(stagingDir, openDatabase, repository, settings, dataStore, backups)
 
     /**
-     * Finish saved a workout: the exports catch up. Its backup comes from Home's check, a few seconds
-     * after Home shows ([BackupManager.requestIfDue]: the newest backup is older than the last Finish):
-     * queued here, RESUME's reopen and Home's load after DONE waited behind it (VACUUM INTO, a check,
-     * two copies flushed to disk), leaving Active Workout blank or Home not ready.
+     * Finish saved a workout: the exports catch up. Its backup comes from the check Home makes
+     * ([BackupManager.requestIfDue]: the newest backup is older than the last Finish), run when he
+     * leaves Workout Complete ([completeLeft], [completePaused]) or Home shows: queued here, RESUME's
+     * reopen and Home's load after DONE waited behind it (VACUUM INTO, a check, two copies flushed to
+     * disk), leaving Active Workout blank or Home not ready.
      */
     fun workoutFinished() {
         exports.request()
+    }
+
+    /**
+     * Workout Complete was left (DONE, RESUME or Back): the backup check, a few seconds later, past the
+     * next screen's load. DONE after a Start Again lands on History, not Home, and RESUME then Finish
+     * again doesn't pass Home either.
+     */
+    fun completeLeft() {
+        backups.requestIfDue()
+    }
+
+    /** Lifts went to the background on Workout Complete (home key, power): the backup check at once. */
+    fun completePaused() {
+        backups.requestIfDue(delayMs = 0)
     }
 
     /** Workout Detail deleted a workout: the exports drop it, and an open workout's cached history too. */

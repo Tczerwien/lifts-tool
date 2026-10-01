@@ -25,6 +25,8 @@ import com.tczerwien.lifts.session.PrRecord
 import com.tczerwien.lifts.session.WorkoutSummary
 import com.tczerwien.lifts.session.recordLines
 import com.tczerwien.lifts.settings.SettingsStore
+import com.tczerwien.lifts.toolmanager.LiftsShare
+import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.MonoDigits
@@ -63,6 +65,7 @@ enum class WorkoutCompleteResult {
 class WorkoutCompleteViewModel(
     private val session: ActiveSession,
     private val settingsStore: SettingsStore,
+    private val share: LiftsShare,
     private val workoutId: Long,
 ) : LightViewModel<WorkoutCompleteResult>() {
 
@@ -92,6 +95,16 @@ class WorkoutCompleteViewModel(
             Perf.done("complete.load", perf)
         }
     }
+
+    /** DONE, RESUME or Back: the Finish's backup, once the next screen has loaded ([LiftsShare.completeLeft]). */
+    override fun onScreenHide(screen: SimpleLightScreen<WorkoutCompleteResult>) {
+        share.completeLeft()
+    }
+
+    /** He left Lifts on this screen: nothing waits on the lane, so the Finish's backup runs now. */
+    override fun onAppPause() {
+        share.completePaused()
+    }
 }
 
 /**
@@ -117,7 +130,7 @@ class WorkoutCompleteScreen(
         get() = WorkoutCompleteViewModel::class.java
 
     override fun createViewModel() =
-        WorkoutCompleteViewModel(session, settingsStore, workoutId)
+        WorkoutCompleteViewModel(session, settingsStore, lightContext.liftsShare(), workoutId)
 
     @Composable
     override fun Content() {

@@ -105,8 +105,8 @@ class BackupsViewModel(
 
 /**
  * Backups (Settings › Backups): the newest backups on the phone, where to download them, and BACK UP
- * NOW. A backup is the whole log plus the settings; Lifts takes one after every Finish (once back on Home) and once a day
- * from Home, and keeps the newest ten.
+ * NOW. A backup is the whole log plus the settings; Lifts takes one after every Finish (once he
+ * leaves Workout Complete) and once a day from Home, and keeps the newest ten.
  */
 class BackupsScreen(
     private val sealedActivity: SealedLightActivity,

@@ -88,12 +88,13 @@ class BackupManager(
      * failed, decided when its turn comes. It waits [HOME_CHECK_DELAY_MS] before it queues: queued as
      * Home shows, the first Start of the day waited behind the whole backup (VACUUM INTO, a check, two
      * copies flushed to disk), which grows with the log. A check that finds nothing due leaves the
-     * status alone.
+     * status alone. Leaving Workout Complete makes the same check ([delayMs] after it, past the next
+     * screen's load); Lifts going to the background there makes it at once ([delayMs] 0).
      */
-    fun requestIfDue() {
+    fun requestIfDue(delayMs: Long = HOME_CHECK_DELAY_MS) {
         if (!dueCheck.tryQueue()) return
         LiftsIo.scope.launch {
-            delay(HOME_CHECK_DELAY_MS)
+            delay(delayMs)
             LiftsIo.write({
                 dueCheck.started()
                 val now = System.currentTimeMillis()
