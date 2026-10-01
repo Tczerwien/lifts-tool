@@ -42,7 +42,7 @@ class ExportWriterTest {
     fun `a burst of edits makes one rewrite, once the edits pause`() = runBlocking {
         val runStarts = mutableListOf<Long>()
         var runs = 0
-        val writer = ExportWriter(dir, scope, settleMillis = 300) {
+        val writer = ExportWriter(dir, scope, settleMillis = 1_000) {
             runStarts += System.nanoTime()
             runs++
             mapOf("a.md" to "run $runs")
@@ -55,7 +55,7 @@ class ExportWriterTest {
         }
         assertEquals(ExportWriter.Status.Idle, writer.settled())
         assertEquals(1, runs, "ten edits half a second long: one rewrite, after them")
-        assertTrue((runStarts.single() - lastRequest) / 1_000_000 >= 250, "it waited for the pause, not the first edit")
+        assertTrue((runStarts.single() - lastRequest) / 1_000_000 >= 900, "it waited for the pause, not the first edit")
         assertEquals(mapOf("a.md" to "run 1"), contents())
     }
 
