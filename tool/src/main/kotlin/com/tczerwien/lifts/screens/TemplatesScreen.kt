@@ -16,6 +16,7 @@ import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.library.reorderPositions
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.LiftsFrame
@@ -140,11 +141,19 @@ class TemplatesViewModel(
         }
     }
 
+    /** When an arrow last moved a template: the move puts another row's arrows under his finger. */
+    private var lastMoveAt: Long? = null
+
     /**
      * Swaps the template with its neighbor ([delta] = ±1), positions 0..n-1 ([reorderPositions]), on the
-     * write lane (serial, survives Back); the exports catch up when anything moved.
+     * write lane (serial, survives Back); the exports catch up when anything moved. A tap within
+     * [isDoubleTap] of the last move is its double tap or bounce, aimed at the row that was there: it
+     * would move the other template (undoing the move), so it is dropped.
      */
     fun moveTemplate(id: Long, delta: Int) {
+        val now = System.currentTimeMillis()
+        if (lastMoveAt?.let { isDoubleTap(it, now) } == true) return
+        lastMoveAt = now
         LiftsIo.write({
             val templates = repository.listTemplates()
             val moves = reorderPositions(templates, templates.indexOfFirst { it.id == id }, delta) { it.position }

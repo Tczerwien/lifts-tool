@@ -32,6 +32,7 @@ import com.tczerwien.lifts.session.MAX_TEMPLATE_SETS
 import com.tczerwien.lifts.session.MAX_TEMPLATE_WARMUPS
 import com.tczerwien.lifts.session.MIN_TEMPLATE_SETS
 import com.tczerwien.lifts.session.RepRange
+import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.restOverride
 import com.tczerwien.lifts.session.stepRepMax
 import com.tczerwien.lifts.session.stepRepMin
@@ -228,8 +229,18 @@ class TemplateEditorViewModel(
         }
     }
 
-    /** Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1 ([reorderPositions]). */
+    /** When an arrow last moved an exercise: the move puts another row's arrows under his finger. */
+    private var lastMoveAt: Long? = null
+
+    /**
+     * Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1 ([reorderPositions]).
+     * A tap within [isDoubleTap] of the last move is its double tap or bounce, aimed at the row that was
+     * there: it would move the other exercise (undoing the move), so it is dropped.
+     */
     fun moveExercise(templateExerciseId: Long, delta: Int) {
+        val now = System.currentTimeMillis()
+        if (lastMoveAt?.let { isDoubleTap(it, now) } == true) return
+        lastMoveAt = now
         disarm()
         mutate {
             val exercises = repository.exercisesForTemplate(templateId)
