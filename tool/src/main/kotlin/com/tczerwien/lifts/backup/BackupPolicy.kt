@@ -141,9 +141,8 @@ object BackupPolicy {
      * Whether the newest backup ([inLatest]: what lifts-latest.db holds, null when there is none or it
      * can't be read) lacks a change to the log's finished workouts ([inLog]): a Finish not yet copied
      * (or a RESUME and Finish again, a stale close, a delete). Home's check then backs up too. No clock
-     * is read: compared by time, a clock set back mid-workout (Finish ends at the last tick, "ahead")
-     * made every Home show back up again, or hid the Finishes after it, and a clock corrected between
-     * Finish and the check hid that Finish. A log with nothing finished and no backup is not behind.
+     * is read, so a clock that moves (set back mid-workout, corrected after a Finish) can neither hide a
+     * Finish nor make each check back up again. A log with nothing finished and no backup is not behind.
      */
     fun behindLog(inLatest: FinishedWorkouts?, inLog: FinishedWorkouts): Boolean =
         inLog != inLatest && !(inLatest == null && inLog.count == 0)

@@ -47,8 +47,8 @@ class LiftsShare private constructor(
 
     /**
      * Finish saved a workout: the exports catch up. Its backup comes from the check Home makes
-     * ([BackupManager.requestIfDue]: the newest backup is older than the last Finish), run when he
-     * leaves Workout Complete ([completeLeft], [completePaused]) or Home shows: queued here, RESUME's
+     * ([BackupManager.requestIfDue]: lifts-latest.db lacks a change to the finished workouts), run when
+     * he leaves Workout Complete ([completeLeft], [completePaused]) or Home shows: queued here, RESUME's
      * reopen and Home's load after DONE waited behind it (VACUUM INTO, a check, two copies flushed to
      * disk), leaving Active Workout blank or Home not ready.
      */

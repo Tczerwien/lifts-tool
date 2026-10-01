@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.backup
 
 import android.database.sqlite.SQLiteDatabase
+import android.util.Log
 import com.tczerwien.lifts.data.FINISHED_WORKOUTS_SQL
 import com.tczerwien.lifts.data.FinishedWorkouts
 import java.io.File
@@ -14,6 +15,8 @@ internal object BackupFile {
 
     /** Settings rows ([com.tczerwien.lifts.settings.SettingsRows]) ride along in the copy. */
     const val SETTINGS_TABLE = "lifts_settings"
+
+    private const val TAG = "LiftsBackup"
 
     private val SQLITE_HEADER = "SQLite format 3\u0000".toByteArray(Charsets.US_ASCII)
 
@@ -78,7 +81,7 @@ internal object BackupFile {
                     if (c.moveToFirst()) FinishedWorkouts(c.getInt(0), c.getLong(1), c.getLong(2), c.getInt(3), c.getLong(4)) else null
                 }
             }
-        }.getOrNull()
+        }.onFailure { Log.w(TAG, "Could not read ${file.name}", it) }.getOrNull()
     }
 
     /** SQLite's own check of every page and index; null when [file] is sound, else what it found. */
