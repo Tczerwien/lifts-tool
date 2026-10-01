@@ -40,7 +40,7 @@ class BackupManager(
         data class Failed(val message: String) : Status
     }
 
-    /** Finish and Back up now requests queued or running. */
+    /** Back up now requests queued or running. */
     private val requested = AtomicInteger()
 
     /** Why the latest backup failed; null once one succeeds. Kept until then, and Home retries. */
@@ -62,9 +62,9 @@ class BackupManager(
     private val queued = QueuedOnce()
 
     /**
-     * A dated backup, queued on the write lane: Finish and Back up now. While one waits its turn a second
-     * isn't queued (a Finish, RESUME and Finish again behind a busy lane): the one waiting reads the
-     * database when its turn comes, so it holds both.
+     * A dated backup, queued on the write lane: Back up now (a Finish's comes from [requestIfDue]). While
+     * one waits its turn a second isn't queued (taps while a busy lane holds the first): the one waiting
+     * reads the database when its turn comes, so it holds whatever the second would.
      */
     fun request() {
         if (!queued.tryQueue()) return
