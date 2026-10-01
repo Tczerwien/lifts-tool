@@ -229,17 +229,22 @@ interface WorkoutDao {
 }
 
 /**
- * How many workouts are finished, the newest one's id and the sum of their ends: the same in a
- * backup as in the log it copied, and different after any Finish since (a RESUME and Finish again
- * moves an end; a stale close, a delete or a restore changes them too). Read the same way from a
- * backup file ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]).
+ * The finished workouts in brief: how many, the newest one's id, the sum of their ends, and how many
+ * sets they hold ticked with the sum of those ticks' times. The same in a backup as in the log it
+ * copied, and different after any Finish since: a new workout, or a RESUME and Finish again (a later
+ * end, or more sets ticked even when the end stays put: the clock set back), a stale close, a delete,
+ * a restore. Read the same way from a backup file ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]).
  */
 const val FINISHED_WORKOUTS_SQL =
-    "SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum " +
+    "SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum, " +
+        "(SELECT COUNT(*) FROM sets JOIN workout_exercises ON workout_exercises.id = sets.workoutExerciseId " +
+        "JOIN workouts AS w ON w.id = workout_exercises.workoutId WHERE w.endedAt IS NOT NULL AND sets.completedAt IS NOT NULL) AS ticked, " +
+        "(SELECT COALESCE(SUM(sets.completedAt), 0) FROM sets JOIN workout_exercises ON workout_exercises.id = sets.workoutExerciseId " +
+        "JOIN workouts AS w ON w.id = workout_exercises.workoutId WHERE w.endedAt IS NOT NULL AND sets.completedAt IS NOT NULL) AS tickSum " +
         "FROM workouts WHERE endedAt IS NOT NULL"
 
 /** [FINISHED_WORKOUTS_SQL]'s one row. */
-data class FinishedWorkouts(val count: Int, val lastId: Long, val endSum: Long)
+data class FinishedWorkouts(val count: Int, val lastId: Long, val endSum: Long, val ticked: Int = 0, val tickSum: Long = 0)
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */
 data class SetWithExercise(
