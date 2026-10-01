@@ -144,6 +144,14 @@ object BackupPolicy {
      * Home show would back up again. [isDue] still backs up daily until then.
      */
     fun behindLog(lastMillis: Long?, lastWorkoutEnd: Long?, now: Long): Boolean =
-        lastWorkoutEnd != null && lastWorkoutEnd <= now + CLOCK_SLACK_MS &&
+        lastWorkoutEnd != null && lastWorkoutEnd <= countedUntil(now) &&
             (lastMillis == null || lastMillis < lastWorkoutEnd)
+
+    /**
+     * The latest workout end [behindLog] counts at [now]. Home asks for the last end up to it, not the
+     * last end of all: one end in the future must not hide the Finishes after it (a phone whose clock
+     * came back months behind after the battery ran out: every real workout is "ahead", and today's
+     * Finish still needs its backup).
+     */
+    fun countedUntil(now: Long): Long = now + CLOCK_SLACK_MS
 }

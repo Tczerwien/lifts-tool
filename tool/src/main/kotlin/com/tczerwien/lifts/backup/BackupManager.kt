@@ -99,9 +99,8 @@ class BackupManager(
                 dueCheck.started()
                 val now = System.currentTimeMillis()
                 val last = lastBackupMillis(now)
-                if (lastFailure != null || BackupPolicy.isDue(last, now) ||
-                    BackupPolicy.behindLog(last, repository.lastWorkoutEndedAt(), now)
-                ) {
+                val lastEnd = repository.lastWorkoutEndedAt(until = BackupPolicy.countedUntil(now))
+                if (lastFailure != null || BackupPolicy.isDue(last, now) || BackupPolicy.behindLog(last, lastEnd, now)) {
                     runCatching { backUp(BackupPolicy.Kind.DATED) }
                 }
             }) { publish() }
