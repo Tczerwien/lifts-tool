@@ -78,7 +78,7 @@ internal object BackupFile {
         return runCatching {
             open(file, writable = false).use { db ->
                 db.rawQuery(FINISHED_WORKOUTS_SQL, null).use { c ->
-                    if (c.moveToFirst()) FinishedWorkouts(c.getInt(0), c.getLong(1), c.getLong(2), c.getInt(3), c.getLong(4)) else null
+                    if (c.moveToFirst()) FinishedWorkouts(c.getInt(0), c.getLong(1), c.getLong(2), c.getInt(3), c.getLong(4), c.getLong(5)) else null
                 }
             }
         }.onFailure { Log.w(TAG, "Could not read ${file.name}", it) }.getOrNull()

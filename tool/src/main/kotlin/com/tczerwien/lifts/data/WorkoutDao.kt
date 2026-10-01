@@ -229,22 +229,37 @@ interface WorkoutDao {
 }
 
 /**
- * The finished workouts in brief: how many, the newest one's id, the sum of their ends, and how many
- * sets they hold ticked with the sum of those ticks' times. The same in a backup as in the log it
- * copied, and different after any Finish since: a new workout, or a RESUME and Finish again (a later
- * end, or more sets ticked even when the end stays put: the clock set back), a stale close, a delete,
- * a restore. Read the same way from a backup file ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]).
+ * The finished workouts in brief: how many, the newest one's id, the sum of their ends; how many sets
+ * they hold ticked, the sum of those ticks' times, and every ticked set's values (weight in grams,
+ * reps, seconds, RIR, type) folded into one whole number, weighted by the set's id so two edits can't
+ * cancel out. Whole numbers only: the same sum in any row order, so a backup and the log it copied
+ * agree exactly. Different after any Finish since: a new workout, or a RESUME and Finish again (a
+ * later end, more sets ticked, a value corrected, even when the end stays put: the clock set back),
+ * a stale close, a delete, a restore. Read the same way from a backup file
+ * ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]).
  */
 const val FINISHED_WORKOUTS_SQL =
-    "SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum, " +
-        "(SELECT COUNT(*) FROM sets JOIN workout_exercises ON workout_exercises.id = sets.workoutExerciseId " +
-        "JOIN workouts AS w ON w.id = workout_exercises.workoutId WHERE w.endedAt IS NOT NULL AND sets.completedAt IS NOT NULL) AS ticked, " +
-        "(SELECT COALESCE(SUM(sets.completedAt), 0) FROM sets JOIN workout_exercises ON workout_exercises.id = sets.workoutExerciseId " +
-        "JOIN workouts AS w ON w.id = workout_exercises.workoutId WHERE w.endedAt IS NOT NULL AND sets.completedAt IS NOT NULL) AS tickSum " +
-        "FROM workouts WHERE endedAt IS NOT NULL"
+    "SELECT f.count, f.lastId, f.endSum, s.ticked, s.tickSum, s.valueSum FROM " +
+        "(SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum " +
+        "FROM workouts WHERE endedAt IS NOT NULL) AS f, " +
+        "(SELECT COUNT(*) AS ticked, COALESCE(SUM(sets.completedAt), 0) AS tickSum, COALESCE(SUM(sets.id * (" +
+        "COALESCE(CAST(ROUND(sets.weightKg * 1000) AS INTEGER), 0) + COALESCE(sets.reps, 0) * 1000003 + " +
+        "COALESCE(sets.durationSec, 0) * 7919 + COALESCE(CAST(ROUND(sets.rpe * 10) AS INTEGER), 0) * 104729 + " +
+        "(CASE sets.type WHEN 'warmup' THEN 1 WHEN 'failure' THEN 2 WHEN 'drop' THEN 3 ELSE 0 END) * 15485863" +
+        ")), 0) AS valueSum " +
+        "FROM sets JOIN workout_exercises ON workout_exercises.id = sets.workoutExerciseId " +
+        "JOIN workouts ON workouts.id = workout_exercises.workoutId " +
+        "WHERE workouts.endedAt IS NOT NULL AND sets.completedAt IS NOT NULL) AS s"
 
 /** [FINISHED_WORKOUTS_SQL]'s one row. */
-data class FinishedWorkouts(val count: Int, val lastId: Long, val endSum: Long, val ticked: Int = 0, val tickSum: Long = 0)
+data class FinishedWorkouts(
+    val count: Int,
+    val lastId: Long,
+    val endSum: Long,
+    val ticked: Int = 0,
+    val tickSum: Long = 0,
+    val valueSum: Long = 0,
+)
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */
 data class SetWithExercise(

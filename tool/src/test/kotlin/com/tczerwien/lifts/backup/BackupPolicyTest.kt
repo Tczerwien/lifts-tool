@@ -211,6 +211,9 @@ class BackupPolicyTest {
         // RESUME, two more sets, Finish again with the clock set back: the end stays at the last tick.
         val ticked = copied.copy(ticked = 610, tickSum = 1_090_000_000_000_000L)
         assertTrue(BackupPolicy.behindLog(ticked, ticked.copy(ticked = 612, tickSum = ticked.tickSum + 3_580_000_000_000L)), "more sets, same end")
+        // RESUME, a logged weight corrected, Finish again with the end at the last tick.
+        val valued = ticked.copy(valueSum = 4_400_000_000_000L)
+        assertTrue(BackupPolicy.behindLog(valued, valued.copy(valueSum = valued.valueSum + 2_268L * 9_041)), "a value corrected, same ticks")
         assertTrue(BackupPolicy.behindLog(inLatest = null, inLog = copied), "no backup (or one that can't be read)")
         val none = FinishedWorkouts(count = 0, lastId = 0, endSum = 0)
         assertFalse(BackupPolicy.behindLog(inLatest = null, inLog = none), "nothing finished, no backup: isDue's business")
