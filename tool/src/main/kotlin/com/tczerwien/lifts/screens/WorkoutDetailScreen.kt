@@ -418,7 +418,7 @@ class WorkoutDetailScreen(
             if (uiState.gone) goBack()
         }
 
-        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.editingNotes) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.editingNotes to uiState.namingTemplate) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
