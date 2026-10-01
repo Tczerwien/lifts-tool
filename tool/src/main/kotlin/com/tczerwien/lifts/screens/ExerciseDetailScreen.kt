@@ -40,6 +40,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.catalogEntries
+import com.tczerwien.lifts.library.nameCheckEntries
 import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.library.renameClash
 import com.tczerwien.lifts.seed.BundledCatalog
@@ -226,7 +227,7 @@ class ExerciseDetailViewModel(
     fun openNameEditor() {
         if (!_uiState.value.loaded) return
         openEditor(Editing.NAME)
-        LiftsIo.write({}) { names = catalogEntries(repository.exerciseSummaries(), catalog) }
+        LiftsIo.write({}) { names = nameCheckEntries(repository.exerciseSummaries(), catalog) }
     }
 
     private fun openEditor(editing: Editing) {

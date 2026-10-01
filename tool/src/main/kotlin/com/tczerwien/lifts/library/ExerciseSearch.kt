@@ -46,6 +46,13 @@ fun catalogEntries(summaries: List<ExerciseSummary>, catalog: CatalogSource): Li
 }
 
 /**
+ * [catalogEntries] for a screen's name check ([nameClash]), which runs on Main as he submits: every
+ * entry's keys are worked out here, off the main thread, so the check is only lookups. Blocking.
+ */
+fun nameCheckEntries(summaries: List<ExerciseSummary>, catalog: CatalogSource): List<CatalogEntry> =
+    catalogEntries(summaries, catalog).onEach { it.claimedKeys }
+
+/**
  * A catalog lift whose stored name is no longer its catalog name: he renamed it. Unrenamed, a catalog
  * lift's name run together is its id run together ("Child's Pose" is childs-pose), so this needs no
  * catalog; only a renamed lift's old name does.

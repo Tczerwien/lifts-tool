@@ -27,6 +27,7 @@ import com.tczerwien.lifts.library.CatalogEntry
 import com.tczerwien.lifts.library.Removal
 import com.tczerwien.lifts.library.catalogEntries
 import com.tczerwien.lifts.library.formTracking
+import com.tczerwien.lifts.library.nameCheckEntries
 import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.seed.CatalogSource
 import com.tczerwien.lifts.session.HistoryVersion
@@ -331,7 +332,7 @@ class CustomExerciseViewModel(
      */
     private fun loadOptions() {
         val summaries = repository.exerciseSummaries()
-        names = catalogEntries(summaries, catalog)
+        names = nameCheckEntries(summaries, catalog)
         hiddenIds = summaries.filter { it.hidden }.mapTo(HashSet()) { it.id }
         val edited = editId?.let { repository.exerciseById(it) }
         val inTemplates = editId?.let { repository.templatesWithExercise(it) } ?: 0
