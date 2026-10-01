@@ -32,6 +32,22 @@ const val DOUBLE_TAP_MS = 600L
 fun isDoubleTap(firstTapAt: Long, now: Long): Boolean = now - firstTapAt in 0 until DOUBLE_TAP_MS
 
 /**
+ * One control whose tap flips or moves something (Units, Rest-over Beep, Per Side): a tap within
+ * [isDoubleTap] of the last one it took is a double tap or a bounce, which would flip it straight back
+ * (the tap looks lost, after two saves), so [take] refuses it. Main thread only.
+ */
+class BounceGuard {
+    private var lastAt: Long? = null
+
+    /** Whether the tap at [now] counts; one that counts starts a new window. */
+    fun take(now: Long = System.currentTimeMillis()): Boolean {
+        if (lastAt?.let { isDoubleTap(it, now) } == true) return false
+        lastAt = now
+        return true
+    }
+}
+
+/**
  * The row the steppers go to after a tick on [tickedSetId], [rows] being one exercise's rows in order
  * with the tick applied: the first unticked row after it, so a set he left out above (a skipped
  * warm-up) doesn't pull the steppers and the list back up, and the next +5 lands on the next set; the

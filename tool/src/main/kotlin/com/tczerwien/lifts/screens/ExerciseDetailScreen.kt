@@ -43,6 +43,7 @@ import com.tczerwien.lifts.library.nameClash
 import com.tczerwien.lifts.library.renameClash
 import com.tczerwien.lifts.seed.BundledCatalog
 import com.tczerwien.lifts.seed.CatalogSource
+import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.ReloadFloor
@@ -325,13 +326,16 @@ class ExerciseDetailViewModel(
         }
     }
 
+    /** Per Side flips on each tap: a bounce would flip it straight back. */
+    private val perSideTaps = BounceGuard()
+
     /**
      * About's Per Side row: from now on (and in its history, which reads the same) the reps or seconds
      * count one side, "10/side" on every screen and in every export; tapping again takes it back.
      */
     fun togglePerSide() {
         val state = _uiState.value
-        if (!state.loaded) return
+        if (!state.loaded || !perSideTaps.take()) return
         val perSide = !state.perSide
         aboutFloor.saveQueued()
         _uiState.update { it.copy(perSide = perSide) }

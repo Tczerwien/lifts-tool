@@ -18,6 +18,7 @@ import com.tczerwien.lifts.analytics.plainNumber
 import com.tczerwien.lifts.backup.BackupManager
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
+import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
@@ -98,8 +99,13 @@ class SettingsViewModel(
         }
     }
 
+    /** Units and Rest-over Beep flip on each tap: a bounce would flip them straight back. */
+    private val unitsTaps = BounceGuard()
+    private val beepTaps = BounceGuard()
+
     fun toggleUnits() {
         val settings = _uiState.value.settings ?: return
+        if (!unitsTaps.take()) return
         val next = when (settings.units) {
             WeightUnit.LB -> WeightUnit.KG
             WeightUnit.KG -> WeightUnit.LB
@@ -130,6 +136,7 @@ class SettingsViewModel(
     /** The rest-over beep on or off; the flash and keep-awake stay either way. */
     fun toggleRestBeep() {
         val settings = _uiState.value.settings ?: return
+        if (!beepTaps.take()) return
         val next = !settings.restBeep
         _uiState.update { it.copy(settings = settings.copy(restBeep = next)) }
         LiftsIo.write { settingsStore.setRestBeep(next) }

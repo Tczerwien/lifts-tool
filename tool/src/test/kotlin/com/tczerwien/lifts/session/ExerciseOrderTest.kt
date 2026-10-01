@@ -155,4 +155,14 @@ class ExerciseOrderTest {
         // A first tap stamped later than this one (clock moved back) is not a double tap.
         assertFalse(isDoubleTap(firstTapAt = 10_000, now = 9_000))
     }
+
+    @Test
+    fun `a two-state row takes one tap of a double tap, and a deliberate one after it`() {
+        val units = BounceGuard()
+        assertTrue(units.take(now = 10_000), "the tap")
+        assertFalse(units.take(now = 10_150), "its bounce would flip it straight back")
+        assertFalse(units.take(now = 10_599), "still within the first tap's window")
+        assertTrue(units.take(now = 10_600), "a deliberate second tap")
+        assertFalse(units.take(now = 10_700), "measured from the last tap taken")
+    }
 }
