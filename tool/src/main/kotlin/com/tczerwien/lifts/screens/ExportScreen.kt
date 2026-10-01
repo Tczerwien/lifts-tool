@@ -76,7 +76,7 @@ class ExportViewModel(
 
     override fun onScreenShow(screen: SimpleLightScreen<Unit>) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (ExportWriter.FILE_NAMES.any { !File(exportsDir, it).isFile }) writer.request()
+            if (ExportWriter.FILE_NAMES.any { !File(exportsDir, it).isFile }) writer.request(urgent = true)
             val rows = fileRows()
             _uiState.update { it.copy(files = rows) }
         }
@@ -84,7 +84,7 @@ class ExportViewModel(
 
     /** REGENERATE: rewrites every file from the data as it is now. Taps during a run fold into one. */
     fun regenerate() {
-        writer.request()
+        writer.request(urgent = true)
     }
 
     private fun fileRows(): List<FileRow> = ExportWriter.FILE_NAMES.map { name ->

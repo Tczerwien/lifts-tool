@@ -53,7 +53,7 @@ class LiftsShare private constructor(
      * disk), leaving Active Workout blank or Home not ready.
      */
     fun workoutFinished() {
-        exports.request()
+        exports.request(urgent = true)
     }
 
     /**
@@ -79,7 +79,8 @@ class LiftsShare private constructor(
     /**
      * Something else the export files show was saved: a weigh-in, an exercise's name or cue, a new
      * custom exercise, a workout's notes, a template, a bar, the weight unit, or a workout reopened
-     * (RESUME) or closed as stale. The exports catch up. Call it once the save has landed.
+     * (RESUME) or closed as stale. The exports catch up once his edits pause for a second
+     * ([ExportWriter.request]). Call it once the save has landed.
      */
     fun logChanged() {
         exports.request()
@@ -105,7 +106,7 @@ class LiftsShare private constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Could not move ${source.name} to restore/$APPLIED", e)
         }
-        exports.request()
+        exports.request(urgent = true)
     }
 
     /** SET ASIDE on a refused upload: it moves to restore/rejected, so Home stops offering it. Never throws. */
@@ -130,7 +131,7 @@ class LiftsShare private constructor(
      */
     fun homeShown() {
         backups.requestIfDue()
-        if (ExportWriter.FILE_NAMES.any { !File(exportsDir, it).isFile }) exports.request()
+        if (ExportWriter.FILE_NAMES.any { !File(exportsDir, it).isFile }) exports.request(urgent = true)
     }
 
     companion object {

@@ -16,6 +16,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /** The export files are swapped in whole or not at all, and runs never overlap. */
 class ExportWriterTest {
@@ -38,27 +39,62 @@ class ExportWriterTest {
         dir.listFiles().orEmpty().associate { it.name to it.readText() }
 
     @Test
-    fun `a burst of edits makes two rewrites, the first at once`() = runBlocking {
+    fun `a burst of edits makes one rewrite, once the edits pause`() = runBlocking {
+        val runStarts = mutableListOf<Long>()
         var runs = 0
         val writer = ExportWriter(dir, scope, settleMillis = 300) {
+            runStarts += System.nanoTime()
             runs++
             mapOf("a.md" to "run $runs")
         }
+        var lastRequest = 0L
         repeat(10) {
             writer.request()
-            delay(20)
+            lastRequest = System.nanoTime()
+            delay(50)
         }
         assertEquals(ExportWriter.Status.Idle, writer.settled())
-        assertEquals(2, runs, "ten edits in a fifth of a second: the first at once, one for the other nine")
-        assertEquals(mapOf("a.md" to "run 2"), contents())
+        assertEquals(1, runs, "ten edits half a second long: one rewrite, after them")
+        assertTrue((runStarts.single() - lastRequest) / 1_000_000 >= 250, "it waited for the pause, not the first edit")
+        assertEquals(mapOf("a.md" to "run 1"), contents())
     }
 
     @Test
-    fun `a request waits what is left of the settle time, never more`() {
-        assertEquals(0L, ExportWriter.settleWait(1_000, now = 10_000, lastRunEnded = 5_000), "after a quiet spell: at once")
-        assertEquals(600L, ExportWriter.settleWait(1_000, now = 10_400, lastRunEnded = 10_000), "close behind a run")
-        // The clock set back an hour after the run: not an hour's wait.
-        assertEquals(1_000L, ExportWriter.settleWait(1_000, now = 10_000 - 3_600_000, lastRunEnded = 10_000))
+    fun `edits that never pause still get their files within the longest wait`() = runBlocking {
+        val runStarts = mutableListOf<Long>()
+        val writer = ExportWriter(dir, scope, settleMillis = 300, maxWaitMillis = 700) {
+            runStarts += System.nanoTime()
+            mapOf("a.md" to "run")
+        }
+        val first = System.nanoTime()
+        repeat(16) {
+            writer.request()
+            delay(100)
+        }
+        writer.settled()
+        assertTrue(runStarts.size >= 2, "a run during the burst and one after it: ${runStarts.size}")
+        assertTrue((runStarts.first() - first) / 1_000_000 < 1_200, "the first within the longest wait")
+    }
+
+    @Test
+    fun `Finish, a restore or REGENERATE runs at once, and ends an edit's wait`() = runBlocking {
+        val runStarts = mutableListOf<Long>()
+        val writer = ExportWriter(dir, scope, settleMillis = 3_000) {
+            runStarts += System.nanoTime()
+            mapOf("a.md" to "run")
+        }
+        val asked = System.nanoTime()
+        writer.request(urgent = true)
+        assertEquals(ExportWriter.Status.Idle, writer.settled())
+        assertTrue((runStarts.single() - asked) / 1_000_000 < 1_000, "no wait for a burst")
+        // An edit waits; Finish right after it doesn't.
+        writer.request()
+        delay(100)
+        val finish = System.nanoTime()
+        writer.request(urgent = true)
+        assertEquals(ExportWriter.Status.Idle, writer.settled())
+        assertEquals(2, runStarts.size, "one run serves both")
+        assertTrue((runStarts.last() - finish) / 1_000_000 < 1_000)
     }
 
     @Test

@@ -3,23 +3,26 @@ package com.tczerwien.lifts.export
 import com.tczerwien.lifts.Perf
 import java.io.File
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Writes the export files into [dir] (files/shared/exports, which Tool Manager serves), one run at a
- * time. A request after a quiet spell runs at once; one within [settleMillis] of a run's end waits out
- * the rest of that time, so a burst of edits (a template built exercise by exercise, a run of renames)
- * makes two full rewrites, not one per edit; a request made
- * while a run is going is folded into one more run after it, so the files end up reflecting the latest
- * data however many requests pile up.
+ * time. An edit's request waits until [settleMillis] pass with no other request, [maxWaitMillis] at
+ * most, so a burst of edits (± taps in the Template Editor, a template built exercise by exercise, a
+ * run of renames) makes one full rewrite, not one per edit, and the run's whole-log read doesn't queue
+ * on the write lane ahead of his next tap or the screen he opens next. An urgent request (Finish, a
+ * restore, REGENERATE, a missing file) runs at once. A request made while a run is going is folded
+ * into one more run after it, so the files end up reflecting the latest data however many requests
+ * pile up.
  *
  * Every file of a run is first written to a hidden temp file; only when all of them are written are
  * they renamed over the old ones. Tool Manager never serves half a file, and a run that fails while
@@ -33,6 +36,7 @@ class ExportWriter(
     private val dir: File,
     scope: CoroutineScope,
     private val settleMillis: Long = SETTLE_MS,
+    private val maxWaitMillis: Long = MAX_WAIT_MS,
     private val render: suspend () -> Map<String, String>,
 ) {
     sealed interface Status {
@@ -51,6 +55,9 @@ class ExportWriter(
 
     private val requests = Channel<Unit>(Channel.CONFLATED)
 
+    /** An urgent request is waiting: the next run doesn't wait for the burst to settle. */
+    private val urgent = AtomicBoolean(false)
+
     /** Requests made so far; a run that ends with this unchanged leaves nothing waiting. */
     private val requested = AtomicLong(0)
 
@@ -59,25 +66,37 @@ class ExportWriter(
 
     init {
         scope.launch {
-            var lastRunEnded = Long.MIN_VALUE / 2
             for (request in requests) {
-                // Straight away after a quiet spell (Finish's run starts at once); a request close behind
-                // a run waits for the rest of the burst, and the ones made meanwhile are served by it.
-                val wait = settleWait(settleMillis, System.currentTimeMillis(), lastRunEnded)
-                if (wait > 0) {
-                    delay(wait)
-                    requests.tryReceive()
-                }
+                settle()
+                urgent.set(false)
                 runOnce()
-                lastRunEnded = System.currentTimeMillis()
             }
         }
     }
 
-    /** Asks for fresh files. Returns at once and never throws. */
-    fun request() {
+    /**
+     * Waits for the rest of a burst: until [settleMillis] pass with no request, [maxWaitMillis] at most
+     * (taps that never stop still get their files), or at once for an [urgent] one. Requests made
+     * meanwhile are served by the run that follows. Timed by uptime, so a clock that jumps can't hold
+     * a run back.
+     */
+    private suspend fun settle() {
+        val started = System.nanoTime()
+        while (!urgent.get()) {
+            val left = maxWaitMillis - (System.nanoTime() - started) / 1_000_000
+            if (left <= 0) return
+            withTimeoutOrNull(minOf(settleMillis, left)) { requests.receive() } ?: return
+        }
+    }
+
+    /**
+     * Asks for fresh files. Returns at once and never throws. [urgent]: no wait for a burst to settle
+     * (Finish, so a kill on Workout Complete can't leave the exports behind; a restore; REGENERATE).
+     */
+    fun request(urgent: Boolean = false) {
         requested.incrementAndGet()
         _status.value = Status.Preparing
+        if (urgent) this.urgent.set(true)
         requests.trySend(Unit)
     }
 
@@ -121,16 +140,11 @@ class ExportWriter(
     private fun tempFor(name: String) = File(dir, ".$name.tmp")
 
     companion object {
-        /**
-         * How long a request at [now] waits for the rest of a burst, the last run having ended at
-         * [lastRunEnded]: what is left of [settleMillis], never more. A clock set back after a run
-         * would otherwise hold the next one for as long as the jump.
-         */
-        internal fun settleWait(settleMillis: Long, now: Long, lastRunEnded: Long): Long =
-            (settleMillis - (now - lastRunEnded)).coerceIn(0L, settleMillis)
-
-        /** How long a run waits for more requests: short, so the files are rarely behind. */
+        /** The quiet spell an edit's run waits for: short, so the files are rarely behind. */
         const val SETTLE_MS = 1_000L
+
+        /** The longest an edit's run waits, however long the burst goes on. */
+        const val MAX_WAIT_MS = 5_000L
 
         const val TRAINING_LOG = "training-log.md"
         const val WORKOUTS_JSON = "workouts.json"
