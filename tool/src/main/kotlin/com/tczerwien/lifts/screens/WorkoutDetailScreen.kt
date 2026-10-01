@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.screens
 
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -398,6 +399,12 @@ class WorkoutDetailScreen(
 
     private val repository = lightContext.liftsRepository()
 
+    /**
+     * The list's place, held by the screen, which stays on the back stack under Exercise Detail and
+     * survives its own editors: back from a lift, a long workout is still scrolled where it was.
+     */
+    private val scrollState = ScrollState(0)
+
     override val viewModelClass: Class<WorkoutDetailViewModel>
         get() = WorkoutDetailViewModel::class.java
 
@@ -479,6 +486,7 @@ class WorkoutDetailScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth(),
+                            scrollState = scrollState,
                         ) {
                             uiState.notes?.let { notes ->
                                 LightText(

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
@@ -533,6 +534,13 @@ class ExerciseDetailScreen(
 
     private val repository = lightContext.liftsRepository()
 
+    /**
+     * The History tab's place, held by the screen, which stays on the back stack under the Workout
+     * Detail a row opens: back from a workout months ago, the list is still there. A remembered state
+     * would be dropped with the composition.
+     */
+    private val historyListState = LazyListState()
+
     override val viewModelClass: Class<ExerciseDetailViewModel>
         get() = ExerciseDetailViewModel::class.java
 
@@ -755,6 +763,7 @@ class ExerciseDetailScreen(
         }
         LightLazyScrollView(
             modifier = modifier,
+            listState = historyListState,
             uniformItemHeightGridUnits = HISTORY_ROW_HEIGHT_UNITS,
         ) {
             itemsIndexed(uiState.history, key = { _, row -> row.workoutId }) { index, row ->
