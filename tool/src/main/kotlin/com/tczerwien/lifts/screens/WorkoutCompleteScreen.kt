@@ -96,9 +96,21 @@ class WorkoutCompleteViewModel(
         }
     }
 
-    /** DONE, RESUME or Back: the Finish's backup, once the next screen has loaded ([LiftsShare.completeLeft]). */
+    /** RESUME was tapped: the workout opens again, so there is no Finish to copy until the next one. */
+    @Volatile
+    private var resuming = false
+
+    fun resume() {
+        resuming = true
+    }
+
+    /**
+     * DONE or Back: the Finish's backup, once the next screen has loaded ([LiftsShare.completeLeft]).
+     * Not after RESUME: the reopened workout would differ from a backup taken on the way (the screen
+     * slept here), and a backup would run on the lane while he logs.
+     */
     override fun onScreenHide(screen: SimpleLightScreen<WorkoutCompleteResult>) {
-        share.completeLeft()
+        if (!resuming) share.completeLeft()
     }
 
     /** He left Lifts on this screen: nothing waits on the lane, so the Finish's backup runs now. */
@@ -162,7 +174,10 @@ class WorkoutCompleteScreen(
                         LightBarButton.Text(
                             text = "RESUME",
                             contentDescription = "resume workout",
-                            onClick = { goBack(WorkoutCompleteResult.RESUME) },
+                            onClick = {
+                                viewModel.resume()
+                                goBack(WorkoutCompleteResult.RESUME)
+                            },
                         ),
                         LightBarButton.Text(
                             text = "DONE",

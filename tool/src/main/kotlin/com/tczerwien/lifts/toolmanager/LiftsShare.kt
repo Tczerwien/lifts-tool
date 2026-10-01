@@ -57,7 +57,7 @@ class LiftsShare private constructor(
     }
 
     /**
-     * Workout Complete was left (DONE, RESUME or Back): the backup check, a few seconds later, past the
+     * Workout Complete was left (DONE or Back): the backup check, a few seconds later, past the
      * next screen's load. DONE after a Start Again lands on History, not Home, and RESUME then Finish
      * again doesn't pass Home either.
      */
