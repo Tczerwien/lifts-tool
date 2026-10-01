@@ -1,6 +1,8 @@
 package com.tczerwien.lifts.backup
 
 import android.database.sqlite.SQLiteDatabase
+import com.tczerwien.lifts.data.FINISHED_WORKOUTS_SQL
+import com.tczerwien.lifts.data.FinishedWorkouts
 import java.io.File
 
 /**
@@ -65,6 +67,18 @@ internal object BackupFile {
 
     fun hasTable(file: File, table: String): Boolean = open(file, writable = false).use { db ->
         db.rawQuery("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", arrayOf(table)).use { it.moveToFirst() }
+    }
+
+    /** [FinishedWorkouts] as [file] holds them; null when there is no such file or it can't be read. */
+    fun finishedWorkouts(file: File): FinishedWorkouts? {
+        if (!file.isFile) return null
+        return runCatching {
+            open(file, writable = false).use { db ->
+                db.rawQuery(FINISHED_WORKOUTS_SQL, null).use { c ->
+                    if (c.moveToFirst()) FinishedWorkouts(c.getInt(0), c.getLong(1), c.getLong(2)) else null
+                }
+            }
+        }.getOrNull()
     }
 
     /** SQLite's own check of every page and index; null when [file] is sound, else what it found. */

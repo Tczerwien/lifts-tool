@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.backup
 
+import com.tczerwien.lifts.data.FinishedWorkouts
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -137,21 +138,13 @@ object BackupPolicy {
     fun isDue(lastMillis: Long?, now: Long): Boolean = lastMillis == null || now - lastMillis >= DUE_AFTER_MS
 
     /**
-     * Whether the newest dated backup ([lastMillis]) is older than the last finished workout's end
-     * ([lastWorkoutEnd]): a Finish since, not yet copied. Home's check then backs up too. An end in
-     * the future (the clock was ahead at Finish, or set back mid-workout: Finish never ends before the
-     * last tick) doesn't count: every copy made until the clock passes it would look older, and each
-     * Home show would back up again. [isDue] still backs up daily until then.
+     * Whether the newest backup ([inLatest]: what lifts-latest.db holds, null when there is none or it
+     * can't be read) lacks a change to the log's finished workouts ([inLog]): a Finish not yet copied
+     * (or a RESUME and Finish again, a stale close, a delete). Home's check then backs up too. No clock
+     * is read: compared by time, a clock set back mid-workout (Finish ends at the last tick, "ahead")
+     * made every Home show back up again, or hid the Finishes after it, and a clock corrected between
+     * Finish and the check hid that Finish. A log with nothing finished and no backup is not behind.
      */
-    fun behindLog(lastMillis: Long?, lastWorkoutEnd: Long?, now: Long): Boolean =
-        lastWorkoutEnd != null && lastWorkoutEnd <= countedUntil(now) &&
-            (lastMillis == null || lastMillis < lastWorkoutEnd)
-
-    /**
-     * The latest workout end [behindLog] counts at [now]. Home asks for the last end up to it, not the
-     * last end of all: one end in the future must not hide the Finishes after it (a phone whose clock
-     * came back months behind after the battery ran out: every real workout is "ahead", and today's
-     * Finish still needs its backup).
-     */
-    fun countedUntil(now: Long): Long = now + CLOCK_SLACK_MS
+    fun behindLog(inLatest: FinishedWorkouts?, inLog: FinishedWorkouts): Boolean =
+        inLog != inLatest && !(inLatest == null && inLog.count == 0)
 }

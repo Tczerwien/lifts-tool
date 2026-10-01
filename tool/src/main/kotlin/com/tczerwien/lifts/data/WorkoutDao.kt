@@ -223,10 +223,23 @@ interface WorkoutDao {
     )
     fun completedSetsForExercisesUntil(exerciseIds: List<String>, until: Long): List<SetWithExercise>
 
-    /** When the last workout to end at or before [until] ended, or null with none. */
-    @Query("SELECT MAX(endedAt) FROM workouts WHERE endedAt <= :until")
-    fun lastEndedAt(until: Long): Long?
+    /** The finished workouts in brief ([FinishedWorkouts]). */
+    @Query(FINISHED_WORKOUTS_SQL)
+    fun finishedWorkouts(): FinishedWorkouts
 }
+
+/**
+ * How many workouts are finished, the newest one's id and the sum of their ends: the same in a
+ * backup as in the log it copied, and different after any Finish since (a RESUME and Finish again
+ * moves an end; a stale close, a delete or a restore changes them too). Read the same way from a
+ * backup file ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]).
+ */
+const val FINISHED_WORKOUTS_SQL =
+    "SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum " +
+        "FROM workouts WHERE endedAt IS NOT NULL"
+
+/** [FINISHED_WORKOUTS_SQL]'s one row. */
+data class FinishedWorkouts(val count: Int, val lastId: Long, val endSum: Long)
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */
 data class SetWithExercise(

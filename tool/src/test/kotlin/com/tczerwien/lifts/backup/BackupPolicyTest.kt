@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.backup
 
 import com.tczerwien.lifts.backup.BackupPolicy.Kind
+import com.tczerwien.lifts.data.FinishedWorkouts
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.test.Test
@@ -200,23 +201,16 @@ class BackupPolicyTest {
     }
 
     @Test
-    fun `a Finish since the newest backup makes Home back up, whatever the day`() {
-        val now = 10_000L
-        assertTrue(BackupPolicy.behindLog(lastMillis = 1_000, lastWorkoutEnd = 2_000, now), "finished after the last copy")
-        assertFalse(BackupPolicy.behindLog(lastMillis = 3_000, lastWorkoutEnd = 2_000, now), "copied since")
-        assertFalse(BackupPolicy.behindLog(lastMillis = 2_000, lastWorkoutEnd = 2_000, now), "copied as it ended")
-        assertTrue(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = 2_000, now), "no copy yet")
-        assertFalse(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = null, now), "nothing finished")
-    }
-
-    @Test
-    fun `a workout that ends in the future doesn't make every Home show back up`() {
-        // Set back an hour mid-workout: Finish ended it at its last tick, an hour ahead of the clock now.
-        val now = millis("2026-09-30T20:00:00Z")
-        val end = now + 60 * 60 * 1000L
-        assertFalse(BackupPolicy.behindLog(lastMillis = now - 1_000, lastWorkoutEnd = end, now), "copies made now look older")
-        assertFalse(BackupPolicy.behindLog(lastMillis = null, lastWorkoutEnd = end, now), "isDue covers no copy at all")
-        // A few seconds of drift still counts as ended.
-        assertTrue(BackupPolicy.behindLog(lastMillis = now - 1_000, lastWorkoutEnd = now + 30_000, now))
+    fun `a Finish the newest backup doesn't hold makes Home back up, whatever the clock says`() {
+        val copied = FinishedWorkouts(count = 41, lastId = 57, endSum = 73_000_000_000L)
+        assertFalse(BackupPolicy.behindLog(inLatest = copied, inLog = copied), "copied since")
+        assertTrue(BackupPolicy.behindLog(copied, copied.copy(count = 42, lastId = 58, endSum = 74_800_000_000L)), "a Finish since")
+        // RESUME and Finish again: same workout, a later end.
+        assertTrue(BackupPolicy.behindLog(copied, copied.copy(endSum = copied.endSum + 600_000)), "finished again")
+        assertTrue(BackupPolicy.behindLog(copied, copied.copy(count = 40, endSum = 71_000_000_000L)), "a workout deleted")
+        assertTrue(BackupPolicy.behindLog(inLatest = null, inLog = copied), "no backup (or one that can't be read)")
+        val none = FinishedWorkouts(count = 0, lastId = 0, endSum = 0)
+        assertFalse(BackupPolicy.behindLog(inLatest = null, inLog = none), "nothing finished, no backup: isDue's business")
+        assertFalse(BackupPolicy.behindLog(inLatest = none, inLog = none))
     }
 }

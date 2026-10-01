@@ -83,7 +83,7 @@ class BackupManager(
     private val dueCheck = QueuedOnce()
 
     /**
-     * Home: a dated backup if the newest is a day old ([BackupPolicy.isDue]), older than the last Finish
+     * Home: a dated backup if the newest is a day old ([BackupPolicy.isDue]), without the last Finish
      * ([BackupPolicy.behindLog]: Finish leaves its backup to this check), or the latest attempt
      * failed, decided when its turn comes. It waits [HOME_CHECK_DELAY_MS] before it queues: queued as
      * Home shows, the first Start of the day waited behind the whole backup (VACUUM INTO, a check, two
@@ -98,9 +98,9 @@ class BackupManager(
             LiftsIo.write({
                 dueCheck.started()
                 val now = System.currentTimeMillis()
-                val last = lastBackupMillis(now)
-                val lastEnd = repository.lastWorkoutEndedAt(until = BackupPolicy.countedUntil(now))
-                if (lastFailure != null || BackupPolicy.isDue(last, now) || BackupPolicy.behindLog(last, lastEnd, now)) {
+                if (lastFailure != null || BackupPolicy.isDue(lastBackupMillis(now), now) ||
+                    BackupPolicy.behindLog(BackupFile.finishedWorkouts(File(dir, BackupPolicy.LATEST)), repository.finishedWorkouts())
+                ) {
                     runCatching { backUp(BackupPolicy.Kind.DATED) }
                 }
             }) { publish() }

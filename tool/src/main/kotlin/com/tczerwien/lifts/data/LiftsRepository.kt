@@ -274,11 +274,8 @@ class LiftsRepository private constructor(
             .groupBy(keySelector = { it.exerciseId }, valueTransform = { it.set })
     }
 
-    /**
-     * When the last finished workout to end at or before [until] ended (its [WorkoutEntity.endedAt]),
-     * or null with none: an end later than [until] (a clock that was ahead) is left out.
-     */
-    fun lastWorkoutEndedAt(until: Long): Long? = db.workoutDao.lastEndedAt(until)
+    /** The finished workouts in brief, to compare with a backup's ([FinishedWorkouts]). */
+    fun finishedWorkouts(): FinishedWorkouts = db.workoutDao.finishedWorkouts()
 
     /** [completedSetsByExercise] of every workout, only the sets completed at or before [until]. */
     fun completedSetsByExerciseUntil(exerciseIds: Collection<String>, until: Long): Map<String, List<SetEntity>> {
