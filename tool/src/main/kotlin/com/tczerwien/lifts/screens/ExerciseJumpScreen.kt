@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.MonoDigits
+import com.tczerwien.lifts.ui.SupersetBar
+import com.tczerwien.lifts.ui.supersetBar
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -31,16 +33,25 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 
-/** One exercise of the workout as the list shows it: its name and how many of its sets are ticked. */
-data class JumpEntry(val slotId: Long, val name: String, val doneCount: Int, val setCount: Int)
+/**
+ * One exercise of the workout as the list shows it: its name, how many of its sets are ticked, and
+ * where it sits in a superset ([bar]).
+ */
+data class JumpEntry(
+    val slotId: Long,
+    val name: String,
+    val doneCount: Int,
+    val setCount: Int,
+    val bar: SupersetBar = SupersetBar.NONE,
+)
 
 class ExerciseJumpViewModel : LightViewModel<Long>()
 
 /**
  * The workout's exercises in order, opened by tapping Active Workout's title, so any exercise is one
  * tap away rather than a trip round the next-exercise row. Numbered like set markers, the one on
- * screen inverted, the finished ones dimmed. Returns the chosen exercise's slot id; Back returns
- * nothing.
+ * screen inverted, the finished ones dimmed, a superset's rows barred down their left edge. Returns
+ * the chosen exercise's slot id; Back returns nothing.
  */
 class ExerciseJumpScreen(
     private val sealedActivity: SealedLightActivity,
@@ -103,6 +114,7 @@ private fun JumpRow(number: Int, entry: JumpEntry, current: Boolean, onClick: ()
         modifier = Modifier
             .fillMaxWidth()
             .height(3f.gridUnitsAsDp())
+            .supersetBar(entry.bar, colors.content)
             .lightClickable(onClick = onClick)
             .padding(start = 1f.gridUnitsAsDp(), end = 2f.gridUnitsAsDp()),
         verticalAlignment = Alignment.CenterVertically,

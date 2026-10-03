@@ -45,6 +45,7 @@ import com.tczerwien.lifts.ui.LiftsFrame
 import com.tczerwien.lifts.ui.SetRow
 import com.tczerwien.lifts.ui.SetRowHeader
 import com.tczerwien.lifts.ui.SetRowState
+import com.tczerwien.lifts.ui.SupersetBar
 import com.tczerwien.lifts.ui.rememberSecondClock
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.SealedLightActivity
@@ -400,12 +401,14 @@ class ActiveWorkoutScreen(
     private fun openExerciseList(uiState: ActiveWorkoutViewModel.UiState) {
         viewModel.finishArm.disarm()
         viewModel.holdPosition()
-        val entries = uiState.exercises.map { block ->
+        val groups = uiState.exercises.map { it.slot.supersetGroup }
+        val entries = uiState.exercises.mapIndexed { index, block ->
             JumpEntry(
                 slotId = block.slot.id,
                 name = block.name,
                 doneCount = block.sets.count { it.completedAt != null },
                 setCount = block.sets.size,
+                bar = SupersetBar.at(groups, index),
             )
         }
         val currentSlotId = uiState.exercises.getOrNull(uiState.currentIndex)?.slot?.id
