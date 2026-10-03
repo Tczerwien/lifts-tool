@@ -19,6 +19,10 @@ America/Chicago):
   - A finished workout with 0 completed sets (opened and closed by mistake).
   - Bodyweight every 3 days, drifting from about 182 lb down to 179 lb.
   - Templates "Upper A" and "Lower A".
+  - Template "Full Body" (schema 2 and later): lateral raises, then dumbbell flyes and seated cable rows
+    as a superset (90 s rest after the round, on the rows), then leg press; done on the last two
+    Saturdays at 10:00, the pair's sets ticked in turn (flyes 1, rows 1, flyes 2, ...). In a v1 file
+    the pair is two plain slots (v1 has no column for it).
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
@@ -69,6 +73,8 @@ LATERAL = "cable-seated-lateral-raise"
 SQUAT = "barbell-squat"
 RDL = "romanian-deadlift"
 LEG_PRESS = "leg-press"
+FLYES = "dumbbell-flyes"
+CABLE_ROW = "seated-cable-rows"
 
 
 def kg(lb):
@@ -99,6 +105,8 @@ def create_schema(conn, version):
 class Writer:
     def __init__(self, conn):
         self.conn = conn
+        # Supersets came with schema 2: a v1 file has no column for them, so its pairs are plain slots.
+        self.groups = "supersetGroup" in {row[1] for row in conn.execute("PRAGMA table_info(workout_exercises)")}
 
     def workout(self, name, started, ended, template_id=None, notes=None):
         cur = self.conn.execute(
@@ -107,13 +115,32 @@ class Writer:
         )
         return cur.lastrowid
 
-    def slot(self, workout_id, exercise_id, position, rest_work=None, rest_warmup=None):
+    def slot(self, workout_id, exercise_id, position, rest_work=None, rest_warmup=None, group=None):
+        columns = ["workoutId", "exerciseId", "position", "restSecWork", "restSecWarmup"]
+        values = [workout_id, exercise_id, position, rest_work, rest_warmup]
+        if self.groups:
+            columns.append("supersetGroup")
+            values.append(group)
         cur = self.conn.execute(
-            "INSERT INTO workout_exercises (workoutId, exerciseId, position, restSecWork, restSecWarmup)"
-            " VALUES (?, ?, ?, ?, ?)",
-            (workout_id, exercise_id, position, rest_work, rest_warmup),
+            f"INSERT INTO workout_exercises ({', '.join(columns)}) VALUES ({', '.join('?' * len(values))})", values,
         )
         return cur.lastrowid
+
+    def superset_sets(self, pair, clock, rng):
+        """pair: [(slot_id, rows), ...] done in turn, one set of each, then the rest after the round.
+        rows: (type, weight_lb, reps), all ticked. Returns the advanced clock."""
+        for index in range(max(len(rows) for _, rows in pair)):
+            for member, (slot_id, rows) in enumerate(pair):
+                if index >= len(rows):
+                    continue
+                kind, weight_lb, reps = rows[index]
+                # The round's first set comes after the rest; its partner's straight after it.
+                clock += dt.timedelta(seconds=(40 if member else 130) + rng.randint(0, 15))
+                self.conn.execute(
+                    "INSERT INTO sets (workoutExerciseId, position, type, weightKg, reps, completedAt) VALUES (?, ?, ?, ?, ?, ?)",
+                    (slot_id, index, kind, kg(weight_lb), reps, millis(clock)),
+                )
+        return clock
 
     def sets(self, slot_id, rows, clock):
         """rows: (type, weight_lb or None, reps, completed). Returns the advanced clock."""
@@ -130,13 +157,18 @@ class Writer:
         return clock
 
     def template(self, name, position, slots):
+        """slots: (exercise_id, target_sets, rest_work[, superset group])."""
         cur = self.conn.execute("INSERT INTO templates (name, position) VALUES (?, ?)", (name, position))
         template_id = cur.lastrowid
-        for index, (exercise_id, target_sets, rest_work) in enumerate(slots):
+        for index, slot in enumerate(slots):
+            exercise_id, target_sets, rest_work = slot[:3]
+            columns = ["templateId", "exerciseId", "position", "targetSets", "restSecWork"]
+            values = [template_id, exercise_id, index, target_sets, rest_work]
+            if self.groups:
+                columns.append("supersetGroup")
+                values.append(slot[3] if len(slot) > 3 else None)
             self.conn.execute(
-                "INSERT INTO template_exercises (templateId, exerciseId, position, targetSets, restSecWork)"
-                " VALUES (?, ?, ?, ?, ?)",
-                (template_id, exercise_id, index, target_sets, rest_work),
+                f"INSERT INTO template_exercises ({', '.join(columns)}) VALUES ({', '.join('?' * len(values))})", values,
             )
         return template_id
 
@@ -186,6 +218,20 @@ def lower(w, day, week, template_id):
     w.conn.execute("UPDATE workouts SET endedAt = ? WHERE id = ?", (millis(clock + dt.timedelta(minutes=2)), workout_id))
 
 
+def full_body(w, day, week, template_id, rng):
+    """A Saturday Full Body: its flyes and cable rows done as a superset, ticked in turn."""
+    start = dt.datetime.combine(day, dt.time(10, 0), ZONE)
+    workout_id = w.workout("Full Body", start, None, template_id)
+    clock = w.sets(w.slot(workout_id, LATERAL, 0, 60), [("normal", 15, 12, True)] * 2, start)
+    flyes = w.slot(workout_id, FLYES, 1, group=1)
+    rows = w.slot(workout_id, CABLE_ROW, 2, 90, group=1)
+    clock = w.superset_sets(
+        [(flyes, [("normal", 30 + 5 * (week % 2), 12)] * 3), (rows, [("normal", 120 + 10 * (week % 2), 10)] * 3)], clock, rng,
+    )
+    clock = w.sets(w.slot(workout_id, LEG_PRESS, 3), [("normal", 270, 12, True)] * 2, clock)
+    w.conn.execute("UPDATE workouts SET endedAt = ? WHERE id = ?", (millis(clock + dt.timedelta(minutes=2)), workout_id))
+
+
 def gym(conn, now):
     random.seed(42)
     w = Writer(conn)
@@ -222,6 +268,12 @@ def gym(conn, now):
         )
         weight -= 0.2 + random.uniform(-0.3, 0.3)
         day += dt.timedelta(days=3)
+
+    # Added in B13, after everything above, with its own random numbers so the rest of the file is as before.
+    rng = random.Random(13)
+    full_body_t = w.template("Full Body", 2, [(LATERAL, 2, 60), (FLYES, 3, None, 1), (CABLE_ROW, 3, 90, 1), (LEG_PRESS, 2, None)])
+    for week in (6, 7):
+        full_body(w, first_monday + dt.timedelta(weeks=week, days=5), week, full_body_t, rng)
 
 
 # --- Scenario "long": years of four workouts a week ---
