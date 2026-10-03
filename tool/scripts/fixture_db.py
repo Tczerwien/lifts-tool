@@ -3,7 +3,9 @@
 
 The tables come straight from the committed Room schema (room-schemas/.../<version>.json), the newest
 one by default, so the file opens in the app without a migration. --schema-version N builds an older
-version instead (e.g. 1), which the app migrates when it is pushed. The exercise catalog and default
+version instead (e.g. 1), which the app migrates when it is pushed. An app older than the file's
+version can't open it at all (Room has no downgrade; it crashes at launch): for 0.12.0, build
+--schema-version 1. The exercise catalog and default
 bar are left empty on purpose: the app seeds them on first launch, which also exercises the seeding
 path. Exercise ids below are the seed slugs.
 
@@ -78,8 +80,8 @@ def millis(moment):
     return int(moment.timestamp() * 1000)
 
 
-def newest_schema_version():
-    return max(int(name[: -len(".json")]) for name in os.listdir(SCHEMA_DIR) if name.endswith(".json"))
+def schema_versions():
+    return sorted(int(name[: -len(".json")]) for name in os.listdir(SCHEMA_DIR) if name.endswith(".json"))
 
 
 def create_schema(conn, version):
@@ -462,13 +464,16 @@ def main():
     args = parser.parse_args()
     if args.scenario == "long" and not args.catalog_from:
         parser.error("--scenario long needs --catalog-from: its custom exercises would stop the app seeding the catalog")
+    version = schema_versions()[-1] if args.schema_version is None else args.schema_version
+    if version not in schema_versions():
+        parser.error(f"no schema version {version}: the exported ones are {schema_versions()}")
 
     now = dt.datetime.fromisoformat(args.now).replace(tzinfo=ZONE) if args.now else dt.datetime.now(ZONE)
     if os.path.exists(args.out):
         os.remove(args.out)
     conn = sqlite3.connect(args.out)
     conn.execute("PRAGMA foreign_keys = ON")
-    create_schema(conn, args.schema_version or newest_schema_version())
+    create_schema(conn, version)
     if args.scenario == "long":
         long_history(conn, now, args.years)
     else:
