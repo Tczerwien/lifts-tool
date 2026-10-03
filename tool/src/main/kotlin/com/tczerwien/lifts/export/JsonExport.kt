@@ -32,6 +32,10 @@ import kotlinx.serialization.json.Json
  * 2.3 (B10) added summary.bodyweight.rate_span_days (the rate now needs 3 weigh-ins 14+ days apart
  * in the last 28 days, and says how many days it covers), exercises[].per_side (reps and seconds
  * count one side) and each workout exercise's target from its template: rep_min, rep_max, target_rir.
+ *
+ * 2.4 (B13) added superset_id (Hevy's name) on workout and template exercises: the exercises sharing a
+ * number were done (or are planned) as a superset, one set of each in turn with the rest after the
+ * round. Numbered 1, 2, … within each workout or template; absent outside one.
  */
 object JsonExport {
 
@@ -79,6 +83,7 @@ object JsonExport {
                             targetRir = it.targetRir,
                             restSeconds = it.restSecWork,
                             warmupRestSeconds = it.restSecWarmup,
+                            supersetId = it.supersetId,
                         )
                     },
                 )
@@ -100,6 +105,7 @@ object JsonExport {
                             repMin = exercise.targetRepMin,
                             repMax = exercise.targetRepMax,
                             targetRir = exercise.targetRir,
+                            supersetId = exercise.supersetId,
                             sets = exercise.sets.map { set ->
                                 JsonSet(
                                     index = set.index,
@@ -241,6 +247,8 @@ data class JsonTemplateExercise(
     /** Absent: the Settings default. */
     @SerialName("rest_seconds") val restSeconds: Int? = null,
     @SerialName("warmup_rest_seconds") val warmupRestSeconds: Int? = null,
+    /** The template's exercises sharing it are a superset; absent outside one. */
+    @SerialName("superset_id") val supersetId: Int? = null,
 )
 
 @Serializable
@@ -265,6 +273,8 @@ data class JsonWorkoutExercise(
     @SerialName("rep_min") val repMin: Int? = null,
     @SerialName("rep_max") val repMax: Int? = null,
     @SerialName("target_rir") val targetRir: Int? = null,
+    /** The workout's exercises sharing it were done as a superset; absent outside one. */
+    @SerialName("superset_id") val supersetId: Int? = null,
     val sets: List<JsonSet>,
 )
 

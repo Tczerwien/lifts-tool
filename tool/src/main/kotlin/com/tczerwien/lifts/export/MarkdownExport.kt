@@ -68,6 +68,8 @@ object MarkdownExport {
         append(" help (`-30x8` is an assisted pull-up with 30 ").append(unit).append(" of assistance).")
         append(" `x10/side` is 10 reps on each side, one side at a time (a split squat); a dumbbell weight is one dumbbell's.")
         append(" `(target 6–12 reps, RIR 1)` after an exercise is what its template asked for that day.")
+        append(" `(superset 1)` marks the exercises done in turn that day as superset 1: one set of each, then the")
+        append(" rest after the round.")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }
@@ -153,6 +155,7 @@ object MarkdownExport {
             workout.notes?.let { append('\n').append(quote(it, indent = "")) }
             for (exercise in workout.exercises) {
                 append("\n- **").append(exercise.name).append("**")
+                exercise.supersetId?.let { append(" (superset ").append(it).append(')') }
                 muscleTag(exercise)?.let { append(' ').append(it) }
                 targetTag(exercise)?.let { append(' ').append(it) }
                 append('\n')

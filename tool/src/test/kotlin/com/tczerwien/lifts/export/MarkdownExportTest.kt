@@ -1,6 +1,8 @@
 package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.data.BodyweightEntity
+import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertContains
@@ -15,7 +17,7 @@ class MarkdownExportTest {
     @Test
     fun frontMatterIsFirstAndComplete() {
         assertTrue(markdown.startsWith("---\n"), "front matter must open the file")
-        assertContains(lines, "schema_version: \"2.3\"")
+        assertContains(lines, "schema_version: \"2.4\"")
         assertContains(lines, "exported_at: ${ExportFixtures.EXPORTED_AT}")
         assertContains(lines, "units:")
         assertContains(lines, "  weight: kg")
@@ -128,9 +130,23 @@ class MarkdownExportTest {
     }
 
     @Test
+    fun aSupersetIsMarkedOnEachOfItsExercises() {
+        val paired = ExportFixtures.slots.map { if (it.id == 2L) it.copy(supersetGroup = 3) else it } +
+            WorkoutExerciseEntity(id = 3, workoutId = 2, exerciseId = ExportFixtures.squat.id, position = 1, supersetGroup = 3)
+        val sets = ExportFixtures.sets + SetEntity(
+            id = 8, workoutExerciseId = 3, position = 0, type = "normal", weightKg = 120.0, reps = 5,
+            completedAt = ExportFixtures.millis("2026-07-13T10:20:00Z"),
+        )
+        val log = MarkdownExport.render(ExportFixtures.snapshot(slots = paired, sets = sets)).lines()
+        assertTrue(log.any { it.startsWith("- **Bench Press (Barbell)** (superset 1) [") }, log.joinToString("\n"))
+        assertTrue(log.any { it.startsWith("- **") && "(superset 1)" in it && "Squat" in it }, log.joinToString("\n"))
+        assertTrue(lines.none { it.startsWith("- **") && "(superset" in it }, "a plain exercise is unmarked")
+    }
+
+    @Test
     fun aLegendExplainsTheNotation() {
         val legend = lines.single { it.startsWith("How to read this:") }
-        for (term in listOf("`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)")) {
+        for (term in listOf("`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)", "`(superset 1)`")) {
             assertTrue(term in legend, "legend lacks $term: $legend")
         }
     }

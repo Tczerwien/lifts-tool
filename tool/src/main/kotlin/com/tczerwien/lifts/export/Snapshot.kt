@@ -15,6 +15,7 @@ import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.tracking
+import com.tczerwien.lifts.session.supersetNumbers
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.WeightUnit
@@ -32,8 +33,8 @@ import java.util.Locale
  * its day. Tests pass a fixed zone.
  */
 
-/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.3: B10). */
-const val EXPORT_SCHEMA_VERSION = "2.3"
+/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.4: B13). */
+const val EXPORT_SCHEMA_VERSION = "2.4"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -126,6 +127,8 @@ data class SnapshotTemplateExercise(
     /** Null: the Settings default. */
     val restSecWork: Int?,
     val restSecWarmup: Int?,
+    /** Its superset in the template, numbered 1, 2, … ([supersetNumbers]); null outside one. */
+    val supersetId: Int? = null,
 )
 
 data class SnapshotWorkout(
@@ -166,6 +169,11 @@ data class SnapshotWorkoutExercise(
     val targetRepMin: Int? = null,
     val targetRepMax: Int? = null,
     val targetRir: Int? = null,
+    /**
+     * Its superset that day among the workout's exported exercises, numbered 1, 2, … ([supersetNumbers]);
+     * null outside one, and for a member whose partner went unticked.
+     */
+    val supersetId: Int? = null,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
     val sets: List<SnapshotSet>,
 )
@@ -285,10 +293,13 @@ fun buildSnapshot(
         .filter { workout -> slotsByWorkout[workout.id].orEmpty().any { it.id in setsBySlot } }
         .sortedWith(compareByDescending<WorkoutEntity> { it.startedAt }.thenByDescending { it.id })
         .map { workout ->
-            val slots = slotsByWorkout[workout.id].orEmpty()
+            val keptSlots = slotsByWorkout[workout.id].orEmpty()
                 .filter(::kept)
                 .sortedBy { it.position }
-                .map { slot ->
+            // Numbered among the exercises the file has: a pair whose partner went unticked is no pair.
+            val supersetIds = supersetNumbers(keptSlots.map { it.supersetGroup })
+            val slots = keptSlots
+                .mapIndexed { index, slot ->
                     val exercise = exercisesById[slot.exerciseId]
                     val orderedSets = setsBySlot[slot.id].orEmpty().sortedBy { it.position }
                     SnapshotWorkoutExercise(
@@ -302,6 +313,7 @@ fun buildSnapshot(
                         targetRepMin = slot.targetRepMin?.takeIf { exercise?.tracking?.takesReps != false },
                         targetRepMax = slot.targetRepMax?.takeIf { exercise?.tracking?.takesReps != false },
                         targetRir = slot.targetRir?.takeIf { exercise?.tracking?.takesReps != false },
+                        supersetId = supersetIds[index],
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,
@@ -335,9 +347,11 @@ fun buildSnapshot(
 
     val templateSlots = rows.templateExercises.groupBy { it.templateId }
     val snapshotTemplates = rows.templates.sortedWith(compareBy({ it.position }, { it.id })).map { template ->
+        val ordered = templateSlots[template.id].orEmpty().sortedWith(compareBy({ it.position }, { it.id }))
+        val supersetIds = supersetNumbers(ordered.map { it.supersetGroup })
         SnapshotTemplate(
             name = template.name,
-            exercises = templateSlots[template.id].orEmpty().sortedWith(compareBy({ it.position }, { it.id })).map {
+            exercises = ordered.mapIndexed { index, it ->
                 SnapshotTemplateExercise(
                     exerciseId = it.exerciseId,
                     name = nameOf(it.exerciseId),
@@ -349,6 +363,7 @@ fun buildSnapshot(
                     targetRir = it.targetRir?.takeIf { _ -> tracking[it.exerciseId]?.takesReps != false },
                     restSecWork = it.restSecWork,
                     restSecWarmup = it.restSecWarmup,
+                    supersetId = supersetIds[index],
                 )
             },
         )

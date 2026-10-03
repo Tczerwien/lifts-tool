@@ -4,6 +4,7 @@ import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -42,17 +43,27 @@ class JsonExportTest {
             restSecWork = 180, restSecWarmup = 90, warmupSets = 2, repMin = 5, repMax = 8, targetRir = 2,
         ),
         TemplateExerciseEntity(id = 2, templateId = 1, exerciseId = customRow.id, position = 1, targetSets = 2),
+        TemplateExerciseEntity(id = 3, templateId = 1, exerciseId = ExportFixtures.squat.id, position = 2, targetSets = 2, supersetGroup = 4),
+        TemplateExerciseEntity(id = 4, templateId = 1, exerciseId = customRow.id, position = 3, targetSets = 2, supersetGroup = 4),
     )
 
-    /** Every optional field filled somewhere: a timed set, a template, a hidden custom exercise with a cue. */
+    /** The newest workout's bench done as a superset with a squat (2.4). */
+    private val pairedSlots = ExportFixtures.slots.map { if (it.id == 2L) it.copy(supersetGroup = 9) else it } +
+        WorkoutExerciseEntity(id = 3, workoutId = 2, exerciseId = ExportFixtures.squat.id, position = 1, supersetGroup = 9)
+
+    /** Every optional field filled somewhere: a timed set, a template, a hidden custom exercise with a cue, a superset. */
     private val full = JsonExport.render(
         ExportFixtures.snapshot(
             exercises = listOf(ExportFixtures.bench, ExportFixtures.squat, customRow),
             templates = listOf(template),
             templateExercises = templateSlots,
+            slots = pairedSlots,
             sets = ExportFixtures.sets + SetEntity(
                 id = 7, workoutExerciseId = 2, position = 3, type = "drop", weightKg = 60.0, durationSec = 40,
                 completedAt = ExportFixtures.millis("2026-07-13T10:30:00Z"),
+            ) + SetEntity(
+                id = 8, workoutExerciseId = 3, position = 0, type = "normal", weightKg = 120.0, reps = 5,
+                completedAt = ExportFixtures.millis("2026-07-13T10:20:00Z"),
             ),
         ),
     )
@@ -81,13 +92,14 @@ class JsonExportTest {
             "summary.week_starts", "summary.weekly_sets_per_muscle",
             "templates", "templates[].exercises", "templates[].exercises[].exercise_id", "templates[].exercises[].name",
             "templates[].exercises[].rep_max", "templates[].exercises[].rep_min", "templates[].exercises[].rest_seconds",
-            "templates[].exercises[].target_rir", "templates[].exercises[].target_sets",
+            "templates[].exercises[].superset_id", "templates[].exercises[].target_rir", "templates[].exercises[].target_sets",
             "templates[].exercises[].warmup_rest_seconds", "templates[].exercises[].warmup_sets", "templates[].title",
             "timezone",
             "units", "units.display", "units.weight",
             "workouts", "workouts[].bodyweight_date", "workouts[].bodyweight_kg", "workouts[].end_time",
             "workouts[].exercises", "workouts[].exercises[].exercise_id", "workouts[].exercises[].name",
-            "workouts[].exercises[].notes", "workouts[].exercises[].sets", "workouts[].exercises[].sets[].completed_at",
+            "workouts[].exercises[].notes", "workouts[].exercises[].superset_id",
+            "workouts[].exercises[].sets", "workouts[].exercises[].sets[].completed_at",
             "workouts[].exercises[].sets[].duration_seconds", "workouts[].exercises[].sets[].index",
             "workouts[].exercises[].sets[].is_pr", "workouts[].exercises[].sets[].reps",
             "workouts[].exercises[].sets[].seconds_since_previous_set", "workouts[].exercises[].sets[].rpe",
@@ -114,7 +126,7 @@ class JsonExportTest {
 
     @Test
     fun topLevelFields() {
-        assertEquals("2.3", decoded.schemaVersion)
+        assertEquals("2.4", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals(JsonUnits(weight = "kg", display = "kg"), decoded.units)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)
@@ -170,7 +182,18 @@ class JsonExportTest {
             ),
             push.exercises.first(),
         )
-        assertEquals(JsonTemplateExercise(exerciseId = "custom-1", name = "Cable Y-Raise", targetSets = 2), push.exercises.last())
+        assertEquals(JsonTemplateExercise(exerciseId = "custom-1", name = "Cable Y-Raise", targetSets = 2), push.exercises[1])
+        assertEquals(listOf(null, null, 1, 1), push.exercises.map { it.supersetId }, "the template's pair")
+    }
+
+    @Test
+    fun supersetsAreNumberedWithinEachWorkout() {
+        val document = Json.decodeFromString(JsonExportDocument.serializer(), full)
+        assertEquals(listOf(1, 1), document.workouts.first().exercises.map { it.supersetId }, "bench and squat in turn")
+        assertEquals(listOf(null), document.workouts.last().exercises.map { it.supersetId })
+        // The squat went unticked: the bench left on its own is no superset in the file.
+        val alone = JsonExport.render(ExportFixtures.snapshot(slots = pairedSlots))
+        assertTrue("superset_id" !in alone, alone)
     }
 
     @Test
@@ -206,7 +229,7 @@ class JsonExportTest {
     @Test
     fun aDropSetIsHevysDropset() {
         val document = Json.decodeFromString(JsonExportDocument.serializer(), full)
-        val drop = document.workouts.first().exercises.single().sets.last()
+        val drop = document.workouts.first().exercises.first().sets.last()
         assertEquals("dropset", drop.type)
         assertEquals(40, drop.durationSeconds)
     }
