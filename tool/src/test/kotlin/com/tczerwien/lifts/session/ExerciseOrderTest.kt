@@ -178,6 +178,27 @@ class ExerciseOrderTest {
         assertEquals(4L, after.slot.id)
     }
 
+    @Test
+    fun `in a superset a warm-up tick keeps the Rest Timer's NEXT on the exercise on screen, as the screen stays`() {
+        // A's warm-up ticked: the warm-up rest runs and A's set 1 is next, not B's.
+        val warmedUp = listOf(
+            row(20, 2, done = true, at = 10L).copy(type = SET_TYPE_WARMUP), row(21, 2), row(22, 2),
+            row(30, 3).copy(type = SET_TYPE_WARMUP), row(31, 3), row(32, 3), row(41, 4),
+        )
+        val onA = restNextContext(withPair, warmedUp, currentSlotId = 2, activeSetId = 21) as RestNext.Next
+        assertEquals(2L to 21L, onA.slot.id to onA.rows[onA.index].id)
+        // A1 done, moved to B, B's warm-up ticked: B's set 1, not A's set 2.
+        val bWarmedUp = warmedUp.map {
+            when (it.id) {
+                21L -> it.copy(completedAt = 20L)
+                30L -> it.copy(completedAt = 30L)
+                else -> it
+            }
+        }
+        val onB = restNextContext(withPair, bWarmedUp, currentSlotId = 3, activeSetId = 31) as RestNext.Next
+        assertEquals(3L to 31L, onB.slot.id to onB.rows[onB.index].id)
+    }
+
     private fun row(id: Long, slot: Long, done: Boolean = false, at: Long = 5L) = SetEntity(
         id = id,
         workoutExerciseId = slot,
