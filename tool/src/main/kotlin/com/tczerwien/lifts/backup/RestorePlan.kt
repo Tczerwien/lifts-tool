@@ -14,6 +14,12 @@ import java.util.Locale
 /** What a restore would bring back, and whether it can: the pure half of Restore. */
 object RestorePlan {
 
+    /** How Room's schema checks begin their messages (Room 2.7). */
+    private val ROOM_SCHEMA_FAILURES = listOf("Migration didn't properly handle", "Room cannot verify the data integrity")
+
+    /** At most this much of a failure's first line reaches the Restore screen. */
+    private const val MESSAGE_CHARS = 100
+
     data class Summary(
         /** Finished workouts with at least one logged set: what History lists. */
         val workouts: Int,
@@ -95,17 +101,19 @@ object RestorePlan {
 
     /**
      * Why Lifts couldn't open or read a file that passed the file checks, as one short line for the
-     * Restore screen ([Restorer] logs the failure in full). Room reports tables that don't match what
-     * this version expects, after migrating an older file, as an IllegalStateException whose message
-     * dumps both tables; the screen says that in a few words instead.
+     * Restore screen ([Restorer] logs the failure in full). Room's two schema checks (the tables after
+     * migrating an older file, and the identity hash of a same-version one) dump whole tables into
+     * their messages; the screen says that in a few words instead. Anything else shows its first
+     * line, cut to [MESSAGE_CHARS].
      */
-    fun unreadable(failure: Throwable): String = when (failure) {
-        is IllegalStateException -> "Lifts can't read it (its tables don't match a Lifts log)"
-        else -> "Lifts can't read it (${failure.message?.lineSequence()?.first()?.trim()?.take(MESSAGE_CHARS) ?: failure})"
+    fun unreadable(failure: Throwable): String {
+        val message = failure.message.orEmpty()
+        if (failure is IllegalStateException && ROOM_SCHEMA_FAILURES.any { message.startsWith(it) }) {
+            return "Lifts can't read it (its tables don't match a Lifts log)"
+        }
+        val line = message.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: failure.toString()
+        return "Lifts can't read it (${if (line.length > MESSAGE_CHARS) line.take(MESSAGE_CHARS) + "…" else line})"
     }
-
-    /** At most this much of a failure's first line reaches the screen. */
-    private const val MESSAGE_CHARS = 100
 
     /** [summary] as the Restore screen's lines, e.g. "26 workouts · 350 sets". */
     fun lines(summary: Summary, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): List<String> = buildList {

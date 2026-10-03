@@ -160,12 +160,19 @@ class RestorePlanTest {
                 "TableInfo{name='bars', columns={id=Column{name='id', type='INTEGER'}}}\n Found:\nTableInfo{name='bars', columns={}}",
         )
         assertEquals("Lifts can't read it (its tables don't match a Lifts log)", RestorePlan.unreadable(room))
+        val hash = IllegalStateException("Room cannot verify the data integrity. Looks like you've changed schema but forgot to update the version number.")
+        assertEquals("Lifts can't read it (its tables don't match a Lifts log)", RestorePlan.unreadable(hash))
+        // Any other IllegalStateException is no table problem: it keeps its own words.
+        val other = IllegalStateException("Cannot access database on the main thread since it may potentially lock the UI.")
+        assertEquals("Lifts can't read it (Cannot access database on the main thread since it may potentially lock the UI.)", RestorePlan.unreadable(other))
 
         val json = IllegalArgumentException("Unexpected JSON token at offset 0: Expected start of the array '['\nJSON input: chest")
         assertEquals("Lifts can't read it (Unexpected JSON token at offset 0: Expected start of the array '[')", RestorePlan.unreadable(json))
 
         val long = RuntimeException("x".repeat(500))
-        assertEquals("Lifts can't read it (${"x".repeat(100)})", RestorePlan.unreadable(long))
+        assertEquals("Lifts can't read it (${"x".repeat(100)}…)", RestorePlan.unreadable(long))
+        assertEquals("Lifts can't read it (${"x".repeat(100)})", RestorePlan.unreadable(RuntimeException("x".repeat(100))))
+        assertEquals("Lifts can't read it (first words)", RestorePlan.unreadable(RuntimeException("\n  \nfirst words\nmore")))
         assertEquals("Lifts can't read it (java.lang.RuntimeException)", RestorePlan.unreadable(RuntimeException()))
     }
 }
