@@ -98,4 +98,4 @@ interface BulkDao {
  */
 const val EXERCISE_COLUMNS_WITHOUT_INSTRUCTIONS =
     "id, name, equipment, primaryMuscles, secondaryMuscles, category, level, '' AS instructions, " +
-        "isCustom, pinnedNote, trackingType, perSide, hidden"
+        "isCustom, pinnedNote, trackingType, perSide, hidden, countsFor"

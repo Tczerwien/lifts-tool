@@ -46,7 +46,7 @@ class SchemaTripwireTest {
     }
 
     private companion object {
-        const val LATEST_VERSION = 1
-        const val LATEST_IDENTITY_HASH = "a1ebce5952497c8fa88929c365015c34"
+        const val LATEST_VERSION = 2
+        const val LATEST_IDENTITY_HASH = "216428bd3635950c518a88eec5fd01e2"
     }
 }

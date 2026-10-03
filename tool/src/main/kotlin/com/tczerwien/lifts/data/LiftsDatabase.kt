@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.data
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
@@ -17,6 +18,8 @@ import androidx.room.TypeConverters
     ],
     version = LiftsDatabase.VERSION,
     exportSchema = true,
+    // 1 -> 2 only adds columns, each nullable or with a default, so every v1 row stays as it was.
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @TypeConverters(Converters::class)
 abstract class LiftsDatabase : RoomDatabase() {
@@ -29,6 +32,6 @@ abstract class LiftsDatabase : RoomDatabase() {
 
     companion object {
         /** The @Database version above; a backup from a newer version can't be restored. */
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }
