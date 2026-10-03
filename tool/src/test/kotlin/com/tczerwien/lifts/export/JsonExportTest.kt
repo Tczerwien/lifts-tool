@@ -199,6 +199,33 @@ class JsonExportTest {
             ExportFixtures.snapshot(slots = pairedSlots.map { if (it.id == 3L) it.copy(notes = "Rack taken") else it }),
         )
         assertTrue("Rack taken" in noted && "superset_id" !in noted, noted)
+        // Nor when the squat was only warmed up.
+        val warmedUp = JsonExport.render(
+            ExportFixtures.snapshot(
+                slots = pairedSlots,
+                sets = ExportFixtures.sets + SetEntity(
+                    id = 8, workoutExerciseId = 3, position = 0, type = "warmup", weightKg = 60.0, reps = 5,
+                    completedAt = ExportFixtures.millis("2026-07-13T10:20:00Z"),
+                ),
+            ),
+        )
+        assertTrue("superset_id" !in warmedUp, warmedUp)
+    }
+
+    @Test
+    fun aMemberKeptOnlyForItsNoteDoesNotSplitTheOthers() {
+        // Three in turn: bench, a noted squat that wasn't done, and the custom raise, both done.
+        val slots = pairedSlots.map { if (it.id == 3L) it.copy(notes = "Rack taken") else it } +
+            WorkoutExerciseEntity(id = 4, workoutId = 2, exerciseId = customRow.id, position = 2, supersetGroup = 9)
+        val sets = ExportFixtures.sets + SetEntity(
+            id = 8, workoutExerciseId = 4, position = 0, type = "normal", weightKg = 10.0, reps = 12,
+            completedAt = ExportFixtures.millis("2026-07-13T10:20:00Z"),
+        )
+        val document = Json.decodeFromString(
+            JsonExportDocument.serializer(),
+            JsonExport.render(ExportFixtures.snapshot(exercises = listOf(ExportFixtures.bench, ExportFixtures.squat, customRow), slots = slots, sets = sets)),
+        )
+        assertEquals(listOf(1, null, 1), document.workouts.first().exercises.map { it.supersetId })
     }
 
     @Test

@@ -15,6 +15,7 @@ import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.tracking
+import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.supersetNumbers
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
@@ -170,9 +171,9 @@ data class SnapshotWorkoutExercise(
     val targetRepMax: Int? = null,
     val targetRir: Int? = null,
     /**
-     * Its superset that day among the workout's exported exercises with a ticked set, numbered 1, 2, …
-     * ([supersetNumbers]); null outside one, and for a member whose partner went unticked (even when the
-     * partner is here for its note).
+     * Its superset that day among the workout's exercises done that day (a ticked work set), numbered 1, 2, …
+     * ([supersetNumbers]); null outside one, and for a member whose partner wasn't done (unticked, warmed up
+     * only, or here for its note alone).
      */
     val supersetId: Int? = null,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
@@ -297,11 +298,13 @@ fun buildSnapshot(
             val keptSlots = slotsByWorkout[workout.id].orEmpty()
                 .filter(::kept)
                 .sortedBy { it.position }
-            // Numbered among the exercises the file has with a ticked set: a pair whose partner went unticked
-            // (or is in the file only for its note) is no pair.
-            val supersetIds = supersetNumbers(keptSlots.map { slot -> slot.supersetGroup.takeIf { slot.id in setsBySlot } })
+            // Numbered among the exercises done that day (a ticked work set, as Start Again keeps them), whatever
+            // else the file has between them: a partner unticked, warmed up only, or here for its note alone is
+            // no member, and a member between two done ones doesn't split them.
+            val done = keptSlots.filter { slot -> setsBySlot[slot.id].orEmpty().any { it.type != SET_TYPE_WARMUP } }
+            val supersetIds = done.map { it.id }.zip(supersetNumbers(done.map { it.supersetGroup })).toMap()
             val slots = keptSlots
-                .mapIndexed { index, slot ->
+                .map { slot ->
                     val exercise = exercisesById[slot.exerciseId]
                     val orderedSets = setsBySlot[slot.id].orEmpty().sortedBy { it.position }
                     SnapshotWorkoutExercise(
@@ -315,7 +318,7 @@ fun buildSnapshot(
                         targetRepMin = slot.targetRepMin?.takeIf { exercise?.tracking?.takesReps != false },
                         targetRepMax = slot.targetRepMax?.takeIf { exercise?.tracking?.takesReps != false },
                         targetRir = slot.targetRir?.takeIf { exercise?.tracking?.takesReps != false },
-                        supersetId = supersetIds[index],
+                        supersetId = supersetIds[slot.id],
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,
