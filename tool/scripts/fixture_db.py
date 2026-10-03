@@ -5,9 +5,8 @@ The tables come straight from the committed Room schema (room-schemas/.../<versi
 one by default, so the file opens in the app without a migration. --schema-version N builds an older
 version instead (e.g. 1), which the app migrates when it is pushed. An app older than the file's
 version can't open it at all (Room has no downgrade; it crashes at launch): for 0.12.0, build
---schema-version 1. The exercise catalog and default
-bar are left empty on purpose: the app seeds them on first launch, which also exercises the seeding
-path. Exercise ids below are the seed slugs.
+--schema-version 1. The exercise catalog and default bar are left empty on purpose: the app seeds
+them on first launch, which also exercises the seeding path. Exercise ids below are the seed slugs.
 
 Scenario "gym" (all weights entered in lb, stored in kg like the app does; times are 19:30
 America/Chicago):
@@ -464,9 +463,10 @@ def main():
     args = parser.parse_args()
     if args.scenario == "long" and not args.catalog_from:
         parser.error("--scenario long needs --catalog-from: its custom exercises would stop the app seeding the catalog")
-    version = schema_versions()[-1] if args.schema_version is None else args.schema_version
-    if version not in schema_versions():
-        parser.error(f"no schema version {version}: the exported ones are {schema_versions()}")
+    versions = schema_versions()
+    version = versions[-1] if args.schema_version is None else args.schema_version
+    if version not in versions:
+        parser.error(f"no schema version {version}: the exported ones are {versions}")
 
     now = dt.datetime.fromisoformat(args.now).replace(tzinfo=ZONE) if args.now else dt.datetime.now(ZONE)
     if os.path.exists(args.out):
