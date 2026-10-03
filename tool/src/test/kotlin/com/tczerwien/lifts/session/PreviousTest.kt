@@ -370,7 +370,7 @@ class PreviousTest {
     }
 
     @Test
-    fun `a reopened superset lands where its turn is when the latest tick handed it on`() {
+    fun `a reopened superset lands where its turn went when the round closed, or the exercise left on is finished`() {
         // Squat, then Fly and Row as a superset.
         val slots = listOf(
             slot(1, "squat", 0),
@@ -389,6 +389,17 @@ class PreviousTest {
         // Fly on purpose after the move (the two look the same; the NEXT row names Row either way).
         assertEquals(2L, openingSlotId(slots, afterA2, rememberedSlotId = 2), "back on Fly, or left in the 2 s: Fly stands")
         assertEquals(3L, openingSlotId(slots, afterA2, rememberedSlotId = 3), "the move had happened: Row, as remembered")
+        assertEquals(2L, openingSlotId(slots, afterA2, rememberedSlotId = null), "nothing saved: the last tick's Fly, which has sets left")
+        // Three in turn, the middle one finished but for a skipped warm-up: Fly's last set hands the turn past it.
+        val three = slots + slot(4, "curl", 3).copy(supersetGroup = 1)
+        val middleDone = listOf(
+            set(21, slot = 2, completedAt = 5L), set(22, slot = 2, position = 1, completedAt = 9L),
+            set(30, slot = 3, type = SET_TYPE_WARMUP), set(31, slot = 3, position = 1, completedAt = 6L),
+            set(32, slot = 3, position = 2, completedAt = 8L),
+            set(41, slot = 4, completedAt = 7L), set(42, slot = 4, position = 1),
+        )
+        assertEquals(4L, openingSlotId(three, middleDone, rememberedSlotId = 2), "Fly finished: on to Curl, not the warmed-down Row")
+        assertEquals(4L, openingSlotId(three, middleDone, rememberedSlotId = null))
         // A warm-up tick hands nothing on: the exercise that was on screen.
         val warmedUp = listOf(
             set(20, slot = 2, type = SET_TYPE_WARMUP, completedAt = 5L), set(21, slot = 2, position = 1), set(31, slot = 3),

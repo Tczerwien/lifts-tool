@@ -246,9 +246,11 @@ fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
  * the first. In a superset whose round closed with the latest tick, on that exercise (or on the last
  * tick's, with none remembered), the member the turn went back to: where the screen was going as the
  * round's rest ended when it was left (Back to Home during the rest, or the app killed), as the NEXT
- * row and the Rest Timer already say. A turn handed on to a later member is left alone: on screen that
- * looks the same as his going back to the member he just did, on purpose (and the NEXT row names the
- * partner either way). Null only for a workout with no exercises.
+ * row and the Rest Timer already say. A turn handed on to a later member is followed only when the
+ * exercise left on is finished: otherwise it looks the same as his going back to the member he just
+ * did, on purpose (and the NEXT row names the partner either way). The trade-off runs the other way
+ * after the round closed: going back to the last member on purpose and leaving reopens on the first
+ * (Back to Home during the round's rest is the common case). Null only for a workout with no exercises.
  */
 fun openingSlotId(
     slots: List<WorkoutExerciseEntity>,
@@ -259,7 +261,8 @@ fun openingSlotId(
         ?: sets.filter { it.completedAt != null }.maxWithOrNull(compareBy({ it.completedAt }, { it.id }))?.workoutExerciseId
     if (leftOn != null) {
         val position = slots.firstOrNull { it.id == leftOn }?.position
-        turnPassedFrom(slots, sets, leftOn)?.takeIf { position != null && it.position < position }?.let { return it.id }
+        val finished = sets.none { it.workoutExerciseId == leftOn && it.completedAt == null }
+        turnPassedFrom(slots, sets, leftOn)?.takeIf { position != null && (it.position < position || finished) }?.let { return it.id }
     }
     if (rememberedSlotId != null && slots.any { it.id == rememberedSlotId } &&
         sets.any { it.workoutExerciseId == rememberedSlotId && it.completedAt == null }
