@@ -29,14 +29,15 @@ user_version() {
 # assets/room-schemas/.../N.json. Empty when it isn't installed or its APK can't be read. Call it in
 # $(...) only: the fallback's trap cleans up when that subshell ends.
 app_schema() {
-  local apk tmp listing
+  local apk tmp listing quoted
   apk="$("$ADB" shell pm path "$PKG" 2>/dev/null | tr -d '\r' | sed -n 's/^package://p' | head -n 1)"
   [ -n "$apk" ] || return 0
   # The device's own zipinfo (Android 10+) lists the APK in place; else pull it (85 MB for a debug build).
   listing="$("$ADB" shell zipinfo -1 "$apk" 2>/dev/null | tr -d '\r')"
   if ! grep -q '^assets/' <<<"$listing"; then
     tmp="$(mktemp -d)" || return 0
-    trap "rm -rf -- '$tmp'" EXIT
+    printf -v quoted '%q' "$tmp"
+    trap "rm -rf -- $quoted" EXIT
     "$ADB" pull "$apk" "$tmp/base.apk" >/dev/null 2>&1 && listing="$(unzip -Z1 "$tmp/base.apk" 2>/dev/null)"
   fi
   sed -n 's#^assets/room-schemas/[^/]*/\([0-9][0-9]*\)\.json$#\1#p' <<<"$listing" | sort -n | tail -n 1
@@ -72,7 +73,7 @@ push_restore() {
   local file="${1:?push-restore needs a backup file}"
   [ -f "$file" ] || { echo "no such file: $file" >&2; exit 1; }
   local name
-  name="$(basename "$file")"
+  name="$(basename -- "$file")"
   # The name goes into a shell command on the device, and Home hides dot files: keep it plain.
   if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
     echo "rename it first: letters, digits, '.', '_' and '-' only, not starting with a dot: $name" >&2
@@ -95,9 +96,9 @@ push_db() {
   local version schema
   version="$(user_version "$file" || true)"
   schema="$(app_schema || true)"
-  echo "$(basename "$file"): schema ${version:-? (not a SQLite database)}; the installed Lifts opens up to ${schema:-? (its APK could not be read)}"
+  echo "$(basename -- "$file"): schema ${version:-? (not a SQLite database)}; the installed Lifts opens up to ${schema:-? (its APK could not be read)}"
   if [ "$version" = 0 ]; then
-    echo "warning: user_version 0 is no Lifts database (Room never opened it); the app will not migrate it" >&2
+    echo "warning: user_version 0: Room never opened it, so the app will not migrate it; it opens only if its tables already match the app's newest schema (${schema:-?}), else it crashes at launch" >&2
   elif [ -n "$version" ] && [ -n "$schema" ]; then
     if [ "$version" -gt "$schema" ]; then
       echo "warning: this Lifts can't open it (Room has no downgrade) and will crash at launch; build it with fixture_db.py --schema-version $schema" >&2
