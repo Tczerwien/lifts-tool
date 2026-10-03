@@ -37,6 +37,7 @@ class MigrationShapeTest {
 
     @Test
     fun version2AddsTheNineV2ColumnsAndNothingElse() {
+        assertEquals(tables(SchemaFiles.database(1)).keys, tables(SchemaFiles.database(2)).keys, "no table added or dropped")
         assertEquals(
             mapOf(
                 "exercises" to listOf("countsFor"),
@@ -87,6 +88,9 @@ class MigrationShapeTest {
     fun theCheckerRejectsChangedNullabilityOrDefault() {
         val nullable = V1.edited(""""name", "affinity": "TEXT", "notNull": true""", """"name", "affinity": "TEXT"""")
         assertEquals(listOf("workouts.name: NOT NULL -> nullable"), migrationProblems(parse(V1), parse(nullable)))
+
+        val notNull = V1.edited(""""notes", "affinity": "TEXT"}""", """"notes", "affinity": "TEXT", "notNull": true}""")
+        assertEquals(listOf("workouts.notes: nullable -> NOT NULL"), migrationProblems(parse(V1), parse(notNull)))
 
         val defaulted = V1.edited(""""notes", "affinity": "TEXT"}""", """"notes", "affinity": "TEXT", "defaultValue": "''"}""")
         assertEquals(listOf("workouts.notes: default none -> ''"), migrationProblems(parse(V1), parse(defaulted)))
