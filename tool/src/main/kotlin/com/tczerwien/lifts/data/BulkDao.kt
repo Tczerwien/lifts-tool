@@ -17,10 +17,7 @@ interface BulkDao {
      * Every exercise with its instructions left empty: the exports never show them, and they are most
      * of the catalog's text (873 JSON lists to decode on every export run).
      */
-    @Query(
-        "SELECT id, name, equipment, primaryMuscles, secondaryMuscles, category, level, '' AS instructions, " +
-            "isCustom, pinnedNote, trackingType, perSide, hidden FROM exercises ORDER BY id"
-    )
+    @Query("SELECT $EXERCISE_COLUMNS_WITHOUT_INSTRUCTIONS FROM exercises ORDER BY id")
     fun exercisesWithoutInstructions(): List<ExerciseEntity>
 
     @Query("SELECT * FROM workouts ORDER BY id")
@@ -92,3 +89,13 @@ interface BulkDao {
     @Insert
     fun insertBars(rows: List<BarEntity>)
 }
+
+/**
+ * [BulkDao.exercisesWithoutInstructions]'s columns: every column of `exercises`, in table order, with
+ * the instructions read as empty. A column left out here reads as its default, and Room only fails
+ * the build when the field is non-null, so `ExerciseColumnsTest` compares this list with the newest
+ * exported schema.
+ */
+const val EXERCISE_COLUMNS_WITHOUT_INSTRUCTIONS =
+    "id, name, equipment, primaryMuscles, secondaryMuscles, category, level, '' AS instructions, " +
+        "isCustom, pinnedNote, trackingType, perSide, hidden"
