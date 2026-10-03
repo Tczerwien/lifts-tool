@@ -2,6 +2,7 @@ package com.tczerwien.lifts.data
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
@@ -18,6 +19,12 @@ import kotlin.test.assertTrue
  * When this fails because you changed an entity on purpose: restore the old JSON from git, bump
  * `@Database(version = N + 1, autoMigrations = [AutoMigration(from = N, to = N + 1)])`, build, commit
  * the new N+1.json, and pin its hash here.
+ *
+ * Room's identity hash ignores the order of an entity's fields, and Room leaves an existing schema
+ * file alone while the hash matches, so moving a field changes the table a new install creates but
+ * neither the hash nor the JSON. [theNewestSchemaHasTheEntitiesFieldOrder] catches that: a field
+ * moved after its version was exported would give new installs a column order that migrated logs
+ * don't have (fields added by a migration go last, see [WorkoutEntity]).
  */
 class SchemaTripwireTest {
 
@@ -45,8 +52,34 @@ class SchemaTripwireTest {
         assertEquals((1..LATEST_VERSION).toList(), versions, "AutoMigrations need every old schema file")
     }
 
+    @Test
+    fun theNewestSchemaHasTheEntitiesFieldOrder() {
+        val database = SchemaFiles.database(SchemaFiles.versions().last())
+        val tables = database.getValue("entities").jsonArray.map { it.jsonObject.getValue("tableName").jsonPrimitive.content }
+        assertEquals(ENTITIES.keys.sorted(), tables.sorted(), "every table's entity class is listed below")
+        for ((table, entity) in ENTITIES) {
+            // Room creates the columns in the order the data class declares its properties.
+            val source = File("src/main/kotlin/com/tczerwien/lifts/data/$entity.kt").readText()
+            val parameters = source.substringAfter("data class $entity(").substringBefore("\n)")
+            val declared = Regex("""\bva[lr] (\w+):""").findAll(parameters).map { it.groupValues[1] }.toList()
+            assertEquals(declared, SchemaFiles.columns(database, table), "$table: fields as declared vs the exported schema")
+        }
+    }
+
     private companion object {
         const val LATEST_VERSION = 2
         const val LATEST_IDENTITY_HASH = "216428bd3635950c518a88eec5fd01e2"
+
+        /** Each table's entity class, by name: its source is `data/<name>.kt`. */
+        val ENTITIES = mapOf(
+            "exercises" to "ExerciseEntity",
+            "workouts" to "WorkoutEntity",
+            "workout_exercises" to "WorkoutExerciseEntity",
+            "sets" to "SetEntity",
+            "templates" to "TemplateEntity",
+            "template_exercises" to "TemplateExerciseEntity",
+            "bodyweight" to "BodyweightEntity",
+            "bars" to "BarEntity",
+        )
     }
 }
