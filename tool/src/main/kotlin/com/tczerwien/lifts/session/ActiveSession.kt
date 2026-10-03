@@ -283,8 +283,10 @@ class ActiveSession(
         if (!isOpen(workoutId)) return@inTransaction false
         val slots = repository.exercisesForWorkout(workoutId)
         val index = slots.indexOfFirst { it.id == slotId }
-        if (index < 0) return@inTransaction false
-        writeGroups(slots, linkWithNext(slots.map { it.supersetGroup }, index, on))
+        val groups = slots.map { it.supersetGroup }
+        // Nothing to join on the last, and nothing to do where it already is so: odd stored groups stay put.
+        if (index < 0 || index == slots.lastIndex || linkedWithNext(groups, index) == on) return@inTransaction false
+        writeGroups(slots, linkWithNext(groups, index, on))
     }
 
     /** Keeps [workoutId]'s supersets whole after a removal ([normalizeGroups]). Call inside a transaction. */

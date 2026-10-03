@@ -828,6 +828,18 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Superset With Next leaves odd stored groups alone where it changes nothing`() {
+        // A restored log with a group of one: the switch on the last exercise, or where it already is so, writes nothing.
+        val template = store.addTemplate("Legs", "squat" to 2, "curl" to 2)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (squat, curl) = store.exercisesForWorkout(workoutId)
+        store.slots[curl.id] = curl.copy(supersetGroup = 8)
+        assertFalse(session.setSupersetWithNext(workoutId, curl.id, on = true), "the last has no next")
+        assertFalse(session.setSupersetWithNext(workoutId, squat.id, on = false), "already off")
+        assertEquals(listOf(null, 8), store.exercisesForWorkout(workoutId).map { it.supersetGroup })
+    }
+
+    @Test
     fun `Start Again drops a superset whose partner wasn't done that day`() {
         val template = store.addTemplate("Arms", "fly" to 2, "curl" to 2, "row" to 2)
         store.exercisesForTemplate(template).take(2).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1) }
