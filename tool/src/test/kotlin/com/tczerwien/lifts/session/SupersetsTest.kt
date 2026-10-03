@@ -201,10 +201,10 @@ class SupersetsTest {
     fun `a template's rows settle to positions 0 to n-1 with whole supersets, writing only what changed`() {
         // Squat, then the pair Fly and Row, then Calf Raise; Row moved down past Calf Raise.
         val rows = listOf(templateRow(1, 0), templateRow(2, 1, group = 1), templateRow(3, 2, group = 1), templateRow(4, 3))
-        val curlDown = listOf(rows[0], rows[1], rows[3], rows[2])
+        val rowDown = listOf(rows[0], rows[1], rows[3], rows[2])
         assertEquals(
             listOf(Triple(2L, 1, null), Triple(4L, 2, null), Triple(3L, 3, null)),
-            settledTemplateRows(curlDown).map { Triple(it.id, it.position, it.supersetGroup) },
+            settledTemplateRows(rowDown).map { Triple(it.id, it.position, it.supersetGroup) },
             "moving a member away leaves both plain",
         )
         val swapped = listOf(rows[0], rows[2], rows[1], rows[3])

@@ -56,7 +56,7 @@ class CustomExerciseTest {
         val rows = listOf(
             row(1, templateId = 1, "y-raise", 0).copy(supersetGroup = 1),
             row(2, templateId = 1, "curl", 1).copy(supersetGroup = 1),
-            row(3, templateId = 1, "pushdown", 2).copy(supersetGroup = 2),
+            row(3, templateId = 1, "dip", 2).copy(supersetGroup = 2),
             row(4, templateId = 1, "fly", 3).copy(supersetGroup = 2),
         )
         val out = withoutExercise(rows, "y-raise")
