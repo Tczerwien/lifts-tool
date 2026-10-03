@@ -1,6 +1,5 @@
 package com.tczerwien.lifts.data
 
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -28,15 +27,12 @@ import kotlin.test.assertTrue
  */
 class SchemaTripwireTest {
 
-    private val schemaDir = File("src/main/assets/room-schemas/com.tczerwien.lifts.data.LiftsDatabase")
-
     @Test
     fun latestSchemaIsPinned() {
-        val versions = schemaDir.listFiles().orEmpty().map { it.nameWithoutExtension.toInt() }.sorted()
+        val versions = SchemaFiles.versions()
         assertEquals(LATEST_VERSION, versions.lastOrNull(), "schema files present: $versions")
 
-        val database = Json.parseToJsonElement(File(schemaDir, "$LATEST_VERSION.json").readText())
-            .jsonObject.getValue("database").jsonObject
+        val database = SchemaFiles.database(LATEST_VERSION)
         assertEquals(LATEST_VERSION, database.getValue("version").jsonPrimitive.int)
         assertEquals(
             LATEST_IDENTITY_HASH,
@@ -47,8 +43,8 @@ class SchemaTripwireTest {
 
     @Test
     fun everyVersionFromOneIsKept() {
-        val versions = schemaDir.listFiles().orEmpty().map { it.nameWithoutExtension.toInt() }.sorted()
-        assertTrue(versions.isNotEmpty(), "no exported schema in $schemaDir")
+        val versions = SchemaFiles.versions()
+        assertTrue(versions.isNotEmpty(), "no exported schema in ${SchemaFiles.dir}")
         assertEquals((1..LATEST_VERSION).toList(), versions, "AutoMigrations need every old schema file")
     }
 
