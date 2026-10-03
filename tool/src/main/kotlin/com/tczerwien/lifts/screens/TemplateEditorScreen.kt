@@ -2,6 +2,7 @@ package com.tczerwien.lifts.screens
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,13 +17,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.moved
+import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.MAX_REST_SEC
 import com.tczerwien.lifts.session.MAX_RIR
@@ -32,6 +36,8 @@ import com.tczerwien.lifts.session.MAX_TEMPLATE_WARMUPS
 import com.tczerwien.lifts.session.MIN_TEMPLATE_SETS
 import com.tczerwien.lifts.session.RepRange
 import com.tczerwien.lifts.session.isDoubleTap
+import com.tczerwien.lifts.session.linkWithNext
+import com.tczerwien.lifts.session.linkedWithNext
 import com.tczerwien.lifts.session.restOverride
 import com.tczerwien.lifts.session.settledTemplateRows
 import com.tczerwien.lifts.session.stepRepMax
@@ -52,9 +58,11 @@ import com.tczerwien.lifts.ui.ReorderArrows
 import com.tczerwien.lifts.ui.RowDivider
 import com.tczerwien.lifts.ui.RowName
 import com.tczerwien.lifts.ui.Stepper
+import com.tczerwien.lifts.ui.SupersetBar
 import com.tczerwien.lifts.ui.TWO_LINE_ROW_HEIGHT_UNITS
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
 import com.tczerwien.lifts.ui.displayName
+import com.tczerwien.lifts.ui.supersetBar
 import com.thelightphone.sdk.LightScreen
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
@@ -87,6 +95,10 @@ private const val LIST_ROW_HEIGHT_UNITS = 3f
 
 /** The gap under each overlay stepper's label: a quarter of the usual, so four rows fit. */
 private const val STEPPER_LABEL_GAP_UNITS = 0.25f
+
+/** "Superset With Next" is as tall as a stepper's targets, and greyed like one when it can't be used. */
+private const val SUPERSET_CELL_HEIGHT_UNITS = 4f
+private const val DISABLED_ALPHA = 0.4f
 
 class TemplateEditorViewModel(
     private val repository: LiftsRepository,
@@ -124,6 +136,12 @@ class TemplateEditorViewModel(
         val warmupRestIsDefault: Boolean = true,
         /** A hold (Duration): seconds, so no rep range or RIR. */
         val hold: Boolean = false,
+        /** Where it sits in a superset: the bar beside its row. */
+        val bar: SupersetBar = SupersetBar.NONE,
+        /** Joined to the exercise after it ("Superset With Next" on). */
+        val supersetWithNext: Boolean = false,
+        /** The last exercise: nothing after it to join. */
+        val last: Boolean = false,
     )
 
     data class UiState(
@@ -277,6 +295,31 @@ class TemplateEditorViewModel(
         exercise.copy(targetRir = stepTargetRir(exercise.targetRir, delta))
     }
 
+    /** "Superset With Next" taps: a bounce or a double tap would flip it straight back. */
+    private val supersetTaps = BounceGuard()
+
+    /**
+     * Flips "Superset With Next" for the exercise ([linkWithNext]): on joins it to the one after it (into
+     * that one's superset, or a new pair), off splits them. Read and written on the lane, as every
+     * edit here is; nothing on the last exercise, which has no next.
+     */
+    fun toggleSupersetWithNext(templateExerciseId: Long) {
+        if (!supersetTaps.take()) return
+        removeArm.disarm()
+        mutate {
+            repository.inTransaction {
+                val rows = repository.exercisesForTemplate(templateId)
+                val index = rows.indexOfFirst { it.id == templateExerciseId }
+                if (index < 0 || index == rows.lastIndex) return@inTransaction false
+                val groups = rows.map { it.supersetGroup }
+                val next = linkWithNext(groups, index, on = !linkedWithNext(groups, index))
+                rows.zip(next).count { (row, group) ->
+                    row.supersetGroup != group && repository.updateTemplateExercise(row.copy(supersetGroup = group))
+                } > 0
+            }
+        }
+    }
+
     /**
      * ±15 s from the rest in effect. A rest that lands on Settings' default is stored as none
      * ([restOverride]), so the exercise follows the default again if that changes: + then − is no change.
@@ -393,7 +436,8 @@ class TemplateEditorViewModel(
         val exercises = repository.exercisesForTemplate(templateId)
         // One query for every row's exercise, not one each: each stepper tap reloads.
         val catalogById = repository.exercisesByIds(exercises.map { it.exerciseId })
-        val rows = exercises.map { exercise ->
+        val groups = exercises.map { it.supersetGroup }
+        val rows = exercises.mapIndexed { index, exercise ->
             val catalog = catalogById[exercise.exerciseId]
             ExerciseRow(
                 id = exercise.id,
@@ -408,6 +452,9 @@ class TemplateEditorViewModel(
                 warmupRestSec = exercise.restSecWarmup ?: settings.warmupRestSec,
                 restIsDefault = exercise.restSecWork == null,
                 warmupRestIsDefault = exercise.restSecWarmup == null,
+                bar = SupersetBar.at(groups, index),
+                supersetWithNext = linkedWithNext(groups, index),
+                last = index == exercises.lastIndex,
             )
         }
         _uiState.update { it.copy(name = template?.name.orEmpty(), rows = rows) }
@@ -419,7 +466,8 @@ class TemplateEditorViewModel(
  * ("name" + "2W + 3 × 8–12 · RIR 1 · rest 3:00"), up/down reorder, "+ Add Exercise" via the picker,
  * rename via the tappable top-bar center, trash with a two-tap confirm. Tapping a row
  * opens the card's documented overlay as a full-screen MODE takeover (top bar + steppers in pairs:
- * Sets and Warm-ups, the rep range, RIR and Rest, Warm-up Rest) so list rows stay uniform.
+ * Sets and Warm-ups, the rep range, RIR and Rest, Warm-up Rest and "Superset With Next") so list rows
+ * stay uniform. A superset's rows carry a bar down their left edge.
  *
  * Constructor and result type are FROZEN (cross-referenced by other screens).
  */
@@ -516,9 +564,15 @@ class TemplateEditorScreen(
                     .fillMaxWidth(),
                 scrollState = scrollState,
             ) {
+                // A superset's rows carry a bar down their left edge, unbroken across the dividers between them.
+                val barColor = LightThemeTokens.colors.content
                 uiState.rows.forEachIndexed { index, row ->
-                    if (index > 0) RowDivider()
+                    if (index > 0) {
+                        val joined = uiState.rows[index - 1].supersetWithNext
+                        RowDivider(Modifier.supersetBar(if (joined) SupersetBar.MIDDLE else SupersetBar.NONE, barColor))
+                    }
                     LiftsListRow(
+                        modifier = Modifier.supersetBar(row.bar, barColor),
                         onClick = { viewModel.openEdit(row.id) },
                         heightUnits = TWO_LINE_ROW_HEIGHT_UNITS,
                         left = {
@@ -672,7 +726,7 @@ class TemplateEditorScreen(
                                 onStep = { viewModel.stepWarmupRest(row.id, it) },
                             )
                         },
-                        right = null,
+                        right = { SupersetCell(row) },
                     )
                 } else {
                     // A hold is seconds: no rep range and no RIR, so its rests pair up.
@@ -680,6 +734,7 @@ class TemplateEditorScreen(
                         left = { WorkRestStepper(row) },
                         right = { WarmupRestStepper(row) },
                     )
+                    StepperPair(left = { SupersetCell(row) }, right = null)
                 }
             }
 
@@ -695,6 +750,36 @@ class TemplateEditorScreen(
                     ),
                 ),
             )
+        }
+    }
+
+    /**
+     * "Superset With Next", shaped like a stepper cell: its label above, ON or OFF in a 4gu box the
+     * height of the targets; one tap flips it. Greyed on the last exercise, which has no next.
+     */
+    @Composable
+    private fun SupersetCell(row: TemplateEditorViewModel.ExerciseRow) {
+        val enabled = !row.last
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            LightText(
+                text = "Superset With Next".uppercase(),
+                variant = LightTextVariant.Superfine,
+                lighten = true,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(bottom = STEPPER_LABEL_GAP_UNITS.gridUnitsAsDp()),
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(SUPERSET_CELL_HEIGHT_UNITS.gridUnitsAsDp())
+                    .alpha(if (enabled) 1f else DISABLED_ALPHA)
+                    .border(1.5.dp, LightThemeTokens.colors.contentSecondary)
+                    .lightClickable(enabled = enabled, onClick = { viewModel.toggleSupersetWithNext(row.id) }),
+                contentAlignment = Alignment.Center,
+            ) {
+                LightText(text = if (row.supersetWithNext) "ON" else "OFF", variant = LightTextVariant.Copy, maxLines = 1)
+            }
         }
     }
 

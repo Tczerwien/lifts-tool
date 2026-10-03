@@ -14,8 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tczerwien.lifts.session.supersetRun
 import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
@@ -95,6 +100,43 @@ fun RowName(text: String, modifier: Modifier = Modifier, lighten: Boolean = fals
         modifier = modifier,
     )
 }
+
+/** The superset bar: this wide, down the left edge of the rows, stopping this short of a superset's ends. */
+private const val SUPERSET_BAR_DP = 3
+private const val SUPERSET_BAR_END_INSET_DP = 8
+
+/**
+ * Where a row sits in a superset, for the bar down its left edge ([supersetBar]): the bar runs through
+ * the rows of one superset and stops short at its first and last, so two supersets side by side read as two.
+ */
+enum class SupersetBar {
+    NONE, FIRST, MIDDLE, LAST;
+
+    companion object {
+        /** The bar of index [index] of [groups] (the superset groups in position order, [supersetRun]). */
+        fun at(groups: List<Int?>, index: Int): SupersetBar {
+            val run = supersetRun(groups, index) ?: return NONE
+            return when (index) {
+                run.first -> FIRST
+                run.last -> LAST
+                else -> MIDDLE
+            }
+        }
+    }
+}
+
+/** Draws [bar] down this row's left edge in [color] (the theme's content colour); nothing for [SupersetBar.NONE]. */
+fun Modifier.supersetBar(bar: SupersetBar, color: Color): Modifier =
+    if (bar == SupersetBar.NONE) {
+        this
+    } else {
+        drawBehind {
+            val inset = SUPERSET_BAR_END_INSET_DP.dp.toPx()
+            val top = if (bar == SupersetBar.FIRST) inset else 0f
+            val bottom = if (bar == SupersetBar.LAST) size.height - inset else size.height
+            drawRect(color, topLeft = Offset(0f, top), size = Size(SUPERSET_BAR_DP.dp.toPx(), bottom - top))
+        }
+    }
 
 /** 1px contentSecondary divider at 30% alpha, inset 1gu on both sides (tokens.css .rowdivider). */
 @Composable
