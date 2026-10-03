@@ -158,16 +158,19 @@ data class AfterTick(val startsRest: Boolean, val moveTo: Long?)
  * - to a member later in the group: no rest, and the move comes 2 s after the tick;
  * - round to an earlier member (the round closed), or staying (only this member has sets left): the
  *   ticked slot's own work rest, and the move, if any, as it ends;
- * - to no one: the rest, and once every row of every member is ticked, the next exercise after the group.
- * A warm-up tick rests and stays, as on a plain slot, unless it finishes the whole group.
+ * - to no one: the rest, and the move to the next exercise after the group with a row unticked, once the
+ *   ticked exercise has no row unticked either, as a plain exercise moves on (a warm-up skipped on the
+ *   other member doesn't hold it; one left on this exercise does, as it would on a plain one).
+ * A warm-up tick rests and stays, as on a plain slot, unless it finishes the last of the group's work.
  */
 fun afterTick(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>, tickedSlotId: Long, tickedType: String): AfterTick {
     val members = supersetOf(slots, tickedSlotId)
     if (members.isEmpty()) return AfterTick(startsRest = true, moveTo = autoAdvanceSlotId(slots, sets, tickedSlotId))
-    val groupDone = members.all { member -> sets.none { it.workoutExerciseId == member.id && it.completedAt == null } }
-    val afterGroup = if (groupDone) firstUntickedSlotAfter(slots, sets, members.last().id)?.id else null
-    val turn = supersetTurn(members, sets, tickedSlotId)?.takeIf { tickedType != SET_TYPE_WARMUP }
-        ?: return AfterTick(startsRest = true, moveTo = afterGroup)
+    val turn = supersetTurn(members, sets, tickedSlotId)
+    if (turn == null || tickedType == SET_TYPE_WARMUP) {
+        val done = turn == null && sets.none { it.workoutExerciseId == tickedSlotId && it.completedAt == null }
+        return AfterTick(startsRest = true, moveTo = if (done) firstUntickedSlotAfter(slots, sets, members.last().id)?.id else null)
+    }
     return when {
         members.indexOf(turn) > members.indexOfFirst { it.id == tickedSlotId } -> AfterTick(startsRest = false, moveTo = turn.id)
         turn.id == tickedSlotId -> AfterTick(startsRest = true, moveTo = null)

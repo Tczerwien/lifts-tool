@@ -120,9 +120,18 @@ class SupersetsTest {
     }
 
     @Test
-    fun `a warm-up left unticked in the pair holds the move, as on a plain exercise`() {
+    fun `a warm-up skipped on the other member doesn't hold the move after the last round`() {
+        // As on two plain exercises: only the exercise on screen decides; the skipped warm-up isn't on it.
         val sets = listOf(row(20, 2, type = SET_TYPE_WARMUP)) + rows(2, 2, done = 2) + rows(3, 2, done = 2) + rows(4, 3)
+        assertEquals(AfterTick(startsRest = true, moveTo = 4), afterTick(pair, sets, 3, SET_TYPE_NORMAL))
+    }
+
+    @Test
+    fun `a warm-up left on the exercise just ticked holds the move, as on a plain exercise`() {
+        val sets = rows(2, 2, done = 2) + listOf(row(30, 3, type = SET_TYPE_WARMUP)) + rows(3, 2, done = 2) + rows(4, 3)
         assertEquals(AfterTick(startsRest = true, moveTo = null), afterTick(pair, sets, 3, SET_TYPE_NORMAL))
+        // Ticking that warm-up last finishes the pair: it rests, then moves on.
+        assertEquals(AfterTick(startsRest = true, moveTo = 4), afterTick(pair, tick(sets, 30), 3, SET_TYPE_WARMUP))
     }
 
     @Test
