@@ -6,8 +6,8 @@
 #   lifts-adb.sh push-restore FILE    put FILE in Restore; Home then offers to check and restore it
 #   lifts-adb.sh pull-db [DIR]        copy lifts.db (+ -wal/-shm, so recent writes aren't lost) into DIR
 #   lifts-adb.sh push-db FILE         stop the app and replace its database with FILE (no checks, no
-#                                     pre-restore copy: for test data, never for a real log); says
-#                                     when FILE's schema is newer than the database it replaces
+#                                     pre-restore copy: for test data, never for a real log); warns
+#                                     when FILE's schema is newer than the installed app can open
 set -euo pipefail
 
 PKG=com.tczerwien.lifts
@@ -18,9 +18,24 @@ usage() {
   exit 2
 }
 
-# PRAGMA user_version of the SQLite file on stdin: 4 bytes, big-endian, at offset 60 of its header.
+# PRAGMA user_version of SQLite file $1: 4 bytes, big-endian, at offset 60 of its header. Empty when
+# $1 isn't a SQLite database.
 user_version() {
-  od -An -tu1 -j60 -N4 | awk '{ print $1 * 16777216 + $2 * 65536 + $3 * 256 + $4 }'
+  [ "$(head -c 15 "$1" 2>/dev/null)" = "SQLite format 3" ] || return 0
+  od -An -tu1 -j60 -N4 "$1" 2>/dev/null | awk 'NF == 4 { print $1 * 16777216 + $2 * 65536 + $3 * 256 + $4 }'
+}
+
+# The newest database version the installed Lifts can open: the highest N of its APK's
+# assets/room-schemas/.../N.json. Empty when it isn't installed or its APK can't be read.
+app_schema() {
+  local apk tmp
+  apk="$("$ADB" shell pm path "$PKG" 2>/dev/null | tr -d '\r' | sed -n 's/^package://p' | head -n 1)"
+  [ -n "$apk" ] || return 0
+  tmp="$(mktemp -d)"
+  if "$ADB" pull "$apk" "$tmp/base.apk" >/dev/null 2>&1; then
+    unzip -Z1 "$tmp/base.apk" 2>/dev/null | sed -n 's#^assets/room-schemas/[^/]*/\([0-9][0-9]*\)\.json$#\1#p' | sort -n | tail -n 1
+  fi
+  rm -rf "${tmp:?}"
 }
 
 run_as() {
@@ -73,12 +88,16 @@ push_restore() {
 push_db() {
   local file="${1:?push-db needs a database file}"
   [ -f "$file" ] || { echo "no such file: $file" >&2; exit 1; }
-  local version on_device
-  version="$(user_version <"$file")"
-  on_device="$(run_as sh -c 'test -f databases/lifts.db && head -c 64 databases/lifts.db' 2>/dev/null | user_version || true)"
-  echo "$(basename "$file"): schema version ${version:-?}; the database it replaces: ${on_device:-none}"
-  if [ -n "$version" ] && [ -n "$on_device" ] && [ "$version" -gt "$on_device" ]; then
-    echo "warning: newer than the app's database: a Lifts older than schema $version can't open it (Room has no downgrade) and crashes at launch" >&2
+  local version schema
+  version="$(user_version "$file" || true)"
+  schema="$(app_schema || true)"
+  echo "$(basename "$file"): schema ${version:-? (not a SQLite database)}; the installed Lifts opens up to ${schema:-? (its APK could not be read)}"
+  if [ -n "$version" ] && [ -n "$schema" ]; then
+    if [ "$version" -gt "$schema" ]; then
+      echo "warning: this Lifts can't open it (Room has no downgrade) and will crash at launch; build it with fixture_db.py --schema-version $schema" >&2
+    elif [ "$version" -lt "$schema" ]; then
+      echo "the app migrates it to schema $schema at launch"
+    fi
   fi
   "$ADB" shell am force-stop "$PKG"
   "$ADB" exec-in run-as "$PKG" sh -c \
