@@ -30,7 +30,7 @@ data class ExerciseEntity(
     @ColumnInfo(defaultValue = TRACKING_WEIGHT_REPS) val trackingType: String = TRACKING_WEIGHT_REPS,
     @ColumnInfo(defaultValue = "0") val perSide: Boolean = false,
     @ColumnInfo(defaultValue = "0") val hidden: Boolean = false,
-    @ColumnInfo(defaultValue = "[]") val countsFor: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = Converters.EMPTY_LIST) val countsFor: List<String> = emptyList(),
 ) {
     companion object {
         const val TRACKING_WEIGHT_REPS = "weight_reps"

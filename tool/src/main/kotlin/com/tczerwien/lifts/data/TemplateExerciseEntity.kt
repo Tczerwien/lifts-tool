@@ -40,6 +40,6 @@ data class TemplateExerciseEntity(
     val repMax: Int? = null,
     val targetRir: Int? = null,
     val supersetGroup: Int? = null,
-    @ColumnInfo(defaultValue = "[]") val alternatives: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = Converters.EMPTY_LIST) val alternatives: List<String> = emptyList(),
     val targetRirMax: Int? = null,
 )

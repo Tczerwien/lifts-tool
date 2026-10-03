@@ -40,7 +40,7 @@ data class WorkoutExerciseEntity(
     val targetRepMax: Int? = null,
     val targetRir: Int? = null,
     val supersetGroup: Int? = null,
-    @ColumnInfo(defaultValue = "[]") val choices: List<String> = emptyList(),
+    @ColumnInfo(defaultValue = Converters.EMPTY_LIST) val choices: List<String> = emptyList(),
     val targetSets: Int? = null,
     val targetRirMax: Int? = null,
 )
