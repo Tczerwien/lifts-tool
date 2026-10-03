@@ -151,4 +151,21 @@ class RestorePlanTest {
         assertEquals(emptyList(), RestorePlan.barsToFit(listOf(seeded), b9, WeightUnit.KG), "a later backup's bar is as he left it")
         assertEquals(emptyList(), RestorePlan.barsToFit(listOf(seeded), emptyMap(), WeightUnit.KG), "a pulled database: age unknown")
     }
+
+    @Test
+    fun `a file Lifts can't read is refused in one short line`() {
+        // What Room throws when an older file's tables, migrated, aren't what this version expects.
+        val room = IllegalStateException(
+            "Migration didn't properly handle: bars(com.tczerwien.lifts.data.BarEntity).\n Expected:\n" +
+                "TableInfo{name='bars', columns={id=Column{name='id', type='INTEGER'}}}\n Found:\nTableInfo{name='bars', columns={}}",
+        )
+        assertEquals("Lifts can't read it (its tables don't match a Lifts log)", RestorePlan.unreadable(room))
+
+        val json = IllegalArgumentException("Unexpected JSON token at offset 0: Expected start of the array '['\nJSON input: chest")
+        assertEquals("Lifts can't read it (Unexpected JSON token at offset 0: Expected start of the array '[')", RestorePlan.unreadable(json))
+
+        val long = RuntimeException("x".repeat(500))
+        assertEquals("Lifts can't read it (${"x".repeat(100)})", RestorePlan.unreadable(long))
+        assertEquals("Lifts can't read it (java.lang.RuntimeException)", RestorePlan.unreadable(RuntimeException()))
+    }
 }

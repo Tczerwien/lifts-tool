@@ -87,7 +87,8 @@ class Restorer(
                     db.close()
                 }
             } catch (e: Exception) {
-                throw Refused("Lifts can't read it (${e.message ?: e})")
+                Log.w("Lifts", "could not read ${source.name} for a restore", e)
+                throw Refused(RestorePlan.unreadable(e))
             }
             val problems = RestorePlan.problems(rows)
             if (problems.isNotEmpty()) throw Refused("it is damaged: ${problems.joinToString("; ")}")

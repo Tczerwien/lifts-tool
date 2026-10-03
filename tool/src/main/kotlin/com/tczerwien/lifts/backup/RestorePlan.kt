@@ -93,6 +93,20 @@ object RestorePlan {
         report(badIds, "rows with no id")
     }
 
+    /**
+     * Why Lifts couldn't open or read a file that passed the file checks, as one short line for the
+     * Restore screen ([Restorer] logs the failure in full). Room reports tables that don't match what
+     * this version expects, after migrating an older file, as an IllegalStateException whose message
+     * dumps both tables; the screen says that in a few words instead.
+     */
+    fun unreadable(failure: Throwable): String = when (failure) {
+        is IllegalStateException -> "Lifts can't read it (its tables don't match a Lifts log)"
+        else -> "Lifts can't read it (${failure.message?.lineSequence()?.first()?.trim()?.take(MESSAGE_CHARS) ?: failure})"
+    }
+
+    /** At most this much of a failure's first line reaches the screen. */
+    private const val MESSAGE_CHARS = 100
+
     /** [summary] as the Restore screen's lines, e.g. "26 workouts · 350 sets". */
     fun lines(summary: Summary, zone: ZoneId = ZoneId.systemDefault(), today: LocalDate = LocalDate.now(zone)): List<String> = buildList {
         add("${count(summary.workouts, "workout")} · ${count(summary.loggedSets, "set")}")
