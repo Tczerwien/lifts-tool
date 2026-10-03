@@ -114,6 +114,12 @@ fun supersetNumbers(groups: List<Int?>): List<Int?> {
     return starts.map { start -> start?.let { numbers.getOrPut(it) { numbers.size + 1 } } }
 }
 
+/** [PlannedSlot]s with their groups normalised among themselves ([normalizeGroups]): after leaving slots out. */
+fun List<PlannedSlot>.withNormalizedGroups(): List<PlannedSlot> {
+    val groups = normalizeGroups(map { it.supersetGroup })
+    return mapIndexed { index, slot -> if (slot.supersetGroup == groups[index]) slot else slot.copy(supersetGroup = groups[index]) }
+}
+
 private fun hasUntickedWork(slotId: Long, sets: List<SetEntity>): Boolean =
     sets.any { it.workoutExerciseId == slotId && it.completedAt == null && it.type != SET_TYPE_WARMUP }
 

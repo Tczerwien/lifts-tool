@@ -161,9 +161,9 @@ fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null, warmupS
 }
 
 /**
- * One slot as a start creates it: the exercise, its rows' set types in order, its rests, and the
- * targets shown at the gym (rep range, RIR), all copied from the template (or the workout started
- * again), so editing that later never changes this workout.
+ * One slot as a start creates it: the exercise, its rows' set types in order, its rests, the
+ * targets shown at the gym (rep range, RIR) and its superset group, all copied from the template (or
+ * the workout started again), so editing that later never changes this workout.
  */
 data class PlannedSlot(
     val exerciseId: String,
@@ -173,13 +173,16 @@ data class PlannedSlot(
     val targetRepMin: Int? = null,
     val targetRepMax: Int? = null,
     val targetRir: Int? = null,
+    /** Slots next to each other sharing one are a superset ([supersetRun]). */
+    val supersetGroup: Int? = null,
 )
 
 /**
  * The slots a workout started from [templateExercises] begins with: one per template exercise in
  * position order, each with [prefillTypes] from its occurrence's slot group last session
- * ([groupsByExercise], from [previousGroups]). ActiveSession.startFromTemplate creates exactly
- * these, and [isUntouched] compares against them, so the two can't drift apart.
+ * ([groupsByExercise], from [previousGroups]), and the template's supersets ([normalizeGroups]: a
+ * group the template holds apart, or alone, starts plain). ActiveSession.startFromTemplate creates
+ * exactly these, and [isUntouched] compares against them, so the two can't drift apart.
  */
 fun planTemplate(
     templateExercises: List<TemplateExerciseEntity>,
@@ -198,16 +201,18 @@ fun planTemplate(
             targetRepMin = planned.repMin,
             targetRepMax = planned.repMax,
             targetRir = planned.targetRir,
+            supersetGroup = planned.supersetGroup,
         )
-    }
+    }.withNormalizedGroups()
 }
 
 /**
  * The slots "Start again" begins with, from a finished workout's [slots] and [sets]: one per slot
  * with a ticked work set, in position order, each with its ticked sets' pattern (warm-ups kept, every
- * other type a plain work set) and the slot's rests and targets. Unticked sets count nowhere, so an
- * exercise skipped that day, or left after its warm-ups, is left out; notes stay with the old
- * workout. "Save as template" reads the same plan.
+ * other type a plain work set), the slot's rests and targets, and its superset among the slots kept
+ * (a superset left with one slot is none). Unticked sets count nowhere, so an exercise skipped that
+ * day, or left after its warm-ups, is left out; notes stay with the old workout. "Save as template"
+ * reads the same plan.
  */
 fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): List<PlannedSlot> {
     val ticked = sets.filter { it.completedAt != null }.groupBy { it.workoutExerciseId }
@@ -222,8 +227,9 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
             targetRepMin = slot.targetRepMin,
             targetRepMax = slot.targetRepMax,
             targetRir = slot.targetRir,
+            supersetGroup = slot.supersetGroup,
         )
-    }
+    }.withNormalizedGroups()
 }
 
 /** "Set 2 of 3", counting work sets only, or "Warm-up 1 of 2" for a warm-up row of [rows]. */

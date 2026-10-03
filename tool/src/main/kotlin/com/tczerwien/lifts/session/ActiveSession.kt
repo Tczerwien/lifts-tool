@@ -45,7 +45,7 @@ class ActiveSession(
 
     /**
      * Creates a workout from [templateId]: one workout_exercises row per template slot (copying rest
-     * overrides and the rep range and RIR target), each starting with the template's warm-ups, or last
+     * overrides, the rep range and RIR target, and its superset), each starting with the template's warm-ups, or last
      * session's for that slot when it leaves them to last session, then targetSets work sets
      * ([planTemplate]), so PREVIOUS lines up warm-up to warm-up. Rows start empty; their
      * starting values are only shown ([seedRows]). A vanished template degrades to an empty
@@ -87,6 +87,7 @@ class ActiveSession(
                     targetRepMin = planned.targetRepMin,
                     targetRepMax = planned.targetRepMax,
                     targetRir = planned.targetRir,
+                    supersetGroup = planned.supersetGroup,
                 ),
             )
             planned.types.forEachIndexed { setIndex, type ->
@@ -107,7 +108,7 @@ class ActiveSession(
 
     /**
      * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises, each with the set
-     * pattern he ticked that day, its rests and its targets ([planFromWorkout]); the rows start empty,
+     * pattern he ticked that day, its rests, its targets and its superset ([planFromWorkout]); the rows start empty,
      * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
      * that name was only its time of day ([startAgainName]). Written in one transaction; any leftover
      * rest is cleared, and the source is remembered by the new workout's id, so the untouched check
@@ -140,18 +141,19 @@ class ActiveSession(
     /**
      * What [planFromWorkout] makes of stored workout [workoutId], without the exercises he removed
      * (hidden, kept only for their history): removing one took it out of his templates, so neither a
-     * Start Again nor a Save as Template brings it back.
+     * Start Again nor a Save as Template brings it back. A superset it leaves with one slot is none.
      */
     private fun planOf(workoutId: Long): List<PlannedSlot> =
         planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
             .filterNot { repository.exerciseById(it.exerciseId)?.hidden == true }
+            .withNormalizedGroups()
 
     /**
      * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
      * workout's name), last in the list, with one exercise per slot he ticked a work set in: that many
      * work sets and warm-ups (none ticked leaves them to last session, as a new template exercise does),
-     * the slot's rep range and RIR target, and its rests, stored as none where they equal Settings'
-     * defaults so they follow them. Returns the template's id, or null
+     * the slot's rep range and RIR target, its superset, and its rests, stored as none where they equal
+     * Settings' defaults so they follow them. Returns the template's id, or null
      * when the workout is gone or not finished (an unfinished workout counts nowhere). One transaction.
      */
     fun saveAsTemplate(workoutId: Long, name: String): Long? = repository.inTransaction {
@@ -177,6 +179,7 @@ class ActiveSession(
                     repMin = planned.targetRepMin,
                     repMax = planned.targetRepMax,
                     targetRir = planned.targetRir,
+                    supersetGroup = planned.supersetGroup,
                 ),
             )
         }

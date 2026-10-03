@@ -346,7 +346,7 @@ fun lastActivityMillis(startedAt: Long, sets: List<SetEntity>): Long =
 /**
  * True when nothing has changed since the workout was created, so discarding it loses nothing: no
  * notes, the name it started with, no set logged or given a value, and the slots, their set types,
- * their rests and their targets are exactly what the
+ * their rests, their targets and their supersets ([sameGrouping]) are exactly what the
  * start made. That is no slots at all for an empty workout, and [planned] ([planTemplate] from the
  * template as it is now) for a template workout; [planned] gives null for a workout with no template.
  * Any doubt (the template was edited or deleted since) counts as touched, so the workout is kept.
@@ -372,6 +372,8 @@ fun isUntouched(
     val expected = planned().orEmpty()
     val actual = slots.sortedBy { it.position }
     if (actual.size != expected.size) return false
+    // A superset joined or split from the "…" menu is his: Back must not throw it away.
+    if (!sameGrouping(actual.map { it.supersetGroup }, expected.map { it.supersetGroup })) return false
     val typesBySlot = sets.groupBy { it.workoutExerciseId }
         .mapValues { (_, slotSets) -> slotSets.sortedBy { it.position }.map { it.type } }
     return actual.zip(expected).all { (slot, plannedSlot) ->

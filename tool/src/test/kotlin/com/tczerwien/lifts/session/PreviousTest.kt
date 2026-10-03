@@ -253,6 +253,32 @@ class PreviousTest {
     }
 
     @Test
+    fun `a template's supersets reach the plan, and a slot it holds apart starts plain`() {
+        val groups = listOf(null, 3, 3, null, 3)
+        val template = groups.mapIndexed { index, group ->
+            TemplateExerciseEntity(
+                id = index + 1L, templateId = 7, exerciseId = "ex$index", position = index, targetSets = 2, supersetGroup = group,
+            )
+        }
+        assertEquals(listOf(null, 3, 3, null, null), planTemplate(template, emptyMap()).map { it.supersetGroup })
+    }
+
+    @Test
+    fun `Start Again keeps the supersets of the slots it keeps, and a pair left with one slot is none`() {
+        // A and B were done as a pair; of C and D only C was done (D only warmed up); E alone.
+        val slots = listOf(1, 1, 2, 2, null).mapIndexed { index, group ->
+            slot(index + 1L, "ex$index", index).copy(supersetGroup = group)
+        }
+        val sets = listOf(
+            set(11, slot = 1, completedAt = 1L), set(21, slot = 2, completedAt = 2L), set(31, slot = 3, completedAt = 3L),
+            set(41, slot = 4, type = w, completedAt = 4L), set(42, slot = 4, position = 1), set(51, slot = 5, completedAt = 5L),
+        )
+        val plan = planFromWorkout(slots, sets)
+        assertEquals(listOf("ex0", "ex1", "ex2", "ex4"), plan.map { it.exerciseId })
+        assertEquals(listOf(1, 1, null, null), plan.map { it.supersetGroup })
+    }
+
+    @Test
     fun `a hand-added exercise mirrors last time's pattern, or starts with three sets`() {
         assertEquals(listOf(w, n, n), prefillTypes(listOf(prev(1, w), prev(2, n), prev(3, f))))
         assertEquals(listOf(n, n, n), prefillTypes(emptyList()))

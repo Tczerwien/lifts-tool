@@ -736,6 +736,45 @@ class ActiveSessionTest {
         assertEquals(600_000L, store.workoutById(stale)?.endedAt)
     }
 
+    // --- Supersets ---
+
+    @Test
+    fun `a template's superset reaches the workout, and Start Again and Save as Template keep it`() {
+        val template = store.addTemplate("Arms", "row" to 2, "fly" to 2, "curl" to 2)
+        val (_, fly, curl) = store.exercisesForTemplate(template)
+        store.templateExercises[fly.id] = fly.copy(supersetGroup = 5)
+        store.templateExercises[curl.id] = curl.copy(supersetGroup = 5)
+        val untouched = session.startFromTemplate(template, now = 500_000)
+        assertEquals(listOf(null, 5, 5), store.exercisesForWorkout(untouched).map { it.supersetGroup })
+        assertTrue(session.discardIfUntouched(untouched), "grouped as the template is: untouched")
+
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        var clock = 1_060_000L
+        for (slot in store.exercisesForWorkout(workoutId)) {
+            session.completeSet(workoutId, rowsOf(slot).first(), 20.0, 10, n, now = clock)
+            clock += 60_000
+        }
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = clock))
+        val again = assertNotNull(session.startFromWorkout(workoutId, now = clock + 3_600_000))
+        assertTrue(sameGrouping(listOf(null, 1, 1), store.exercisesForWorkout(again).map { it.supersetGroup }))
+        assertTrue(session.discardIfUntouched(again), "a copy grouped as the source: untouched")
+        val saved = assertNotNull(session.saveAsTemplate(workoutId, "Arms 2"))
+        assertTrue(sameGrouping(listOf(null, 1, 1), store.exercisesForTemplate(saved).map { it.supersetGroup }))
+    }
+
+    @Test
+    fun `Start Again drops a superset whose partner wasn't done that day`() {
+        val template = store.addTemplate("Arms", "fly" to 2, "curl" to 2, "row" to 2)
+        store.exercisesForTemplate(template).take(2).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1) }
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (fly, _, row) = store.exercisesForWorkout(workoutId)
+        session.completeSet(workoutId, rowsOf(fly).first(), 20.0, 10, n, now = 1_060_000)
+        session.completeSet(workoutId, rowsOf(row).first(), 40.0, 10, n, now = 1_120_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        val again = assertNotNull(session.startFromWorkout(workoutId, now = 5_000_000))
+        assertEquals(listOf("fly" to null, "row" to null), store.exercisesForWorkout(again).map { it.exerciseId to it.supersetGroup })
+    }
+
     // --- Version 2's columns ---
 
     @Test

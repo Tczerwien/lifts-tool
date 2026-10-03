@@ -480,6 +480,21 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a superset joined or split since the start counts as touched, whatever its numbers`() {
+        val plan = planTemplate(benchAndSquat.map { it.copy(supersetGroup = 4) }, benchLastTime)
+        assertEquals(listOf(4, 4), plan.map { it.supersetGroup }, "the template's pair")
+        val (slots, sets) = startedFrom(plan)
+        assertTrue(isUntouched(workout(templateId = 7), slots, sets, { plan }))
+        assertTrue(isUntouched(workout(templateId = 7), slots.map { it.copy(supersetGroup = 9) }, sets, { plan }), "the same pair")
+        assertFalse(isUntouched(workout(templateId = 7), slots.map { it.copy(supersetGroup = null) }, sets, { plan }), "split for today")
+        val (plainSlots, plainSets) = startedFrom(benchAndSquatPlan)
+        assertFalse(
+            isUntouched(workout(templateId = 7), plainSlots.map { it.copy(supersetGroup = 1) }, plainSets, { benchAndSquatPlan }),
+            "joined for today",
+        )
+    }
+
+    @Test
     fun `a workout used within four hours is kept`() {
         val hour = 3_600_000L
         val sets = listOf(set(id = 1, completedAt = 10 * hour))
@@ -601,7 +616,7 @@ class SessionLogicTest {
     private fun startedFrom(plan: List<PlannedSlot>): Pair<List<WorkoutExerciseEntity>, List<SetEntity>> {
         var setId = 100L
         val slots = plan.mapIndexed { index, planned ->
-            slot(id = index + 1L, exerciseId = planned.exerciseId, position = index)
+            slot(id = index + 1L, exerciseId = planned.exerciseId, position = index).copy(supersetGroup = planned.supersetGroup)
         }
         val sets = slots.zip(plan).flatMap { (slot, planned) ->
             planned.types.mapIndexed { position, type ->
