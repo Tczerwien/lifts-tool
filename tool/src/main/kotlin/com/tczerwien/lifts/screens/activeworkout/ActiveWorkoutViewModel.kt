@@ -20,9 +20,9 @@ import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.TypedWeight
 import com.tczerwien.lifts.session.activeRowAfterTick
+import com.tczerwien.lifts.session.afterTick
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
-import com.tczerwien.lifts.session.autoAdvanceSlotId
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.nextRowOf
@@ -265,7 +265,7 @@ class ActiveWorkoutViewModel(
                     // Never one long wait: delays count uptime, which stops while the phone sleeps. Checked
                     // against the wall clock at least each second, the move comes within a second of waking.
                     while (true) {
-                        val wait = autoAdvanceAt(pending.tickedAt, restEnd) - System.currentTimeMillis()
+                        val wait = autoAdvanceAt(pending.waitFrom, restEnd) - System.currentTimeMillis()
                         if (wait <= 0) break
                         delay(minOf(wait, 1_000L))
                     }
@@ -350,17 +350,29 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * The exercise [slotId] was finished by a tick at [tickedAt]; see [pendingAdvance]. [restSaved] once
-     * that tick's rest is saved: until then the rest on record is an older one, and timing the move by
-     * it could move on early (behind a slow write) or late.
+     * A tick at [tickedAt] of set [setId] (a [type] set) on exercise [slotId] that moves the screen on;
+     * see [pendingAdvance]. The move is timed from [waitFrom], the tick until a RIR tap on that row
+     * restarts the wait. [restSaved] once that tick's rest is saved: until then the rest on record is
+     * an older one, and timing the move by it could move on early (behind a slow write) or late.
      */
-    private data class PendingAdvance(val slotId: Long, val tickedAt: Long, val restSaved: Boolean = false)
+    private data class PendingAdvance(
+        val slotId: Long,
+        val setId: Long,
+        val type: String,
+        val tickedAt: Long,
+        val waitFrom: Long = tickedAt,
+        val restSaved: Boolean = false,
+    ) {
+        /** The same tick, whatever has been restarted or saved since. */
+        fun sameTick(other: PendingAdvance?): Boolean = other != null && other.setId == setId && other.tickedAt == tickedAt
+    }
 
     /**
-     * Set when a tick finishes the exercise on screen: the screen moves on to the next exercise with
-     * an unticked set as the rest ends ([autoAdvanceAt]), not at the tick, so the tick shows and a
-     * mis-tap can be undone. Any other tap on this screen cancels it ([beginAction]), and so does
-     * opening any other screen but the Rest Timer ([holdPosition]).
+     * Set when a tick moves the screen on ([afterTick]): it finished the exercise on screen, or passed a
+     * superset's turn. The screen moves as the tick's rest ends ([autoAdvanceAt]), or 2 s after the tick
+     * with none, not at the tick, so the tick shows and a mis-tap can be undone. Any other tap on this
+     * screen cancels it ([beginAction]), and so does opening any other screen but the Rest Timer
+     * ([holdPosition]); a RIR tap on the ticked row restarts the wait instead ([onRirTapped]).
      */
     private val pendingAdvance = MutableStateFlow<PendingAdvance?>(null)
 
@@ -368,13 +380,17 @@ class ActiveWorkoutViewModel(
     @Volatile
     private var movedOnAt: Long? = null
 
-    /** Moves on for [pending] if it still stands, the exercise is still on screen and still finished. */
+    /**
+     * Moves on for [pending] if it still stands and the exercise is still on screen, to where its tick
+     * leads now ([afterTick]: the next exercise, or the superset member whose turn it is).
+     */
     private fun autoAdvance(pending: PendingAdvance) {
         if (!pendingAdvance.compareAndSet(pending, null) || locked) return
         val state = _uiState.value
         val current = state.exercises.getOrNull(state.currentIndex) ?: return
         if (current.slot.id != pending.slotId) return
-        val target = autoAdvanceSlotId(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id) ?: return
+        val target = afterTick(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id, pending.type).moveTo
+            ?: return
         movedOnAt = System.currentTimeMillis()
         showExercise(target)
     }
@@ -409,12 +425,16 @@ class ActiveWorkoutViewModel(
      * then blank ([nextRir]), stored as RPE = 10 − RIR.
      * Ticked rows too: the effort is known once the set is done, usually while resting. It rates the
      * set without moving the steppers or cancelling a pending move to the next exercise, but a tap in
-     * the second after the screen moved on was aimed at the rows before and is dropped.
+     * the second after the screen moved on was aimed at the rows before and is dropped. On the row
+     * whose tick is moving the screen on it restarts the wait: a superset moves to the partner 2 s
+     * after a tick, too soon to rate it otherwise (a move timed by a rest still comes as the rest ends).
      */
     fun onRirTapped(setId: Long) {
-        if (locked || rowsJustMoved(System.currentTimeMillis())) return
+        val now = System.currentTimeMillis()
+        if (locked || rowsJustMoved(now)) return
         val target = locate(setId)?.block?.slot?.targetRir
         val edit = applySetChange(setId) { it.copy(rpe = rpeOf(nextRir(rirOf(it.rpe), target))) } ?: return
+        pendingAdvance.update { pending -> if (pending?.setId == setId) pending.copy(waitFrom = now) else pending }
         persistSet(edit)
     }
 
@@ -480,16 +500,27 @@ class ActiveWorkoutViewModel(
         // The exercise's last tick brings the header's equipment line back (if it has one) and every
         // row slides down under his finger: the screen sees the line come and calls [headerShifted].
         Perf.done("aw.tick.ui", perf)
-        // The exercise's last set: move on once the rest that this tick starts is over.
-        val pending = PendingAdvance(set.workoutExerciseId, now).takeIf { _uiState.value.activeSetId == null }
+        // The exercise's last set, or a superset's turn passing on: move once the rest this tick starts
+        // is over, or 2 s after it when it starts none (the partner's turn).
+        val ticked = _uiState.value.exercises
+        val pending = PendingAdvance(set.workoutExerciseId, setId, set.type, now)
+            .takeIf { afterTick(ticked.map { it.slot }, ticked.flatMap { it.sets }, set.workoutExerciseId, set.type).moveTo != null }
         pending?.let { pendingAdvance.value = it }
         val workoutId = _uiState.value.workoutId
         LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now, seed.durationSec) }) { logged ->
             Perf.done("aw.tick.saved", perf)
             settle(edit)
-            // Its rest is saved now, so the move can be timed by it; unless a tap has cancelled it since.
-            // Nothing logged (the workout closed meanwhile): no move either.
-            pending?.let { pendingAdvance.compareAndSet(it, if (logged != null) it.copy(restSaved = true) else null) }
+            // Its rest is saved now, so the move can be timed by it; unless a tap has cancelled it since
+            // (a RIR tap's restart keeps it). Nothing logged (the workout closed meanwhile): no move either.
+            pending?.let { mine ->
+                pendingAdvance.update { current ->
+                    when {
+                        !mine.sameTick(current) -> current
+                        logged != null -> current?.copy(restSaved = true)
+                        else -> null
+                    }
+                }
+            }
         }
     }
 
