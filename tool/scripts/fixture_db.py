@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Build a Lifts database with realistic history, for checking changes on the emulator.
 
-The tables come straight from the committed Room schema (room-schemas/.../<version>.json), so the
-file opens in the app without a migration. The exercise catalog and default bar are left empty on
-purpose: the app seeds them on first launch, which also exercises the seeding path. Exercise ids
-below are the seed slugs.
+The tables come straight from the committed Room schema (room-schemas/.../<version>.json), the newest
+one by default, so the file opens in the app without a migration. --schema-version N builds an older
+version instead (e.g. 1), which the app migrates when it is pushed. The exercise catalog and default
+bar are left empty on purpose: the app seeds them on first launch, which also exercises the seeding
+path. Exercise ids below are the seed slugs.
 
 Scenario "gym" (all weights entered in lb, stored in kg like the app does; times are 19:30
 America/Chicago):
@@ -19,7 +20,8 @@ America/Chicago):
   - Templates "Upper A" and "Lower A".
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
-exercise catalog and bars are copied in, and the things he types himself are added, so every export
+exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
+schema version fills a fixture of either), and the things he types himself are added, so every export
 field has data: the incline dumbbell press renamed "Low Incline DB Press", a pinned cue on the squat,
 and a custom exercise "Cable Y-Raise" (with a cue) in the Upper A template. Without it the catalog is
 left empty, as before.
@@ -35,7 +37,7 @@ one-arm dumbbell row is per side, the squat has a cue, the incline press is rena
 day. No workout is left open.
 
 Usage:
-  python3 tool/scripts/fixture_db.py OUT.db [--now 2026-09-24T12:00] [--schema-version 1] [--catalog-from SEEDED.db]
+  python3 tool/scripts/fixture_db.py OUT.db [--now 2026-09-24T12:00] [--schema-version N] [--catalog-from SEEDED.db]
   python3 tool/scripts/fixture_db.py OUT.db --scenario long --catalog-from SEEDED.db [--years 3]
 
 Then push it with: tool/scripts/lifts-adb.sh push-db OUT.db
@@ -74,6 +76,10 @@ def kg(lb):
 
 def millis(moment):
     return int(moment.timestamp() * 1000)
+
+
+def newest_schema_version():
+    return max(int(name[: -len(".json")]) for name in os.listdir(SCHEMA_DIR) if name.endswith(".json"))
 
 
 def create_schema(conn, version):
@@ -392,13 +398,20 @@ def long_history(conn, now, years=3):
         day += dt.timedelta(days=1)
 
 
-def long_own_data(conn, seeded):
-    """The catalog and bars from [seeded], then his own: custom exercises, a rename, a cue, a per-side lift."""
+def copy_catalog(conn, seeded):
+    """The exercises and bars of [seeded], by name: the columns both files have, so either schema version fills either."""
     conn.execute("ATTACH DATABASE ? AS seeded", (seeded,))
-    conn.execute("INSERT INTO exercises SELECT * FROM seeded.exercises")
-    conn.execute("INSERT INTO bars SELECT * FROM seeded.bars")
+    for table in ("exercises", "bars"):
+        theirs = {row[1] for row in conn.execute(f"PRAGMA seeded.table_info({table})")}
+        columns = ", ".join(f"`{row[1]}`" for row in conn.execute(f"PRAGMA main.table_info({table})") if row[1] in theirs)
+        conn.execute(f"INSERT INTO {table} ({columns}) SELECT {columns} FROM seeded.{table}")
     conn.commit()
     conn.execute("DETACH DATABASE seeded")
+
+
+def long_own_data(conn, seeded):
+    """The catalog and bars from [seeded], then his own: custom exercises, a rename, a cue, a per-side lift."""
+    copy_catalog(conn, seeded)
     conn.execute("UPDATE exercises SET name = ? WHERE id = ?", (RENAMED_INCLINE, INCLINE))
     conn.execute("UPDATE exercises SET pinnedNote = ? WHERE id = ?", (SQUAT_CUE, SQUAT))
     conn.execute("UPDATE exercises SET perSide = 1 WHERE id = ?", (ROW,))
@@ -421,11 +434,7 @@ CUSTOM_ID = "custom-fixture-cable-y-raise"
 
 def own_data(conn, seeded):
     """Copies the seeded catalog and bars, then adds a rename, cues and a custom exercise."""
-    conn.execute("ATTACH DATABASE ? AS seeded", (seeded,))
-    conn.execute("INSERT INTO exercises SELECT * FROM seeded.exercises")
-    conn.execute("INSERT INTO bars SELECT * FROM seeded.bars")
-    conn.commit()
-    conn.execute("DETACH DATABASE seeded")
+    copy_catalog(conn, seeded)
     conn.execute("UPDATE exercises SET name = ? WHERE id = ?", (RENAMED_INCLINE, INCLINE))
     conn.execute("UPDATE exercises SET pinnedNote = ? WHERE id = ?", (SQUAT_CUE, SQUAT))
     conn.execute(
@@ -447,7 +456,7 @@ def main():
     parser.add_argument("out")
     parser.add_argument("--scenario", default="gym", choices=sorted(SCENARIOS))
     parser.add_argument("--now", help="local time in America/Chicago, e.g. 2026-09-24T12:00 (default: now)")
-    parser.add_argument("--schema-version", type=int, default=1)
+    parser.add_argument("--schema-version", type=int, help="the Room schema version to build (default: the newest)")
     parser.add_argument("--catalog-from", help="a pulled, seeded lifts.db: copy its catalog and add his own data")
     parser.add_argument("--years", type=int, default=3, help="scenario long: years of history (default 3)")
     args = parser.parse_args()
@@ -459,7 +468,7 @@ def main():
         os.remove(args.out)
     conn = sqlite3.connect(args.out)
     conn.execute("PRAGMA foreign_keys = ON")
-    create_schema(conn, args.schema_version)
+    create_schema(conn, args.schema_version or newest_schema_version())
     if args.scenario == "long":
         long_history(conn, now, args.years)
     else:
