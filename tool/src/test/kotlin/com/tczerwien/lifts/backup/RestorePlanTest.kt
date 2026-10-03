@@ -175,8 +175,10 @@ class RestorePlanTest {
         assertEquals("Lifts can't read it (first words)", RestorePlan.unreadable(RuntimeException("\n  \nfirst words\nmore")))
         assertEquals("Lifts can't read it (java.lang.RuntimeException)", RestorePlan.unreadable(RuntimeException()))
         assertEquals("Lifts can't read it (java.lang.RuntimeException)", RestorePlan.unreadable(RuntimeException(" \n ")))
-        // An emoji is two UTF-16 units: a cut never splits one.
-        val emoji = "x".repeat(99) + "\uD83C\uDFCB" + "x"
-        assertEquals("Lifts can't read it (${"x".repeat(99)}…)", RestorePlan.unreadable(RuntimeException(emoji)))
+        // A character outside the BMP is a surrogate pair (two UTF-16 units): a cut never splits one.
+        val across = "x".repeat(99) + "\uD83C\uDFCB" + "x"
+        assertEquals("Lifts can't read it (${"x".repeat(99)}…)", RestorePlan.unreadable(RuntimeException(across)))
+        val before = "x".repeat(98) + "\uD83C\uDFCB" + "x"
+        assertEquals("Lifts can't read it (${"x".repeat(98)}\uD83C\uDFCB…)", RestorePlan.unreadable(RuntimeException(before)))
     }
 }

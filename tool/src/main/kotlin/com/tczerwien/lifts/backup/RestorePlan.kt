@@ -104,7 +104,7 @@ object RestorePlan {
      * Restore screen ([Restorer] logs the failure in full). Room's two schema checks (the tables after
      * migrating an older file, and the identity hash of a same-version one) word their failures for a
      * developer, the first one dumping both tables; the screen says it in a few words instead.
-     * Anything else shows its first line, cut to [MESSAGE_CHARS] (never inside an emoji).
+     * Anything else shows its first line, cut to [MESSAGE_CHARS] (never inside a surrogate pair).
      */
     fun unreadable(failure: Throwable): String {
         val message = failure.message.orEmpty()
