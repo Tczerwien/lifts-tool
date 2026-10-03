@@ -243,13 +243,19 @@ fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
 /**
  * The exercise Active Workout opens on: the one that was on screen ([rememberedSlotId]) while it
  * still exists and has an unticked row, else the one [nextPendingSet] picks (the last tick's), else
- * the first. Null only for a workout with no exercises.
+ * the first. In a superset whose latest tick, on that exercise (or on the last tick's, with none
+ * remembered), handed the turn to another member, that member: where the screen was about to move
+ * when it was left (Back to Home during the round's rest, or the app killed in the 2 s after a tick),
+ * as the NEXT row and the Rest Timer already say. Null only for a workout with no exercises.
  */
 fun openingSlotId(
     slots: List<WorkoutExerciseEntity>,
     sets: List<SetEntity>,
     rememberedSlotId: Long?,
 ): Long? {
+    val leftOn = rememberedSlotId?.takeIf { id -> slots.any { it.id == id } }
+        ?: sets.filter { it.completedAt != null }.maxWithOrNull(compareBy({ it.completedAt }, { it.id }))?.workoutExerciseId
+    leftOn?.let { turnPassedFrom(slots, sets, it) }?.let { return it.id }
     if (rememberedSlotId != null && slots.any { it.id == rememberedSlotId } &&
         sets.any { it.workoutExerciseId == rememberedSlotId && it.completedAt == null }
     ) {
