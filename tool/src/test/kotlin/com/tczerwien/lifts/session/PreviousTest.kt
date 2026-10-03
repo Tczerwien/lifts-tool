@@ -379,13 +379,15 @@ class PreviousTest {
         )
         val afterB1 = listOf(
             set(11, slot = 1, completedAt = 1L),
-            set(21, slot = 2, completedAt = 5L), set(22, slot = 2, position = 1),
-            set(31, slot = 3, completedAt = 6L), set(32, slot = 3, position = 1),
+            set(21, slot = 2, completedAt = 5L), set(22, slot = 2, position = 1), set(23, slot = 2, position = 2),
+            set(31, slot = 3, completedAt = 6L), set(32, slot = 3, position = 1), set(33, slot = 3, position = 2),
         )
         assertEquals(2L, openingSlotId(slots, afterB1, rememberedSlotId = 3), "left during the round's rest: back on Fly")
         assertEquals(2L, openingSlotId(slots, afterB1, rememberedSlotId = null), "nothing saved: the turn from the last tick")
         val afterA2 = afterB1.map { if (it.id == 22L) it.copy(completedAt = 7L) else it }
-        assertEquals(3L, openingSlotId(slots, afterA2, rememberedSlotId = 2), "killed in the 2 s after Fly's tick: on Row")
+        // Fly's tick handed the turn on to Row: Fly as remembered, whether he left in the 2 s or went back to
+        // Fly on purpose after the move (the two look the same; the NEXT row names Row either way).
+        assertEquals(2L, openingSlotId(slots, afterA2, rememberedSlotId = 2), "back on Fly, or left in the 2 s: Fly stands")
         assertEquals(3L, openingSlotId(slots, afterA2, rememberedSlotId = 3), "the move had happened: Row, as remembered")
         // A warm-up tick hands nothing on: the exercise that was on screen.
         val warmedUp = listOf(

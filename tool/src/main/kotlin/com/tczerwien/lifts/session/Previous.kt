@@ -243,10 +243,12 @@ fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
 /**
  * The exercise Active Workout opens on: the one that was on screen ([rememberedSlotId]) while it
  * still exists and has an unticked row, else the one [nextPendingSet] picks (the last tick's), else
- * the first. In a superset whose latest tick, on that exercise (or on the last tick's, with none
- * remembered), handed the turn to another member, that member: where the screen was about to move
- * when it was left (Back to Home during the round's rest, or the app killed in the 2 s after a tick),
- * as the NEXT row and the Rest Timer already say. Null only for a workout with no exercises.
+ * the first. In a superset whose round closed with the latest tick, on that exercise (or on the last
+ * tick's, with none remembered), the member the turn went back to: where the screen was going as the
+ * round's rest ended when it was left (Back to Home during the rest, or the app killed), as the NEXT
+ * row and the Rest Timer already say. A turn handed on to a later member is left alone: on screen that
+ * looks the same as his going back to the member he just did, on purpose (and the NEXT row names the
+ * partner either way). Null only for a workout with no exercises.
  */
 fun openingSlotId(
     slots: List<WorkoutExerciseEntity>,
@@ -255,7 +257,10 @@ fun openingSlotId(
 ): Long? {
     val leftOn = rememberedSlotId?.takeIf { id -> slots.any { it.id == id } }
         ?: sets.filter { it.completedAt != null }.maxWithOrNull(compareBy({ it.completedAt }, { it.id }))?.workoutExerciseId
-    leftOn?.let { turnPassedFrom(slots, sets, it) }?.let { return it.id }
+    if (leftOn != null) {
+        val position = slots.firstOrNull { it.id == leftOn }?.position
+        turnPassedFrom(slots, sets, leftOn)?.takeIf { position != null && it.position < position }?.let { return it.id }
+    }
     if (rememberedSlotId != null && slots.any { it.id == rememberedSlotId } &&
         sets.any { it.workoutExerciseId == rememberedSlotId && it.completedAt == null }
     ) {
