@@ -741,7 +741,7 @@ class ActiveSessionTest {
     @Test
     fun `version 2's columns ride along unchanged through a whole workout`() {
         // Set as the v2 features will set them; nothing reads them yet, and no write may drop them.
-        store.exercises["bench"] = store.exercises.getValue("bench").copy(countsFor = listOf("chest", "triceps"))
+        // (An exercise's countsFor isn't here: a workout never writes exercises.)
         val template = store.addTemplate("Upper A", "fly" to 2, "bench" to 2, "curl" to 2)
         store.exercisesForTemplate(template).forEach {
             store.templateExercises[it.id] = it.copy(supersetGroup = 1, alternatives = listOf("row"), targetRirMax = 2)
@@ -778,7 +778,6 @@ class ActiveSessionTest {
             )
         }
         assertEquals(templateRows, store.exercisesForTemplate(template), "a workout never writes its template")
-        assertEquals(listOf("chest", "triceps"), store.exerciseById("bench")!!.countsFor)
     }
 
     private fun rowsOf(slot: WorkoutExerciseEntity): List<SetEntity> =
