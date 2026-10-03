@@ -194,6 +194,11 @@ class JsonExportTest {
         // The squat went unticked: the bench left on its own is no superset in the file.
         val alone = JsonExport.render(ExportFixtures.snapshot(slots = pairedSlots))
         assertTrue("superset_id" !in alone, alone)
+        // Nor when the squat is in the file only for its note.
+        val noted = JsonExport.render(
+            ExportFixtures.snapshot(slots = pairedSlots.map { if (it.id == 3L) it.copy(notes = "Rack taken") else it }),
+        )
+        assertTrue("Rack taken" in noted && "superset_id" !in noted, noted)
     }
 
     @Test

@@ -170,8 +170,9 @@ data class SnapshotWorkoutExercise(
     val targetRepMax: Int? = null,
     val targetRir: Int? = null,
     /**
-     * Its superset that day among the workout's exported exercises, numbered 1, 2, … ([supersetNumbers]);
-     * null outside one, and for a member whose partner went unticked.
+     * Its superset that day among the workout's exported exercises with a ticked set, numbered 1, 2, …
+     * ([supersetNumbers]); null outside one, and for a member whose partner went unticked (even when the
+     * partner is here for its note).
      */
     val supersetId: Int? = null,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
@@ -296,8 +297,9 @@ fun buildSnapshot(
             val keptSlots = slotsByWorkout[workout.id].orEmpty()
                 .filter(::kept)
                 .sortedBy { it.position }
-            // Numbered among the exercises the file has: a pair whose partner went unticked is no pair.
-            val supersetIds = supersetNumbers(keptSlots.map { it.supersetGroup })
+            // Numbered among the exercises the file has with a ticked set: a pair whose partner went unticked
+            // (or is in the file only for its note) is no pair.
+            val supersetIds = supersetNumbers(keptSlots.map { slot -> slot.supersetGroup.takeIf { slot.id in setsBySlot } })
             val slots = keptSlots
                 .mapIndexed { index, slot ->
                     val exercise = exercisesById[slot.exerciseId]
