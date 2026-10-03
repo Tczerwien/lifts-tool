@@ -42,7 +42,7 @@ class SupersetsTest {
 
     // --- SS-2: what a tick leads to ---
 
-    // Row (1), the pair Pushdown (2) and Curl (3), then Calf Raise (4).
+    // Squat (1), the pair Fly (2) and Row (3), then Calf Raise (4).
     private val pair = listOf(slot(1, 0), slot(2, 1, group = 1), slot(3, 2, group = 1), slot(4, 3))
 
     @Test
@@ -62,17 +62,17 @@ class SupersetsTest {
                 AfterTick(startsRest = false, moveTo = 3), AfterTick(startsRest = true, moveTo = 4),
             ),
             outcomes,
-            "round 3 closes on Curl, and the screen moves on to the exercise after the pair",
+            "round 3 closes on Row, and the screen moves on to the exercise after the pair",
         )
     }
 
     @Test
     fun `with unequal sets the member with more finishes on its own, resting each time`() {
-        // Pushdown has 4, Curl 3: after round 3 the turn wraps to Pushdown's 4th, then the pair is done.
+        // Fly has 4, Row 3: after round 3 the turn wraps to Fly's 4th, then the pair is done.
         val moreA = rows(1, 3, done = 3) + rows(2, 4, done = 3) + rows(3, 3, done = 3) + rows(4, 3)
         assertEquals(AfterTick(startsRest = true, moveTo = 2), afterTick(pair, moreA, 3, SET_TYPE_NORMAL))
         assertEquals(AfterTick(startsRest = true, moveTo = 4), afterTick(pair, tick(moreA, 24), 2, SET_TYPE_NORMAL))
-        // Curl has 4: after Pushdown's last, Curl's 3rd comes without a rest; then Curl stays and rests.
+        // Row has 4: after Fly's last, Row's 3rd comes without a rest; then Row stays and rests.
         val moreB = rows(1, 3, done = 3) + rows(2, 3, done = 3) + rows(3, 4, done = 2) + rows(4, 3)
         assertEquals(AfterTick(startsRest = false, moveTo = 3), afterTick(pair, moreB, 2, SET_TYPE_NORMAL))
         assertEquals(AfterTick(startsRest = true, moveTo = null), afterTick(pair, tick(moreB, 33), 3, SET_TYPE_NORMAL))
@@ -199,7 +199,7 @@ class SupersetsTest {
 
     @Test
     fun `a template's rows settle to positions 0 to n-1 with whole supersets, writing only what changed`() {
-        // Row, then the pair Pushdown and Curl, then Calf Raise; Curl moved down past Calf Raise.
+        // Squat, then the pair Fly and Row, then Calf Raise; Row moved down past Calf Raise.
         val rows = listOf(templateRow(1, 0), templateRow(2, 1, group = 1), templateRow(3, 2, group = 1), templateRow(4, 3))
         val curlDown = listOf(rows[0], rows[1], rows[3], rows[2])
         assertEquals(

@@ -139,19 +139,19 @@ class ExerciseOrderTest {
     private fun slot(id: Long, position: Int, group: Int? = null) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position, supersetGroup = group)
 
-    // Squat (1), the pair Pushdown (2) and Curl (3), then Calf Raise (4).
+    // Squat (1), the pair Fly (2) and Row (3), then Calf Raise (4).
     private val withPair = listOf(slot(1, 0), slot(2, 1, group = 1), slot(3, 2, group = 1), slot(4, 3))
 
     @Test
     fun `in a superset the next-exercise row names whose turn is next, then the exercise after the pair`() {
         val fresh = listOf(row(11, 1), row(21, 2), row(22, 2), row(31, 3), row(32, 3), row(41, 4))
         assertEquals(2L, nextExerciseSlotId(withPair, fresh, currentSlotId = 1), "before the pair, as before")
-        assertEquals(3L, nextExerciseSlotId(withPair, fresh, currentSlotId = 2), "on Pushdown: Curl")
-        assertEquals(2L, nextExerciseSlotId(withPair, fresh, currentSlotId = 3), "on Curl: back to Pushdown")
-        // Curl finished, Pushdown has a set left: from Pushdown the row goes past the pair.
-        val curlDone = fresh.map { if (it.workoutExerciseId == 3L) it.copy(completedAt = 9L) else it }
-        assertEquals(4L, nextExerciseSlotId(withPair, curlDone, currentSlotId = 2))
-        // Everything but Pushdown finished: the row still moves on, to the slot after it.
+        assertEquals(3L, nextExerciseSlotId(withPair, fresh, currentSlotId = 2), "on Fly: Row")
+        assertEquals(2L, nextExerciseSlotId(withPair, fresh, currentSlotId = 3), "on Row: back to Fly")
+        // Row finished, Fly has a set left: from Fly the row goes past the pair.
+        val rowDone = fresh.map { if (it.workoutExerciseId == 3L) it.copy(completedAt = 9L) else it }
+        assertEquals(4L, nextExerciseSlotId(withPair, rowDone, currentSlotId = 2))
+        // Everything but Fly finished: the row still moves on, to the slot after it.
         val restDone = fresh.map { if (it.workoutExerciseId != 2L) it.copy(completedAt = 9L) else it }
         assertEquals(3L, nextExerciseSlotId(withPair, restDone, currentSlotId = 2))
     }
