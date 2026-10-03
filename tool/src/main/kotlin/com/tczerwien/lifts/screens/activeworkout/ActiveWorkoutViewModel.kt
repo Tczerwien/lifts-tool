@@ -25,6 +25,8 @@ import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
 import com.tczerwien.lifts.session.inSuperset
 import com.tczerwien.lifts.session.isDoubleTap
+import com.tczerwien.lifts.session.linkWithNext
+import com.tczerwien.lifts.session.linkedWithNext
 import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.nextRowOf
 import com.tczerwien.lifts.session.nextRir
@@ -894,6 +896,8 @@ class ActiveWorkoutViewModel(
                 exerciseNote = block.slot.notes,
                 restSec = block.slot.restSecWork ?: state.defaultRestSec,
                 defaultRestSec = state.defaultRestSec,
+                supersetWithNext = linkedWithNext(state.exercises.map { it.slot.supersetGroup }, state.currentIndex)
+                    .takeIf { state.currentIndex < state.exercises.lastIndex },
                 platesFor = platesKg?.let { "${Format.weight(it, state.units)} ${state.units.suffix}" },
                 platesUnavailable = when {
                     platesKg != null -> null
@@ -952,6 +956,29 @@ class ActiveWorkoutViewModel(
         val meta = updateSlot(slotId) { it.copy(restSecWork = sec.takeIf { rest -> rest != default }) }
         LiftsIo.write({ session.setSlotRest(workoutId, slotId, sec) }) { settleMeta(meta); refresh() }
     }
+
+    /**
+     * Menu: "Superset With Next" for exercise [slotId], for this workout only ([linkWithNext]): [on] joins
+     * it to the exercise after it, off splits them. Shown at once (the target line, the NEXT row); the
+     * session refuses it once the workout has closed, and the reload after shows what was saved.
+     */
+    fun setSupersetWithNext(slotId: Long, on: Boolean) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        // Worked out again over every reload it is put back on: joining what is joined changes nothing.
+        val meta = editMeta { state ->
+            val index = state.exercises.indexOfFirst { it.slot.id == slotId }
+            if (index < 0) state else withGroups(state, linkWithNext(state.exercises.map { it.slot.supersetGroup }, index, on))
+        }
+        LiftsIo.write({ session.setSupersetWithNext(workoutId, slotId, on) }) { settleMeta(meta); refresh() }
+    }
+
+    /** [state] with each exercise's superset group set from [groups] (in screen order), and its "SUPERSET" with it. */
+    private fun withGroups(state: UiState, groups: List<Int?>): UiState = state.copy(
+        exercises = state.exercises.mapIndexed { index, block ->
+            block.copy(slot = block.slot.copy(supersetGroup = groups[index]), superset = inSuperset(groups, index))
+        },
+    )
 
     /** [transform] applied to slot [slotId] on screen, ahead of the save and the reload after it ([editMeta]). */
     private fun updateSlot(slotId: Long, transform: (WorkoutExerciseEntity) -> WorkoutExerciseEntity): PendingMeta =

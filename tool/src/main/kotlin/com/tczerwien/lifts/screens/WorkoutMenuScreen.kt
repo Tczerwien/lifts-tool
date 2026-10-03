@@ -71,6 +71,9 @@ sealed interface WorkoutMenuResult {
 
     /** This exercise's rest for its work sets, from its next tick. */
     data class Rest(val sec: Int) : WorkoutMenuResult
+
+    /** Join this exercise to the next one as a superset ([on]), or split them, for this workout only. */
+    data class SupersetWithNext(val on: Boolean) : WorkoutMenuResult
 }
 
 /**
@@ -83,6 +86,8 @@ data class WorkoutMenuContent(
     /** This exercise's work rest as it stands (its own, else Settings' default). */
     val restSec: Int = 0,
     val defaultRestSec: Int = 0,
+    /** Whether this exercise is a superset with the next one; null when it is the last (nothing to join). */
+    val supersetWithNext: Boolean? = null,
     /** "225 lb": the weight the Plate Calculator would open on; null when it can't ([platesUnavailable]). */
     val platesFor: String? = null,
     /** Why there is no Plates for the exercise on screen, e.g. "SET A WEIGHT FIRST". */
@@ -160,6 +165,7 @@ class WorkoutMenuViewModel : LightViewModel<WorkoutMenuResult>() {
 
 /**
  * The Active Workout "…" menu. For the exercise on screen: its note for this workout, its rest,
+ * whether it is a superset with the next exercise (one tap flips it, for this workout only),
  * plates for the weight the active row shows, its details, renaming it, and removing a set or the
  * exercise while nothing in them is logged (a null label greys the row out). For the workout: the
  * exercise list, renaming it, its note, and discarding it (two taps). Notes, the name and the rest
@@ -221,6 +227,17 @@ class WorkoutMenuScreen(
                         title = "Rest",
                         detail = Format.clock(content.restSec) + if (content.restSec == content.defaultRestSec) " · DEFAULT" else "",
                         onClick = { viewModel.editRest(content.restSec) },
+                    )
+                    RowDivider()
+                    // For this workout only: a machine taken splits a pair, a spontaneous pair joins one.
+                    MenuRow(
+                        title = "Superset With Next",
+                        detail = when (content.supersetWithNext) {
+                            true -> "ON"
+                            false -> "OFF"
+                            null -> "LAST EXERCISE"
+                        },
+                        onClick = content.supersetWithNext?.let { on -> { choose(WorkoutMenuResult.SupersetWithNext(!on)) } },
                     )
                     RowDivider()
                     MenuRow(

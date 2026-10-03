@@ -64,7 +64,7 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
  * set grid (PREVIOUS autofill, steppers on the active row, checkbox logging + PR stars),
  * a collapsed next-exercise row, and the rest strip. Top bar: back / name and clock / Finish,
  * which takes two taps and discards a workout with nothing logged. Bottom bar: rest timer / add
- * exercise / "…" (the exercise's note, rest, plates, details, name, removing a set or it; the
+ * exercise / "…" (the exercise's note, rest, superset with the next, plates, details, name, removing a set or it; the
  * workout's exercise list, name, note, discard). The elapsed clock and rest remaining are
  * derived from wall-clock timestamps; each ticks in its own small composable, once a second,
  * and only while the app is in the foreground ([rememberSecondClock]).
@@ -439,6 +439,7 @@ class ActiveWorkoutScreen(
                 is WorkoutMenuResult.WorkoutNote -> viewModel.setWorkoutNotes(result.text)
                 is WorkoutMenuResult.ExerciseNote -> options.slotId?.let { viewModel.setSlotNotes(it, result.text) }
                 is WorkoutMenuResult.Rest -> options.slotId?.let { viewModel.setSlotRest(it, result.sec) }
+                is WorkoutMenuResult.SupersetWithNext -> options.slotId?.let { viewModel.setSupersetWithNext(it, result.on) }
             }
         }
     }
