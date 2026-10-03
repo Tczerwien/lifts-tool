@@ -278,7 +278,9 @@ sealed interface RestNext {
  * while it is an unticked row of [currentSlotId] (the exercise on screen), else the row he is on
  * there ([nextRowOf]: after his last tick, not a warm-up he skipped); once that exercise is done,
  * the row he is on in the next exercise with one unticked, where Active Workout moves on to
- * ([autoAdvanceSlotId]). With no exercise on screen, in [nextPendingSet]'s exercise.
+ * ([autoAdvanceSlotId]). In a superset whose latest tick was on the exercise on screen, the row he
+ * is on in the member whose turn it is ([supersetTurn]: A's set 2 after B's set 1), where Active
+ * Workout moves to. With no exercise on screen, in [nextPendingSet]'s exercise.
  */
 fun restNextContext(
     slots: List<WorkoutExerciseEntity>,
@@ -293,6 +295,10 @@ fun restNextContext(
     fun indexOf(rows: List<SetEntity>, id: Long?) = rows.indexOfFirst { it.id == id && it.completedAt == null }
     val current = slots.firstOrNull { it.id == currentSlotId }
     if (current != null) {
+        turnPassedFrom(slots, sets, current.id)?.let { member ->
+            val memberRows = rowsOf(member.id)
+            return RestNext.Next(member, memberRows, indexOf(memberRows, nextRowOf(memberRows)))
+        }
         val rows = rowsOf(current.id)
         val index = indexOf(rows, activeSetId).takeIf { it >= 0 } ?: indexOf(rows, nextRowOf(rows))
         if (index >= 0) return RestNext.Next(current, rows, index)
@@ -303,4 +309,20 @@ fun restNextContext(
     val next = nextPendingSet(slots, sets) ?: return RestNext.AllDone
     val rows = rowsOf(next.slot.id)
     return RestNext.Next(next.slot, rows, indexOf(rows, nextRowOf(rows)))
+}
+
+/**
+ * The superset member the turn has passed to from [slotId]: the one whose turn it is ([supersetTurn])
+ * when the group's latest tick was on [slotId], so its set is done; null when that is [slotId] itself,
+ * no member has work left, [slotId] is in no superset, or its set is still to come (he has just moved
+ * to it).
+ */
+private fun turnPassedFrom(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>, slotId: Long): WorkoutExerciseEntity? {
+    val members = supersetOf(slots, slotId)
+    if (members.isEmpty()) return null
+    val memberIds = members.mapTo(HashSet()) { it.id }
+    val latest = sets.filter { it.workoutExerciseId in memberIds && it.completedAt != null }
+        .maxWithOrNull(compareBy({ it.completedAt }, { it.id }))
+    if (latest?.workoutExerciseId != slotId) return null
+    return supersetTurn(members, sets, slotId)?.takeIf { it.id != slotId }
 }

@@ -6,7 +6,8 @@ import com.tczerwien.lifts.data.WorkoutExerciseEntity
 /**
  * Moving between the exercises of a workout: what the next-exercise row offers, where Active Workout
  * moves on its own once an exercise is done, and when. The Rest Timer's NEXT line names the same
- * exercise ([restNextContext]). Pure, covered by ExerciseOrderTest.
+ * exercise ([restNextContext]). In a superset all three follow whose turn it is ([supersetTurn],
+ * [afterTick]). Pure, covered by ExerciseOrderTest.
  */
 
 /** With no rest to wait for (a 0 s slot, or Skip), how long an exercise's last tick stays on screen before moving on. */
@@ -88,10 +89,18 @@ fun firstUntickedSlotAfter(slots: List<WorkoutExerciseEntity>, sets: List<SetEnt
 /**
  * The exercise the next-exercise row offers after [currentSlotId]: the first after it with a row
  * still unticked, so finished ones are skipped; when every other one is finished, simply the one
- * after it, so the row still moves on. Null when there is no other exercise.
+ * after it, so the row still moves on. In a superset, the member whose turn comes after this one's
+ * set ([supersetTurn]), as the screen moves to it; once no other member has work left, the first
+ * exercise after the group with a row unticked. Null when there is no other exercise.
  */
-fun nextExerciseSlotId(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>, currentSlotId: Long?): Long? =
-    (firstUntickedSlotAfter(slots, sets, currentSlotId) ?: slotsAfter(slots, currentSlotId).firstOrNull())?.id
+fun nextExerciseSlotId(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>, currentSlotId: Long?): Long? {
+    val members = currentSlotId?.let { supersetOf(slots, it) }.orEmpty()
+    if (members.isNotEmpty()) {
+        supersetTurn(members, sets, currentSlotId!!)?.takeIf { it.id != currentSlotId }?.let { return it.id }
+        slotsAfter(slots, members.last().id).firstOrNull { it.id != currentSlotId && hasUntickedRow(it.id, sets) }?.let { return it.id }
+    }
+    return (firstUntickedSlotAfter(slots, sets, currentSlotId) ?: slotsAfter(slots, currentSlotId).firstOrNull())?.id
+}
 
 /**
  * Where Active Workout moves on its own once every row of the exercise on screen ([currentSlotId])

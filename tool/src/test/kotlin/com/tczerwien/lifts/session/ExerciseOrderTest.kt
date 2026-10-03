@@ -136,8 +136,47 @@ class ExerciseOrderTest {
         assertNull(nextRowOf(rows.map { it.copy(completedAt = 9L) }))
     }
 
-    private fun slot(id: Long, position: Int) =
-        WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position)
+    private fun slot(id: Long, position: Int, group: Int? = null) =
+        WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position, supersetGroup = group)
+
+    // Squat (1), the pair Pushdown (2) and Curl (3), then Calf Raise (4).
+    private val withPair = listOf(slot(1, 0), slot(2, 1, group = 1), slot(3, 2, group = 1), slot(4, 3))
+
+    @Test
+    fun `in a superset the next-exercise row names whose turn is next, then the exercise after the pair`() {
+        val fresh = listOf(row(11, 1), row(21, 2), row(22, 2), row(31, 3), row(32, 3), row(41, 4))
+        assertEquals(2L, nextExerciseSlotId(withPair, fresh, currentSlotId = 1), "before the pair, as before")
+        assertEquals(3L, nextExerciseSlotId(withPair, fresh, currentSlotId = 2), "on Pushdown: Curl")
+        assertEquals(2L, nextExerciseSlotId(withPair, fresh, currentSlotId = 3), "on Curl: back to Pushdown")
+        // Curl finished, Pushdown has a set left: from Pushdown the row goes past the pair.
+        val curlDone = fresh.map { if (it.workoutExerciseId == 3L) it.copy(completedAt = 9L) else it }
+        assertEquals(4L, nextExerciseSlotId(withPair, curlDone, currentSlotId = 2))
+        // Everything but Pushdown finished: the row still moves on, to the slot after it.
+        val restDone = fresh.map { if (it.workoutExerciseId != 2L) it.copy(completedAt = 9L) else it }
+        assertEquals(3L, nextExerciseSlotId(withPair, restDone, currentSlotId = 2))
+    }
+
+    @Test
+    fun `in a superset the Rest Timer's NEXT names the set whose turn it is once this member's is done`() {
+        // A1 then B1 ticked, B on screen with B2 under the steppers: the rest leads back to A2.
+        val afterB1 = listOf(
+            row(21, 2, done = true, at = 10L), row(22, 2), row(23, 2),
+            row(31, 3, done = true, at = 20L), row(32, 3), row(33, 3), row(41, 4),
+        )
+        val back = restNextContext(withPair, afterB1, currentSlotId = 3, activeSetId = 32) as RestNext.Next
+        assertEquals(2L to 22L, back.slot.id to back.rows[back.index].id)
+        // A2 ticked, still on A: NEXT is B2, where the screen goes in 2 s.
+        val afterA2 = afterB1.map { if (it.id == 22L) it.copy(completedAt = 30L) else it }
+        val over = restNextContext(withPair, afterA2, currentSlotId = 2, activeSetId = 23) as RestNext.Next
+        assertEquals(3L to 32L, over.slot.id to over.rows[over.index].id)
+        // Moved to B and B2 not done yet: B2, as on any exercise.
+        val onB = restNextContext(withPair, afterA2, currentSlotId = 3, activeSetId = 32) as RestNext.Next
+        assertEquals(3L to 32L, onB.slot.id to onB.rows[onB.index].id)
+        // The last round closed on B: the exercise after the pair.
+        val pairDone = afterA2.map { if (it.workoutExerciseId in 2L..3L) it.copy(completedAt = it.completedAt ?: 40L) else it }
+        val after = restNextContext(withPair, pairDone, currentSlotId = 3, activeSetId = null) as RestNext.Next
+        assertEquals(4L, after.slot.id)
+    }
 
     private fun row(id: Long, slot: Long, done: Boolean = false, at: Long = 5L) = SetEntity(
         id = id,
