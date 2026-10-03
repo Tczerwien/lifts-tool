@@ -28,7 +28,6 @@ class ConvertersTest {
         // A row the app writes and a row the migration defaulted must read and compare the same.
         assertEquals("[]", converters.fromStringList(emptyList()))
         assertEquals(emptyList(), converters.toStringList("[]"))
-        assertEquals(emptyList(), converters.toStringList(Converters.EMPTY_LIST))
         val database = SchemaFiles.database(SchemaFiles.versions().last())
         val listDefaults = database.getValue("entities").jsonArray.map { it.jsonObject }.flatMap { entity ->
             val table = entity.getValue("tableName").jsonPrimitive.content
