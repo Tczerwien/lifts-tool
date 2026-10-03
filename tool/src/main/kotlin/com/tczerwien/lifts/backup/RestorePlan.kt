@@ -102,17 +102,20 @@ object RestorePlan {
     /**
      * Why Lifts couldn't open or read a file that passed the file checks, as one short line for the
      * Restore screen ([Restorer] logs the failure in full). Room's two schema checks (the tables after
-     * migrating an older file, and the identity hash of a same-version one) dump whole tables into
-     * their messages; the screen says that in a few words instead. Anything else shows its first
-     * line, cut to [MESSAGE_CHARS].
+     * migrating an older file, and the identity hash of a same-version one) word their failures for a
+     * developer, the first one dumping both tables; the screen says it in a few words instead.
+     * Anything else shows its first line, cut to [MESSAGE_CHARS] (never inside an emoji).
      */
     fun unreadable(failure: Throwable): String {
         val message = failure.message.orEmpty()
         if (failure is IllegalStateException && ROOM_SCHEMA_FAILURES.any { message.startsWith(it) }) {
             return "Lifts can't read it (its tables don't match a Lifts log)"
         }
-        val line = message.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: failure.toString()
-        return "Lifts can't read it (${if (line.length > MESSAGE_CHARS) line.take(MESSAGE_CHARS) + "…" else line})"
+        val line = message.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() }
+            ?: failure.toString().substringBefore(':') // its class name (the plugin bans reflection)
+        if (line.length <= MESSAGE_CHARS) return "Lifts can't read it ($line)"
+        val cut = if (line[MESSAGE_CHARS - 1].isHighSurrogate()) MESSAGE_CHARS - 1 else MESSAGE_CHARS
+        return "Lifts can't read it (${line.take(cut)}…)"
     }
 
     /** [summary] as the Restore screen's lines, e.g. "26 workouts · 350 sets". */
