@@ -23,6 +23,7 @@ import com.tczerwien.lifts.session.activeRowAfterTick
 import com.tczerwien.lifts.session.afterTick
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
+import com.tczerwien.lifts.session.inSuperset
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.nextExerciseSlotId
 import com.tczerwien.lifts.session.nextRowOf
@@ -91,6 +92,8 @@ class ActiveWorkoutViewModel(
         val tracking: Tracking = Tracking.WEIGHT_REPS,
         /** Done one side at a time: the count is each side's ("REPS/SIDE"). */
         val perSide: Boolean = false,
+        /** Done in turn with its neighbour ([inSuperset]): the target line says "SUPERSET". */
+        val superset: Boolean = false,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
@@ -100,8 +103,8 @@ class ActiveWorkoutViewModel(
 
         /**
          * The template's target for this slot, "8–12 REPS · RIR 1", and "ADD LOAD" once every work set last
-         * time reached the top of the range, until today's rows start heavier ([progressionHint]); null
-         * without a target, and for a hold.
+         * time reached the top of the range, until today's rows start heavier ([progressionHint]), then
+         * "SUPERSET" in a superset; null with none of these (a hold shows only "SUPERSET").
          */
         val targetLine: String? = targetLine(
             // A hold is seconds: a rep range or RIR (set before its type changed) says nothing about it.
@@ -115,6 +118,7 @@ class ActiveWorkoutViewModel(
                 todayWeightsKg = seeds.filterIndexed { index, _ -> sets[index].type != SET_TYPE_WARMUP }.map { it.weightKg },
             ),
             perSide = perSide,
+            superset = superset,
         )
     }
 
@@ -1157,7 +1161,8 @@ class ActiveWorkoutViewModel(
         applyRefresh(ticket) {
             val sets = overlayPendingEdits(ticket, loadedSets)
             val setsBySlot = sets.groupBy { it.workoutExerciseId }
-            val blocks = slots.map { slot ->
+            val groups = slots.map { it.supersetGroup }
+            val blocks = slots.mapIndexed { index, slot ->
                 val exercise = catalog[slot.exerciseId]
                 val name = exercise?.let { displayName(it) } ?: UNKNOWN_EXERCISE
                 ExerciseBlock(
@@ -1170,6 +1175,7 @@ class ActiveWorkoutViewModel(
                     unit = settings.units,
                     tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS,
                     perSide = exercise?.perSide == true,
+                    superset = inSuperset(groups, index),
                 )
             }
             val prIds = prSetIds(slots, sets, cached.prior, trackingOf(blocks))

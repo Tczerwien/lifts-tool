@@ -91,6 +91,9 @@ class TargetsTest {
         assertEquals("RIR 0", targetLine(null, null, 0))
         assertEquals("10–12 REPS/SIDE · RIR 2", targetLine(10, 12, 2, perSide = true))
         assertNull(targetLine(null, null, null))
+        assertEquals("10–15 REPS · RIR 1 · SUPERSET", targetLine(10, 15, 1, superset = true))
+        assertEquals("8–12 REPS · ADD LOAD · SUPERSET", targetLine(8, 12, null, HINT_ADD_LOAD, superset = true))
+        assertEquals("SUPERSET", targetLine(null, null, null, superset = true), "a superset without a target still says so")
     }
 
     // --- Progression hint ---

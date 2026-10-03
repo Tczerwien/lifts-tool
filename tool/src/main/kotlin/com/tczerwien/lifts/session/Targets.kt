@@ -95,16 +95,28 @@ fun restOverride(restSec: Int, defaultSec: Int): Int? = restSec.coerceAtLeast(0)
 
 /**
  * The Active Workout header's target line: "6–12 REPS · RIR 1" ("REPS/SIDE" on an exercise done one
- * side at a time, [perSide]), with [hint] after it; null when the slot has no target and there is no hint.
+ * side at a time, [perSide]), with [hint] after it, and "SUPERSET" last on an exercise done in turn
+ * with its neighbour ([superset]); null when the slot has none of these.
  */
-fun targetLine(repMin: Int?, repMax: Int?, targetRir: Int?, hint: String? = null, perSide: Boolean = false): String? {
+fun targetLine(
+    repMin: Int?,
+    repMax: Int?,
+    targetRir: Int?,
+    hint: String? = null,
+    perSide: Boolean = false,
+    superset: Boolean = false,
+): String? {
     val parts = listOfNotNull(
         repRangeText(repMin, repMax)?.let { if (perSide) "$it REPS/SIDE" else "$it REPS" },
         targetRir?.let { "RIR $it" },
         hint,
+        SUPERSET_TAG.takeIf { superset },
     )
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
 }
+
+/** The target line's word for an exercise done in turn with its neighbour: shown only on such exercises. */
+const val SUPERSET_TAG = "SUPERSET"
 
 /** The hint once every work set reached the top of the range: more weight, or less help on an assisted lift. */
 const val HINT_ADD_LOAD = "ADD LOAD"
