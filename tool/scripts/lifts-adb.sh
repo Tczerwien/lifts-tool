@@ -6,15 +6,21 @@
 #   lifts-adb.sh push-restore FILE    put FILE in Restore; Home then offers to check and restore it
 #   lifts-adb.sh pull-db [DIR]        copy lifts.db (+ -wal/-shm, so recent writes aren't lost) into DIR
 #   lifts-adb.sh push-db FILE         stop the app and replace its database with FILE (no checks, no
-#                                     pre-restore copy: for test data, never for a real log)
+#                                     pre-restore copy: for test data, never for a real log); says
+#                                     when FILE's schema is newer than the database it replaces
 set -euo pipefail
 
 PKG=com.tczerwien.lifts
 ADB="${ADB:-$(command -v adb || echo "${ANDROID_HOME:-$HOME/Android/Sdk}/platform-tools/adb")}"
 
 usage() {
-  sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
+}
+
+# PRAGMA user_version of the SQLite file on stdin: 4 bytes, big-endian, at offset 60 of its header.
+user_version() {
+  od -An -tu1 -j60 -N4 | awk '{ print $1 * 16777216 + $2 * 65536 + $3 * 256 + $4 }'
 }
 
 run_as() {
@@ -67,6 +73,13 @@ push_restore() {
 push_db() {
   local file="${1:?push-db needs a database file}"
   [ -f "$file" ] || { echo "no such file: $file" >&2; exit 1; }
+  local version on_device
+  version="$(user_version <"$file")"
+  on_device="$(run_as sh -c 'test -f databases/lifts.db && head -c 64 databases/lifts.db' 2>/dev/null | user_version || true)"
+  echo "$(basename "$file"): schema version ${version:-?}; the database it replaces: ${on_device:-none}"
+  if [ -n "$version" ] && [ -n "$on_device" ] && [ "$version" -gt "$on_device" ]; then
+    echo "warning: newer than the app's database: a Lifts older than schema $version can't open it (Room has no downgrade) and crashes at launch" >&2
+  fi
   "$ADB" shell am force-stop "$PKG"
   "$ADB" exec-in run-as "$PKG" sh -c \
     'mkdir -p databases && rm -f databases/lifts.db-wal databases/lifts.db-shm && cat > databases/lifts.db' <"$file"
