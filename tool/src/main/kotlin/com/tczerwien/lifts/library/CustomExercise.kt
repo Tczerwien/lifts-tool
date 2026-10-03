@@ -3,6 +3,7 @@ package com.tczerwien.lifts.library
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.seed.SeedParser
+import com.tczerwien.lifts.session.settledTemplateRows
 
 /**
  * Rules for the exercises he makes himself: how a new one is measured until he says otherwise, and
@@ -39,18 +40,18 @@ enum class Removal {
 /** [Removal] for a custom exercise some workout refers to ([inWorkouts]) or none. */
 fun removalFor(inWorkouts: Boolean): Removal = if (inWorkouts) Removal.HIDE else Removal.DELETE
 
-/** Taking an exercise out of templates: the rows to delete, and the rows left with their new positions. */
-data class TemplateRemoval(val deleteIds: List<Long>, val moves: List<Pair<TemplateExerciseEntity, Int>>)
+/** Taking an exercise out of templates: the rows to delete, and the rows left as they must now be stored. */
+data class TemplateRemoval(val deleteIds: List<Long>, val updates: List<TemplateExerciseEntity>)
 
 /**
  * [exerciseId] out of the templates [rows] come from (every row of each, any order): its rows go, and
- * each template's other exercises close up to positions 0..n-1 in the order they had ([renumber]).
- * A template left with nothing stays, empty.
+ * each template's other exercises close up to positions 0..n-1 in the order they had, a superset it
+ * leaves with one exercise becoming plain ([settledTemplateRows]). A template left with nothing stays, empty.
  */
 fun withoutExercise(rows: List<TemplateExerciseEntity>, exerciseId: String): TemplateRemoval {
     val (removed, kept) = rows.partition { it.exerciseId == exerciseId }
-    val moves = kept.groupBy { it.templateId }.values.flatMap { template ->
-        renumber(template.sortedWith(compareBy({ it.position }, { it.id }))) { it.position }
+    val updates = kept.groupBy { it.templateId }.values.flatMap { template ->
+        settledTemplateRows(template.sortedWith(compareBy({ it.position }, { it.id })))
     }
-    return TemplateRemoval(removed.map { it.id }, moves)
+    return TemplateRemoval(removed.map { it.id }, updates)
 }

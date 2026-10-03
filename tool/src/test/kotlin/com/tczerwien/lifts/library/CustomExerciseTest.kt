@@ -46,9 +46,24 @@ class CustomExerciseTest {
         )
         val out = withoutExercise(rows.shuffled(kotlin.random.Random(3)), "y-raise")
         assertEquals(listOf(2L, 4L, 6L, 8L), out.deleteIds.sorted(), "twice in one template: both rows go")
-        val moved = out.moves.associate { (row, position) -> row.id to position }
+        val moved = out.updates.associate { it.id to it.position }
         assertEquals(mapOf(3L to 1, 5L to 2, 7L to 0), moved, "positions 0..n-1 in each template, in the order they had")
         assertEquals(null, moved[1L], "a row already in place isn't written")
+    }
+
+    @Test
+    fun `a removed exercise's superset partner is left plain, and another superset whole`() {
+        val rows = listOf(
+            row(1, templateId = 1, "y-raise", 0).copy(supersetGroup = 1),
+            row(2, templateId = 1, "curl", 1).copy(supersetGroup = 1),
+            row(3, templateId = 1, "pushdown", 2).copy(supersetGroup = 2),
+            row(4, templateId = 1, "fly", 3).copy(supersetGroup = 2),
+        )
+        val out = withoutExercise(rows, "y-raise")
+        assertEquals(
+            listOf(Triple(2L, 0, null), Triple(3L, 1, 2), Triple(4L, 2, 2)),
+            out.updates.map { Triple(it.id, it.position, it.supersetGroup) },
+        )
     }
 
     @Test

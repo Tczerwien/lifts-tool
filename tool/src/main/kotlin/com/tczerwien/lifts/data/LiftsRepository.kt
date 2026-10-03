@@ -119,8 +119,8 @@ class LiftsRepository private constructor(
     }
 
     /**
-     * Removes custom exercise [id]: first out of every template, the rest of each closing up
-     * ([withoutExercise]), then deleted when no workout refers to it, else hidden from the picker so
+     * Removes custom exercise [id]: first out of every template, the rest of each closing up and a
+     * superset it was in left whole or plain ([withoutExercise]), then deleted when no workout refers to it, else hidden from the picker so
      * history keeps it ([removalFor]). One transaction, so a workout can't start using it between the
      * check and the delete. Null when it isn't a custom exercise.
      */
@@ -129,7 +129,7 @@ class LiftsRepository private constructor(
         val rows = db.templateDao.templateIdsWith(id).flatMap { db.templateDao.exercisesForTemplate(it) }
         val out = withoutExercise(rows, id)
         out.deleteIds.forEach { db.templateDao.deleteTemplateExercise(it) }
-        out.moves.forEach { (row, position) -> db.templateDao.updateTemplateExercise(row.copy(position = position)) }
+        out.updates.forEach { db.templateDao.updateTemplateExercise(it) }
         when (removalFor(inWorkouts = db.exerciseDao.inWorkouts(id))) {
             Removal.HIDE -> Removal.HIDE.also { db.exerciseDao.setHidden(id, true) }
             Removal.DELETE -> Removal.DELETE.also { db.exerciseDao.deleteCustom(id) }

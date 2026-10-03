@@ -22,8 +22,7 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
-import com.tczerwien.lifts.library.renumber
-import com.tczerwien.lifts.library.reorderPositions
+import com.tczerwien.lifts.library.moved
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.MAX_REST_SEC
 import com.tczerwien.lifts.session.MAX_RIR
@@ -34,6 +33,7 @@ import com.tczerwien.lifts.session.MIN_TEMPLATE_SETS
 import com.tczerwien.lifts.session.RepRange
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.restOverride
+import com.tczerwien.lifts.session.settledTemplateRows
 import com.tczerwien.lifts.session.stepRepMax
 import com.tczerwien.lifts.session.stepRepMin
 import com.tczerwien.lifts.session.stepTargetRir
@@ -233,9 +233,11 @@ class TemplateEditorViewModel(
     private var lastMoveAt: Long? = null
 
     /**
-     * Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1 ([reorderPositions]).
-     * A tap within [isDoubleTap] of the last move is its double tap or bounce, aimed at the row that was
-     * there: it would move the other exercise (undoing the move), so it is dropped.
+     * Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1, and a superset
+     * member moved away from its partner leaves both plain ([settledTemplateRows]): one tap on "Superset
+     * With Next" joins them again. A tap within [isDoubleTap] of the last move is its double tap or
+     * bounce, aimed at the row that was there: it would move the other exercise (undoing the move), so
+     * it is dropped.
      */
     fun moveExercise(templateExerciseId: Long, delta: Int) {
         val now = System.currentTimeMillis()
@@ -244,13 +246,8 @@ class TemplateEditorViewModel(
         disarm()
         mutate {
             val exercises = repository.exercisesForTemplate(templateId)
-            val index = exercises.indexOfFirst { it.id == templateExerciseId }
-            val moves = reorderPositions(exercises, index, delta) { it.position } ?: return@mutate false
-            repository.inTransaction {
-                moves.forEach { (exercise, position) ->
-                    repository.updateTemplateExercise(exercise.copy(position = position))
-                }
-            }
+            val order = moved(exercises, exercises.indexOfFirst { it.id == templateExerciseId }, delta) ?: return@mutate false
+            repository.inTransaction { settledTemplateRows(order).forEach { repository.updateTemplateExercise(it) } }
             true
         }
     }
@@ -319,9 +316,8 @@ class TemplateEditorViewModel(
         mutate {
             repository.inTransaction {
                 val deleted = repository.deleteTemplateExercise(mode.templateExerciseId)
-                renumber(repository.exercisesForTemplate(templateId)) { it.position }.forEach { (exercise, position) ->
-                    repository.updateTemplateExercise(exercise.copy(position = position))
-                }
+                // The rest close up; a superset left with one exercise is none.
+                settledTemplateRows(repository.exercisesForTemplate(templateId)).forEach { repository.updateTemplateExercise(it) }
                 deleted
             }
         }

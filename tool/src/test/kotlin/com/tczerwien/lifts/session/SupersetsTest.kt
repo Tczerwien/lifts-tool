@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -187,7 +188,30 @@ class SupersetsTest {
         assertEquals(listOf(null, null), supersetNumbers(listOf(4, null)))
     }
 
+    @Test
+    fun `a template's rows settle to positions 0 to n-1 with whole supersets, writing only what changed`() {
+        // Row, then the pair Pushdown and Curl, then Calf Raise; Curl moved down past Calf Raise.
+        val rows = listOf(templateRow(1, 0), templateRow(2, 1, group = 1), templateRow(3, 2, group = 1), templateRow(4, 3))
+        val curlDown = listOf(rows[0], rows[1], rows[3], rows[2])
+        assertEquals(
+            listOf(Triple(2L, 1, null), Triple(4L, 2, null), Triple(3L, 3, null)),
+            settledTemplateRows(curlDown).map { Triple(it.id, it.position, it.supersetGroup) },
+            "moving a member away leaves both plain",
+        )
+        val swapped = listOf(rows[0], rows[2], rows[1], rows[3])
+        assertEquals(
+            listOf(Triple(3L, 1, 1), Triple(2L, 2, 1)),
+            settledTemplateRows(swapped).map { Triple(it.id, it.position, it.supersetGroup) },
+            "the pair swapped within itself stays a pair",
+        )
+        assertEquals(emptyList(), settledTemplateRows(rows), "nothing to write")
+    }
+
     // --- Helpers ---
+
+    private fun templateRow(id: Long, position: Int, group: Int? = null) = TemplateExerciseEntity(
+        id = id, templateId = 1, exerciseId = "ex$id", position = position, targetSets = 3, supersetGroup = group,
+    )
 
     private fun slot(id: Long, position: Int, group: Int? = null) =
         WorkoutExerciseEntity(id = id, workoutId = 1, exerciseId = "ex$id", position = position, supersetGroup = group)

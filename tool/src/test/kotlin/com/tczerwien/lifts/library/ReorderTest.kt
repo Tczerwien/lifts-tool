@@ -34,6 +34,12 @@ class ReorderTest {
     }
 
     @Test
+    fun `moved gives the whole list in its new order, or null when the item can't move`() {
+        assertEquals(listOf("a", "c", "b"), moved(rows, index = 1, delta = 1)?.map { it.id })
+        assertNull(moved(rows, index = 2, delta = 1))
+    }
+
+    @Test
     fun `renumber closes the gap a removal leaves`() {
         val afterRemoval = listOf(Row("a", 0), Row("c", 2), Row("d", 3))
         assertEquals(listOf("c" to 1, "d" to 2), renumber(afterRemoval) { it.position }.map { (row, p) -> row.id to p })

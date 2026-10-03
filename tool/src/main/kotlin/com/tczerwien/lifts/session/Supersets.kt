@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.TemplateExerciseEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 
 /**
@@ -112,6 +113,18 @@ fun supersetNumbers(groups: List<Int?>): List<Int?> {
     val starts = runShape(groups)
     val numbers = HashMap<Int, Int>()
     return starts.map { start -> start?.let { numbers.getOrPut(it) { numbers.size + 1 } } }
+}
+
+/**
+ * A template's rows in their new order ([ordered]: after a move or a removal) as they must be stored:
+ * positions 0..n-1, and supersets whole ([normalizeGroups]: a member moved away from its partner leaves
+ * both plain). Only the rows that change, so a move writes two rows, or a few more when it splits a pair.
+ */
+fun settledTemplateRows(ordered: List<TemplateExerciseEntity>): List<TemplateExerciseEntity> {
+    val groups = normalizeGroups(ordered.map { it.supersetGroup })
+    return ordered.mapIndexedNotNull { index, row ->
+        row.copy(position = index, supersetGroup = groups[index]).takeIf { it != row }
+    }
 }
 
 /** [PlannedSlot]s with their groups normalised among themselves ([normalizeGroups]): after leaving slots out. */
