@@ -216,6 +216,19 @@ class SupersetsTest {
         assertEquals(emptyList(), settledTemplateRows(rows), "nothing to write")
     }
 
+    @Test
+    fun `an arrow tap moves a plain exercise past a whole superset, and a member one place`() {
+        // Squat, the pair (1, 2), Calf Raise.
+        val groups = listOf(null, 4, 4, null)
+        assertEquals(2, moveTarget(groups, 0, +1), "Squat down: past the pair, not between the two")
+        assertEquals(1, moveTarget(groups, 3, -1), "Calf Raise up: before the pair")
+        assertEquals(2, moveTarget(groups, 1, +1), "a member swaps within its pair")
+        assertEquals(3, moveTarget(groups, 2, +1), "a member moves out (and leaves the pair)")
+        assertEquals(0, moveTarget(groups, 1, -1))
+        assertEquals(4, moveTarget(groups, 3, +1), "off the end: no move (moved refuses it)")
+        assertEquals(3, moveTarget(listOf(4, 4, 7, 7), 1, +1), "a member moving out past another pair")
+    }
+
     // --- Helpers ---
 
     private fun templateRow(id: Long, position: Int, group: Int? = null) = TemplateExerciseEntity(

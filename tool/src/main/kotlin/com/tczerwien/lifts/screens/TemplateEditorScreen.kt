@@ -38,6 +38,7 @@ import com.tczerwien.lifts.session.RepRange
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.linkWithNext
 import com.tczerwien.lifts.session.linkedWithNext
+import com.tczerwien.lifts.session.moveTarget
 import com.tczerwien.lifts.session.restOverride
 import com.tczerwien.lifts.session.settledTemplateRows
 import com.tczerwien.lifts.session.stepRepMax
@@ -251,11 +252,12 @@ class TemplateEditorViewModel(
     private var lastMoveAt: Long? = null
 
     /**
-     * Swaps the exercise with its neighbor ([delta] = ±1); positions come out 0..n-1, and a superset
-     * member moved away from its partner leaves both plain ([settledTemplateRows]): one tap on "Superset
-     * With Next" joins them again. A tap within [isDoubleTap] of the last move is its double tap or
-     * bounce, aimed at the row that was there: it would move the other exercise (undoing the move), so
-     * it is dropped.
+     * Moves the exercise one place ([delta] = ±1), or past the whole superset there when it isn't in it
+     * ([moveTarget]: a pair is never split by an exercise moved through it); positions come out 0..n-1,
+     * and a superset member moved away from its partner leaves both plain ([settledTemplateRows]): one
+     * tap on "Superset With Next" joins them again. A tap within [isDoubleTap] of the last move is its
+     * double tap or bounce, aimed at the row that was there: it would move the other exercise (undoing
+     * the move), so it is dropped.
      */
     fun moveExercise(templateExerciseId: Long, delta: Int) {
         val now = System.currentTimeMillis()
@@ -264,7 +266,9 @@ class TemplateEditorViewModel(
         disarm()
         mutate {
             val exercises = repository.exercisesForTemplate(templateId)
-            val order = moved(exercises, exercises.indexOfFirst { it.id == templateExerciseId }, delta) ?: return@mutate false
+            val index = exercises.indexOfFirst { it.id == templateExerciseId }
+            val target = moveTarget(exercises.map { it.supersetGroup }, index, delta)
+            val order = moved(exercises, index, target - index) ?: return@mutate false
             repository.inTransaction { settledTemplateRows(order).forEach { repository.updateTemplateExercise(it) } }
             true
         }

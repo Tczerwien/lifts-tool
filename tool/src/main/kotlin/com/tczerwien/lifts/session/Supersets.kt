@@ -116,6 +116,22 @@ fun supersetNumbers(groups: List<Int?>): List<Int?> {
 }
 
 /**
+ * Where one arrow tap ([delta] ±1) moves row [index] of [groups] (a template's groups in position
+ * order): the next place, or past the whole superset there when the row isn't in it, so a plain
+ * exercise moved past a pair doesn't land between the two and split them. A member moving within or
+ * out of its own superset moves one place (out of it, it leaves: [normalizeGroups]).
+ */
+fun moveTarget(groups: List<Int?>, index: Int, delta: Int): Int {
+    val next = index + delta
+    val run = supersetRun(groups, next) ?: return next
+    return when {
+        index in run -> next
+        delta > 0 -> run.last
+        else -> run.first
+    }
+}
+
+/**
  * A template's rows in their new order ([ordered]: after a move or a removal) as they must be stored:
  * positions 0..n-1, and supersets whole ([normalizeGroups]: a member moved away from its partner leaves
  * both plain). Only the rows that change, so a move writes two rows, or a few more when it splits a pair.
