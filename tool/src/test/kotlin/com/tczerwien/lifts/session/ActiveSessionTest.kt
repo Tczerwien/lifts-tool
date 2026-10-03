@@ -736,6 +736,51 @@ class ActiveSessionTest {
         assertEquals(600_000L, store.workoutById(stale)?.endedAt)
     }
 
+    // --- Version 2's columns ---
+
+    @Test
+    fun `version 2's columns ride along unchanged through a whole workout`() {
+        // Set as the v2 features will set them; nothing reads them yet, and no write may drop them.
+        store.exercises["bench"] = store.exercises.getValue("bench").copy(countsFor = listOf("chest", "triceps"))
+        val template = store.addTemplate("Upper A", "fly" to 2, "bench" to 2, "curl" to 2)
+        store.exercisesForTemplate(template).forEach {
+            store.templateExercises[it.id] = it.copy(supersetGroup = 1, alternatives = listOf("row"), targetRirMax = 2)
+        }
+        val templateRows = store.exercisesForTemplate(template)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        store.workouts[workoutId] = store.workoutById(workoutId)!!.copy(deload = true)
+        store.exercisesForWorkout(workoutId).forEach {
+            store.slots[it.id] = it.copy(supersetGroup = 7, choices = listOf(it.exerciseId, "row"), targetSets = 2, targetRirMax = 2)
+        }
+        val (fly, bench, curl) = store.exercisesForWorkout(workoutId)
+
+        session.completeSet(workoutId, rowsOf(bench).first(), 60.0, 8, n, now = 1_060_000)
+        session.addSet(workoutId, bench.id)
+        session.removeSet(workoutId, rowsOf(bench).last().id)
+        session.setSlotNotes(workoutId, bench.id, "Pause at the chest")
+        session.setSlotRest(workoutId, bench.id, 120)
+        session.renameWorkout(workoutId, "Push")
+        session.setWorkoutNotes(workoutId, "Felt strong")
+        assertTrue(session.removeExercise(workoutId, fly.id), "the rest renumber")
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        assertTrue(session.reopenWorkout(workoutId, now = 1_300_000))
+        assertTrue(session.closeIfStale(workoutId, now = 1_060_000 + 10 * 3_600_000L), "closed at its last set")
+
+        val workout = store.workoutById(workoutId)!!
+        assertEquals(listOf("Push", "Felt strong", 1_060_000L, true), listOf(workout.name, workout.notes, workout.endedAt, workout.deload))
+        val slots = store.exercisesForWorkout(workoutId)
+        assertEquals(listOf(bench.id to 0, curl.id to 1), slots.map { it.id to it.position })
+        for (slot in slots) {
+            assertEquals(
+                listOf(7, listOf(slot.exerciseId, "row"), 2, 2),
+                listOf(slot.supersetGroup, slot.choices, slot.targetSets, slot.targetRirMax),
+                "slot ${slot.exerciseId}",
+            )
+        }
+        assertEquals(templateRows, store.exercisesForTemplate(template), "a workout never writes its template")
+        assertEquals(listOf("chest", "triceps"), store.exerciseById("bench")!!.countsFor)
+    }
+
     private fun rowsOf(slot: WorkoutExerciseEntity): List<SetEntity> =
         store.setsForWorkout(slot.workoutId).filter { it.workoutExerciseId == slot.id }
 }
