@@ -763,6 +763,71 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `in a superset the first member's tick starts no rest, and the round's last starts its own`() {
+        val template = store.addTemplate("Arms", "fly" to 2, "curl" to 2, "row" to 2)
+        val (flyRow, curlRow) = store.exercisesForTemplate(template)
+        store.templateExercises[flyRow.id] = flyRow.copy(supersetGroup = 1, restSecWork = 75)
+        store.templateExercises[curlRow.id] = curlRow.copy(supersetGroup = 1, restSecWork = 90)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (fly, curl, row) = store.exercisesForWorkout(workoutId)
+        // A rest left from before the pair: the first member's tick ends it, as a 0 s slot's does.
+        runBlocking { session.startRest(120, now = 1_000_000) }
+
+        val a1 = assertNotNull(session.completeSet(workoutId, rowsOf(fly)[0], 20.0, 12, n, now = 1_010_000))
+        assertEquals(0 to null, a1.restDurationSec to a1.restEndMillis)
+        assertNull(session.restStateSnapshot(), "no rest and no beep between the two")
+        val b1 = assertNotNull(session.completeSet(workoutId, rowsOf(curl)[0], 12.0, 10, n, now = 1_040_000))
+        assertEquals(90 to 1_130_000L, b1.restDurationSec to b1.restEndMillis, "the curl's own rest, after the round")
+        assertEquals(1_130_000L, session.restStateSnapshot()?.endMillis)
+        // A plain slot after the pair rests as always (Settings' default here).
+        assertEquals(
+            SettingsStore.DEFAULT_REST_SEC_VALUE,
+            session.completeSet(workoutId, rowsOf(row)[0], 40.0, 10, n, now = 1_200_000)!!.restDurationSec,
+        )
+    }
+
+    @Test
+    fun `removing a member leaves its partner plain, and another superset keeps its own`() {
+        val template = store.addTemplate("Arms", "fly" to 2, "curl" to 2, "row" to 2, "bench" to 2)
+        store.exercisesForTemplate(template).forEachIndexed { index, it ->
+            store.templateExercises[it.id] = it.copy(supersetGroup = if (index < 2) 1 else 2)
+        }
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val curl = store.exercisesForWorkout(workoutId)[1]
+        assertTrue(session.removeExercise(workoutId, curl.id))
+        assertEquals(
+            listOf("fly" to null, "row" to 2, "bench" to 2),
+            store.exercisesForWorkout(workoutId).map { it.exerciseId to it.supersetGroup },
+        )
+    }
+
+    @Test
+    fun `Superset With Next joins and splits this workout's exercises only, until it closes`() {
+        val template = store.addTemplate("Legs", "squat" to 2, "curl" to 2, "row" to 2)
+        val templateRows = store.exercisesForTemplate(template)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (squat, curl, row) = store.exercisesForWorkout(workoutId)
+        // As the exports number them: the grouping, whatever numbers it is stored with.
+        fun groups() = supersetNumbers(store.exercisesForWorkout(workoutId).map { it.supersetGroup })
+
+        assertTrue(session.setSupersetWithNext(workoutId, curl.id, on = true))
+        assertEquals(listOf(null, 1, 1), groups())
+        assertFalse(session.setSupersetWithNext(workoutId, curl.id, on = true), "already joined")
+        assertFalse(session.setSupersetWithNext(workoutId, row.id, on = true), "the last has no next")
+        assertFalse(session.discardIfUntouched(workoutId), "joined for today: Back keeps it")
+        assertTrue(session.setSupersetWithNext(workoutId, squat.id, on = true), "joins the pair: three in turn")
+        assertEquals(listOf(1, 1, 1), groups())
+        assertTrue(session.setSupersetWithNext(workoutId, squat.id, on = false))
+        assertEquals(listOf(null, 1, 1), groups())
+        assertEquals(templateRows, store.exercisesForTemplate(template), "the template never changes")
+
+        session.completeSet(workoutId, rowsOf(squat)[0], 100.0, 5, n, now = 1_060_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        assertFalse(session.setSupersetWithNext(workoutId, curl.id, on = false), "closed: refused")
+        assertEquals(listOf(null, 1, 1), groups())
+    }
+
+    @Test
     fun `Start Again drops a superset whose partner wasn't done that day`() {
         val template = store.addTemplate("Arms", "fly" to 2, "curl" to 2, "row" to 2)
         store.exercisesForTemplate(template).take(2).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1) }

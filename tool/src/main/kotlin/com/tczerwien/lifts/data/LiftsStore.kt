@@ -47,6 +47,9 @@ interface LiftsStore {
     /** Writes one slot's work rest (null follows Settings' default). */
     fun updateSlotRest(id: Long, restSecWork: Int?): Boolean
 
+    /** Writes one slot's superset group (null: in none). */
+    fun updateSlotGroup(id: Long, supersetGroup: Int?): Boolean
+
     /** A workout's slots in position order. */
     fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity>
 

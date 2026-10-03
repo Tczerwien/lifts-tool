@@ -120,6 +120,10 @@ interface WorkoutDao {
     @Query("UPDATE workout_exercises SET restSecWork = :restSecWork WHERE id = :id")
     fun updateSlotRest(id: Long, restSecWork: Int?): Int
 
+    /** One slot's superset group, alone: nothing else of the slot is written. */
+    @Query("UPDATE workout_exercises SET supersetGroup = :supersetGroup WHERE id = :id")
+    fun updateSlotGroup(id: Long, supersetGroup: Int?): Int
+
     @Query("SELECT * FROM sets WHERE id = :id")
     fun setById(id: Long): SetEntity?
 

@@ -102,6 +102,12 @@ class InMemoryLiftsStore : LiftsStore {
         return true
     }
 
+    override fun updateSlotGroup(id: Long, supersetGroup: Int?): Boolean {
+        val slot = slots[id] ?: return false
+        slots[id] = slot.copy(supersetGroup = supersetGroup)
+        return true
+    }
+
     override fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
         slots.values.filter { it.workoutId == workoutId }.sortedBy { it.position }
 

@@ -263,13 +263,39 @@ class ActiveSession(
         set.completedAt == null && repository.deleteSet(setId)
     }
 
-    /** Removes an exercise slot with its sets, only while none of them is logged and the workout is open. */
+    /**
+     * Removes an exercise slot with its sets, only while none of them is logged and the workout is open.
+     * A superset it leaves with one slot is none ([regroup]).
+     */
     fun removeExercise(workoutId: Long, workoutExerciseId: Long): Boolean = repository.inTransaction {
         if (!isOpen(workoutId)) return@inTransaction false
         val logged = repository.setsForWorkout(workoutId)
             .any { it.workoutExerciseId == workoutExerciseId && it.completedAt != null }
-        !logged && repository.deleteSlot(workoutExerciseId)
+        (!logged && repository.deleteSlot(workoutExerciseId)).also { removed -> if (removed) regroup(workoutId) }
     }
+
+    /**
+     * "Superset With Next" for slot [slotId] of the open workout, for this workout only ([linkWithNext]):
+     * [on] joins it to the exercise after it, off splits them. Its template is never written. False,
+     * changing nothing, when the workout has closed, the slot is gone or last, or it already was so.
+     */
+    fun setSupersetWithNext(workoutId: Long, slotId: Long, on: Boolean): Boolean = repository.inTransaction {
+        if (!isOpen(workoutId)) return@inTransaction false
+        val slots = repository.exercisesForWorkout(workoutId)
+        val index = slots.indexOfFirst { it.id == slotId }
+        if (index < 0) return@inTransaction false
+        writeGroups(slots, linkWithNext(slots.map { it.supersetGroup }, index, on))
+    }
+
+    /** Keeps [workoutId]'s supersets whole after a removal ([normalizeGroups]). Call inside a transaction. */
+    private fun regroup(workoutId: Long) {
+        val slots = repository.exercisesForWorkout(workoutId)
+        writeGroups(slots, normalizeGroups(slots.map { it.supersetGroup }))
+    }
+
+    /** Writes [groups] onto [slots] (both in position order) where they differ; true when any did. */
+    private fun writeGroups(slots: List<WorkoutExerciseEntity>, groups: List<Int?>): Boolean =
+        slots.zip(groups).count { (slot, group) -> slot.supersetGroup != group && repository.updateSlotGroup(slot.id, group) } > 0
 
     // --- The "…" menu's edits (all refused once the workout has closed) ---
 
@@ -319,8 +345,9 @@ class ActiveSession(
     fun uncompleteSet(workoutId: Long, set: SetEntity): Boolean = updateSet(workoutId, set.copy(completedAt = null))
 
     /**
-     * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null when no
-     * rest started because the slot rests 0 s. (A workout that has ended logs nothing: [completeSet] is null.)
+     * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null (and
+     * [restDurationSec] 0) when no rest started: the slot rests 0 s, or a superset's turn passed to a
+     * later member. (A workout that has ended logs nothing: [completeSet] is null.)
      */
     data class SetCompletion(
         val set: SetEntity,
@@ -333,7 +360,9 @@ class ActiveSession(
      * has it), selects the rest duration (exercise
      * override else settings default; warm-up pair for warm-up sets), and persists the rest
      * end timestamp — the DataStore keys are written on set completion, as the timer contract
-     * requires. PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
+     * requires. In a superset a work tick that hands the turn to a later member starts no rest and
+     * ends any other ([afterTick]); only then are the workout's sets read, so a plain tick costs no
+     * more than before. PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
      * starting no rest, when the workout has closed (a tick queued behind a stale close) or the
      * set is gone.
      */
@@ -360,12 +389,13 @@ class ActiveSession(
             warmupRestSec = snapshot.warmupRestSec,
         )
         // The workout is open: the write above checked, and nothing else writes between (one lane).
-        // A slot that rests 0 s (a superset's first half) means no rest: the tick still ends any other.
-        val rests = restSec > 0
+        // A slot that rests 0 s, or a superset's turn passing on, means no rest: the tick still ends any other.
+        val rests = restSec > 0 &&
+            (slot?.supersetGroup == null || afterTick(slots, repository.setsForWorkout(workoutId), slot.id, type).startsRest)
         runBlocking { if (rests) startRest(restSec, now) else clearRest() }
         return SetCompletion(
             set = completed,
-            restDurationSec = restSec,
+            restDurationSec = if (rests) restSec else 0,
             restEndMillis = if (rests) now + restSec * 1000L else null,
         )
     }
