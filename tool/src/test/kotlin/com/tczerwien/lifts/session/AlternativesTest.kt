@@ -44,6 +44,11 @@ class AlternativesTest {
     }
 
     @Test
+    fun `a choice listed twice is one choice`() {
+        assertEquals("squat", swapTarget(listOf("squat", "press", "press"), "press", rows(), { true }), "not to itself")
+    }
+
+    @Test
     fun `the slot on screen is a choice even when it couldn't be picked now`() {
         // A main he hid since: the slot started on it, and the swap still leaves it for the next.
         assertEquals("press", swapTarget(listOf("hidden", "press"), "hidden", rows(), { it != "hidden" }))

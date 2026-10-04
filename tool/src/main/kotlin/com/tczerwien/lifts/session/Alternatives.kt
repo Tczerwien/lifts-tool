@@ -47,7 +47,8 @@ fun nextChoice(choices: List<String>, current: String): String? {
  */
 fun swapTarget(choices: List<String>, current: String, rows: List<SetEntity>, usable: (String) -> Boolean): String? {
     if (rows.any { it.completedAt != null }) return null
-    return nextChoice(choices.filter { it == current || usable(it) }, current)
+    // Each once: a choice listed twice (a restored log) would swap to itself.
+    return nextChoice(choices.distinct().filter { it == current || usable(it) }, current)
 }
 
 /**
