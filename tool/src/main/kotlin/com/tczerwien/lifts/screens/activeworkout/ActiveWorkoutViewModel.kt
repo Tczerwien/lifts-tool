@@ -12,6 +12,7 @@ import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.screens.WorkoutMenuContent
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
+import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.DEFAULT_DELOAD_RIR
 import com.tczerwien.lifts.session.DURATION_STEP_SEC
 import com.tczerwien.lifts.session.HistoryCache
@@ -43,6 +44,7 @@ import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.shownRir
+import com.tczerwien.lifts.session.swapTarget
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
 import com.tczerwien.lifts.session.targetLine
 import com.tczerwien.lifts.settings.SettingsStore
@@ -105,12 +107,17 @@ class ActiveWorkoutViewModel(
         val deload: Boolean = false,
         /** The RIR a deload aims for (Settings), shown instead of the slot's own target. */
         val deloadRir: RirTarget = DEFAULT_DELOAD_RIR,
+        /** The slot's choices still in the picker, and the one it does: what the swap cycles through ([swapTarget]). */
+        val choices: List<String> = emptyList(),
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
 
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
         val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking)
+
+        /** The exercise the swap icon changes it to ([swapTarget]); null, no icon, without one or once a row is ticked. */
+        val swapTo: String? = swapTarget(choices, slot.exerciseId, sets) { true }
 
         /**
          * The RIR this slot aims for, one number or a range ([rirTarget]); in a deload, the deload's
@@ -364,21 +371,22 @@ class ActiveWorkoutViewModel(
 
     /**
      * Whether a tap on the rows at [now] was aimed at rows that have since moved under his finger, or that a
-     * deload switch still on its way may yet delete ([rowsChanging]).
+     * deload switch or a swap still on its way may yet delete or empty ([rowsChanging]).
      */
     private fun rowsJustMoved(now: Long): Boolean =
         tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true || rowsChanging.get() > 0
 
     /**
-     * Deload switches waiting on the lane or for their reload ([setDeload]): until one lands, a tick on a row
-     * it deletes would show, then vanish with no rest, and a value stepped onto it would go with it (the lane
-     * can be held for seconds by a backup).
+     * Deload switches ([setDeload]) and swaps ([swapExercise]) waiting on the lane or for their reload: until one
+     * lands, a tick on a row a switch deletes would show, then vanish with no rest, and a value stepped onto a
+     * row would go with it, or be the other lift's on a row a swap empties (the lane can be held for seconds by
+     * a backup).
      */
     private val rowsChanging = AtomicInteger()
 
     /**
      * [beginAction] for the steppers and the weight's keyboard, which change the active row: not while a deload
-     * switch is on its way ([rowsChanging]), as for a tap on the rows.
+     * switch or swap is on its way ([rowsChanging]), as for a tap on the rows.
      */
     private fun beginStep(): Boolean = rowsChanging.get() == 0 && beginAction()
 
@@ -1028,6 +1036,33 @@ class ActiveWorkoutViewModel(
         }
     }
 
+    /** The swap icon's taps: a double tap or a bounce would swap twice, past the choice he wanted. */
+    private val swapTaps = BounceGuard()
+
+    /**
+     * The swap icon on exercise [slotId] (ALT-3): it does the next of its choices ([ExerciseBlock.swapTo]) for
+     * this workout only ([ActiveSession.swapExercise]), with that lift's PREVIOUS and starting values once the
+     * save's reload lands. The rows change under his finger only then, so the rows and steppers ignore taps
+     * until it lands ([rowsChanging]) and the rows a moment after ([rowsMovedUnderFinger]). The icon sits in
+     * the same place on every exercise, so like a tap on the rows it is dropped in the second after the
+     * screen moved on by itself ([beginRowAction]): it was aimed at the exercise before.
+     */
+    fun swapExercise(slotId: Long) {
+        if (!swapTaps.take() || !beginRowAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        val block = _uiState.value.exercises.firstOrNull { it.slot.id == slotId } ?: return
+        val to = block.swapTo ?: return
+        rowsMovedUnderFinger()
+        rowsChanging.incrementAndGet()
+        LiftsIo.write({ session.swapExercise(workoutId, slotId, to) }) { swapped ->
+            // Its rows' values were the other lift's and are gone: a reload must not put back any still pending.
+            if (swapped) synchronized(refreshLock) { pendingEdits.keys.removeAll(block.sets.mapTo(HashSet()) { it.id }) }
+            refresh()
+            rowsMovedUnderFinger()
+            rowsChanging.decrementAndGet()
+        }
+    }
+
     /** [state] as a deload ([on]) or not: the flag and every exercise's target line. */
     private fun withDeload(state: UiState, on: Boolean): UiState =
         state.copy(deload = on, exercises = state.exercises.map { if (it.deload == on) it else it.copy(deload = on) })
@@ -1235,7 +1270,8 @@ class ActiveWorkoutViewModel(
         val slots = repository.exercisesForWorkout(workoutId)
         val loadedSets = repository.setsForWorkout(workoutId)
         val exerciseIds = slots.map { it.exerciseId }.distinct()
-        val catalog = repository.exercisesByIds(exerciseIds)
+        // The choices' rows too, in the same query: a swap skips one gone from the log or hidden.
+        val catalog = repository.exercisesByIds(exerciseIds + slots.flatMap { it.choices })
         history.ensure(exerciseIds)
         val cached = history.snapshot
         // Each exercise's history replayed here, on IO and outside the lock taps take: otherwise the
@@ -1264,6 +1300,7 @@ class ActiveWorkoutViewModel(
                     superset = inSuperset(groups, index),
                     deload = workout.deload,
                     deloadRir = settings.deloadRir,
+                    choices = slot.choices.filter { it == slot.exerciseId || catalog[it]?.hidden == false },
                 )
             }
             val prIds = prSetIds(slots, sets, cached.prior, trackingOf(blocks))

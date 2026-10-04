@@ -63,6 +63,7 @@ import com.thelightphone.sdk.ui.LightTopBarCenter
 /**
  * Active workout (design/screens/active-workout.html): one exercise at a time with its
  * set grid (PREVIOUS autofill, steppers on the active row, checkbox logging + PR stars),
+ * a swap icon by its name while it has an alternative and nothing ticked,
  * a collapsed next-exercise row, and the rest strip. Top bar: back / name and clock / Finish,
  * which takes two taps and discards a workout with nothing logged. Bottom bar: rest timer / add
  * exercise / "…" (the exercise's note, rest, superset with the next, plates, details, name, removing a set or it; the
@@ -201,6 +202,7 @@ class ActiveWorkoutScreen(
                                 viewModel.holdPosition()
                                 navigateTo({ ExerciseDetailScreen(it, exerciseId = current.slot.exerciseId) })
                             },
+                            onSwap = current.swapTo?.let { { viewModel.swapExercise(current.slot.id) } },
                         )
                         SetRowHeader(unit = uiState.units, tracking = current.tracking, perSide = current.perSide)
 

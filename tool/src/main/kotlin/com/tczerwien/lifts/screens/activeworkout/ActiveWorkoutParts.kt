@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,6 +32,8 @@ import com.tczerwien.lifts.ui.MonoDigits
 import com.tczerwien.lifts.ui.Stepper
 import com.tczerwien.lifts.ui.WeightUnit
 import com.tczerwien.lifts.ui.rememberSecondClock
+import com.thelightphone.sdk.ui.LightIcon
+import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
@@ -81,30 +86,59 @@ internal fun activeRowScrollTarget(activeIndex: Int, firstFullyVisible: Int?, la
 internal fun scrollMovesRows(target: Int?, firstVisibleIndex: Int, firstVisibleOffset: Int): Boolean =
     target != null && (target != firstVisibleIndex || firstVisibleOffset != 0)
 
+/** The swap icon's target: this wide, as tall as the name, at the end of the name's row. */
+private const val SWAP_TARGET_UNITS = 3f
+private const val SWAP_ICON_UNITS = 1.2f
+
+/** The space kept between the name (Exercise Detail's target) and the swap icon's own target. */
+private const val SWAP_GAP_UNITS = 1f
+
 /**
  * The exercise's name, the equipment and muscles under it, the template's target ("8–12 REPS · RIR 1 ·
  * ADD LOAD") and its pinned cue. While a row is being logged ([logging]) the equipment and muscles line
  * gives its height to the set list; the target and the cue stay. The whole header is one tap target
- * for Exercise Detail ([onOpenDetail]), which the "›" signals.
+ * for Exercise Detail ([onOpenDetail]), which the "›" signals, except the swap icon at the end of the
+ * name's row ([onSwap], only while the exercise has another choice to swap to and nothing ticked): its own
+ * target, kept apart from the name, and no taller than the name, so the rows below never move as it
+ * comes and goes.
  */
 @Composable
-internal fun ExerciseHeader(block: ActiveWorkoutViewModel.ExerciseBlock, logging: Boolean, onOpenDetail: () -> Unit) {
+internal fun ExerciseHeader(
+    block: ActiveWorkoutViewModel.ExerciseBlock,
+    logging: Boolean,
+    onOpenDetail: () -> Unit,
+    onSwap: (() -> Unit)? = null,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .lightClickable(onClick = onOpenDetail)
             .padding(horizontal = 1f.gridUnitsAsDp()),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            // Short names for the common lifts ([displayName]); anything longer is cut at the end.
-            LightText(
-                text = block.name,
-                variant = LightTextVariant.Copy,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
+        Row(modifier = Modifier.height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                // Short names for the common lifts ([displayName]); anything longer is cut at the end.
+                LightText(
+                    text = block.name,
+                    variant = LightTextVariant.Copy,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                LightText(text = " ›", variant = LightTextVariant.Copy, lighten = true, maxLines = 1)
+            }
+            if (onSwap != null) {
+                Spacer(modifier = Modifier.width(SWAP_GAP_UNITS.gridUnitsAsDp()))
+                Box(
+                    modifier = Modifier
+                        .width(SWAP_TARGET_UNITS.gridUnitsAsDp())
+                        .fillMaxHeight()
+                        .lightClickable(onClick = onSwap),
+                    contentAlignment = Alignment.CenterEnd,
+                ) {
+                    LightIcon(icon = LightIcons.LOOP, size = SWAP_ICON_UNITS, contentDescription = "swap exercise")
+                }
+            }
         }
         if (!logging && block.detailLine.isNotEmpty()) {
             LightText(
