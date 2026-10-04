@@ -364,16 +364,23 @@ class ActiveWorkoutViewModel(
 
     /**
      * Whether a tap on the rows at [now] was aimed at rows that have since moved under his finger, or that a
-     * deload switch still on its way may yet delete ([deloadSwitching]).
+     * deload switch still on its way may yet delete ([rowsChanging]).
      */
     private fun rowsJustMoved(now: Long): Boolean =
-        tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true || deloadSwitching.get() > 0
+        tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true || rowsChanging.get() > 0
 
     /**
      * Deload switches waiting on the lane or for their reload ([setDeload]): until one lands, a tick on a row
-     * it deletes would show, then vanish with no rest (the lane can be held for seconds by a backup).
+     * it deletes would show, then vanish with no rest, and a value stepped onto it would go with it (the lane
+     * can be held for seconds by a backup).
      */
-    private val deloadSwitching = AtomicInteger()
+    private val rowsChanging = AtomicInteger()
+
+    /**
+     * [beginAction] for the steppers and the weight's keyboard, which change the active row: not while a deload
+     * switch is on its way ([rowsChanging]), as for a tap on the rows.
+     */
+    private fun beginStep(): Boolean = rowsChanging.get() == 0 && beginAction()
 
     /**
      * He opened a screen about this exercise or workout (Exercise Detail, the exercise list, the "…"
@@ -585,7 +592,7 @@ class ActiveWorkoutViewModel(
      */
     fun stepWeight(steps: Int) {
         val perf = Perf.start()
-        if (!beginAction()) return
+        if (!beginStep()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val tracking = currentTracking(state)
@@ -606,7 +613,7 @@ class ActiveWorkoutViewModel(
      * shows (blank for none), in the unit shown; on an assisted exercise the help itself.
      */
     fun openWeightEntry() {
-        if (!beginAction()) return
+        if (!beginStep()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         if (!currentTracking(state).takesWeight) return
@@ -649,7 +656,7 @@ class ActiveWorkoutViewModel(
 
     /** Moves the active row's seconds [steps] steps of [DURATION_STEP_SEC] along their grid; a long hold sends several. */
     fun stepDuration(steps: Int) {
-        if (!beginAction()) return
+        if (!beginStep()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val next = Format.stepWeight(currentDuration(set).toDouble(), steps, DURATION_STEP_SEC.toDouble()).roundToInt()
@@ -663,7 +670,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun stepReps(direction: Int) {
-        if (!beginAction()) return
+        if (!beginStep()) return
         val state = _uiState.value
         val set = activeSet(state) ?: return
         val next = (currentReps(set) + direction).coerceAtLeast(0)
@@ -1010,14 +1017,14 @@ class ActiveWorkoutViewModel(
     fun setDeload(on: Boolean) {
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
-        deloadSwitching.incrementAndGet()
+        rowsChanging.incrementAndGet()
         val meta = editMeta { withDeload(it, on) }
         LiftsIo.write({ session.setDeload(workoutId, on) }) {
             settleMeta(meta)
             refresh()
             // The rows have changed under his finger only now: taps aimed at the old ones are dropped a moment longer.
             rowsMovedUnderFinger()
-            deloadSwitching.decrementAndGet()
+            rowsChanging.decrementAndGet()
         }
     }
 
