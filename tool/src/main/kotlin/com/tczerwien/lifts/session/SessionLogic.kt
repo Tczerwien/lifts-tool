@@ -388,7 +388,8 @@ fun isUntouched(
             slot.restSecWork == plannedSlot.restSecWork && slot.restSecWarmup == plannedSlot.restSecWarmup &&
             slot.targetRepMin == plannedSlot.targetRepMin && slot.targetRepMax == plannedSlot.targetRepMax &&
             slot.targetRir == plannedSlot.targetRir && slot.targetRirMax == plannedSlot.targetRirMax &&
-            // No plan on the slot: started before B14 wrote one (a slot added by hand fails the count above).
+            // No plan on the slot: started before B14 wrote one, or added by hand (then an extra, which fails the
+            // count above, or the planned exercise put back the way it started: nothing to lose).
             (slot.targetSets == null || slot.targetSets == plannedSlot.targetSets)
     }
 }

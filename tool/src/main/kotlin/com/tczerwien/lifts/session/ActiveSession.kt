@@ -162,7 +162,9 @@ class ActiveSession(
     /**
      * What Start Again begins with from [source] ([planOf]); as a [deload], each exercise cut to the deload's
      * number of its plan ([deloadTrimmed]): a copy of one switched on that day is that short already, and one
-     * marked after its Finish, its full sets done, starts trimmed too.
+     * marked after its Finish, its full sets done, starts trimmed too. Settings' share is read each time: if it
+     * changes while the copy is open, the untouched check compares with the new share (a copy that then
+     * matches it holds nothing logged, so discarding it loses nothing).
      */
     private fun planAgain(source: WorkoutEntity, deload: Boolean): List<PlannedSlot> {
         val plan = planOf(source.id)
@@ -586,8 +588,8 @@ class ActiveSession(
      * [isUntouched] for a stored workout, against what its template would start with now
      * ([planTemplate]), or the workout it was started again from ([startFromWorkout] remembers it,
      * [planAgain]). Other workouts can't finish while this one is open, but a deload mark in Workout
-     * Detail can change which session is last; if last session isn't what it was at the start, the
-     * workout counts as touched and is kept.
+     * Detail can change which session is last; when that changes the plan (a template slot's warm-ups from
+     * last session), the workout counts as touched and is kept.
      */
     private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean {
         val startedFrom = startedFromSnapshot(workout.id)?.takeIf { workout.templateId == null }
