@@ -24,8 +24,11 @@ America/Chicago):
     Saturdays at 10:00, the pair's sets ticked in turn (flyes 1, rows 1, flyes 2, ...). In a v1 file
     the pair is two plain slots (v1 has no column for it).
   - Lower A's targets (schema 2 and later): squat 3–5 reps at RIR 1–2, Romanian deadlift 6–8 at RIR 1–2
-    (both reached the top every set last time: ADD LOAD), leg press 8–10 at RIR 2 (one set short: none).
-    A v1 file has no column for a range, so it gets none of them.
+    (both reached the top every set last time: ADD LOAD), leg press 10–15 at RIR 2 (last done in Saturday's
+    Full Body at 12: no cue). A v1 file has no column for a range, so it gets none of them.
+  - Week 4 is a deload week (schema 2 and later): its three workouts are marked deload, each exercise kept
+    half its work sets (rounded up: 3 -> 2, 1 -> 1), loads as they were, and its planned sets recorded, as
+    "… › Deload" leaves them. A v1 file has no column for the mark, so its week 4 is a normal one.
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
@@ -42,7 +45,8 @@ skipped exercise or a note. Loads climb in 6-week blocks with a deload week afte
 exercises: Cable Y-Raise (weight x reps), Hanging Knee Raise (reps only), Machine-Assisted Pull-Up
 (assisted, help stored negative) and Old Cable Row (hidden, only in the first year's workouts); the
 one-arm dumbbell row is per side, the squat has a cue, the incline press is renamed. A weigh-in every
-day. No workout is left open.
+day. No workout is left open. In schema 2 and later each deload week's workouts are marked deload (their
+sets stay as built: the same work sets, lighter).
 
 Usage:
   python3 tool/scripts/fixture_db.py OUT.db [--now 2026-09-24T12:00] [--schema-version N] [--catalog-from SEEDED.db]
@@ -110,6 +114,8 @@ class Writer:
         self.conn = conn
         # Supersets came with schema 2: a v1 file has no column for them, so its pairs are plain slots.
         self.groups = "supersetGroup" in {row[1] for row in conn.execute("PRAGMA table_info(workout_exercises)")}
+        # So did the deload mark.
+        self.deloads = "deload" in {row[1] for row in conn.execute("PRAGMA table_info(workouts)")}
 
     def workout(self, name, started, ended, template_id=None, notes=None):
         cur = self.conn.execute(
@@ -281,11 +287,32 @@ def gym(conn, now):
     # Added in B14: Lower A's targets, two of them RIR ranges, so a deload has targets to stand in for and
     # ADD LOAD a top to reach. Only where the schema has the range's column; nothing random.
     if "targetRirMax" in {row[1] for row in conn.execute("PRAGMA table_info(template_exercises)")}:
-        for exercise_id, rep_min, rep_max, rir, rir_max in ((SQUAT, 3, 5, 1, 2), (RDL, 6, 8, 1, 2), (LEG_PRESS, 8, 10, 2, None)):
+        for exercise_id, rep_min, rep_max, rir, rir_max in ((SQUAT, 3, 5, 1, 2), (RDL, 6, 8, 1, 2), (LEG_PRESS, 10, 15, 2, None)):
             conn.execute(
                 "UPDATE template_exercises SET repMin = ?, repMax = ?, targetRir = ?, targetRirMax = ? WHERE templateId = ? AND exerciseId = ?",
                 (rep_min, rep_max, rir, rir_max, lower_t, exercise_id),
             )
+    # Also B14: week 4 as a deload week, as the switch leaves a workout: marked, each exercise cut to half its
+    # work sets (rounded up), loads as they were, and its planned sets recorded. Nothing random.
+    if w.deloads:
+        start, end = first_monday + dt.timedelta(weeks=4), first_monday + dt.timedelta(weeks=5)
+        week4 = [row[0] for row in conn.execute(
+            "SELECT id FROM workouts WHERE name IN ('Upper A', 'Lower A') AND startedAt >= ? AND startedAt < ?",
+            (millis(dt.datetime.combine(start, dt.time(0, 0), ZONE)), millis(dt.datetime.combine(end, dt.time(0, 0), ZONE))),
+        )]
+        for workout_id in week4:
+            conn.execute("UPDATE workouts SET deload = 1 WHERE id = ?", (workout_id,))
+            for (slot_id,) in conn.execute("SELECT id FROM workout_exercises WHERE workoutId = ?", (workout_id,)).fetchall():
+                work = [row[0] for row in conn.execute(
+                    "SELECT id FROM sets WHERE workoutExerciseId = ? AND type IN ('normal', 'failure') ORDER BY position", (slot_id,),
+                )]
+                conn.execute("UPDATE workout_exercises SET targetSets = ? WHERE id = ?", (len(work), slot_id))
+                for set_id in work[(len(work) + 1) // 2:]:
+                    conn.execute("DELETE FROM sets WHERE id = ?", (set_id,))
+                for position, (set_id,) in enumerate(conn.execute(
+                    "SELECT id FROM sets WHERE workoutExerciseId = ? ORDER BY position", (slot_id,),
+                ).fetchall()):
+                    conn.execute("UPDATE sets SET position = ? WHERE id = ?", (position, set_id))
 
 
 # --- Scenario "long": years of four workouts a week ---
@@ -366,6 +393,8 @@ def long_workout(w, rng, name, template_id, slots, start, block_week, year_week)
     workout_id = w.workout(name, start, None, template_id, rng.choice(LONG_NOTES) if rng.random() < 0.08 else None)
     clock = start
     deload = block_week == 6
+    if deload and w.deloads:
+        w.conn.execute("UPDATE workouts SET deload = 1 WHERE id = ?", (workout_id,))
     for position, (exercise, warmups, work, (lo, hi), load, step, rest, rir) in enumerate(slots):
         # The hidden custom row stands in for the one-arm row in the first year.
         if exercise == ROW and year_week < 52:
