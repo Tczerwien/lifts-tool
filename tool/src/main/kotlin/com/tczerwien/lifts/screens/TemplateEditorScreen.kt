@@ -272,6 +272,15 @@ class TemplateEditorViewModel(
     private var lastAlternativeRemovedAt: Long? = null
 
     /**
+     * "+ Add Alternative": the picker opens ([canAddExercise]), unless the tap comes within [isDoubleTap] of a
+     * removal: removing the last alternative slides this row up into its place, under the second tap.
+     */
+    fun canAddAlternative(): Boolean {
+        if (lastAlternativeRemovedAt?.let { isDoubleTap(it, System.currentTimeMillis()) } == true) return false
+        return canAddExercise()
+    }
+
+    /**
      * Takes [exerciseId] out of exercise [templateExerciseId]'s alternatives. One tap (adding it back is a
      * pick); a tap within [isDoubleTap] of the last removal was aimed at the row that was there, which the
      * next one has taken, so it is dropped.
@@ -891,7 +900,7 @@ class TemplateEditorScreen(
                     AddRow(
                         label = "+ Add Alternative",
                         onClick = {
-                            if (viewModel.canAddExercise()) {
+                            if (viewModel.canAddAlternative()) {
                                 navigateTo(::ExercisePickerScreen) { exerciseId -> viewModel.addAlternative(row.id, exerciseId) }
                             }
                         },
