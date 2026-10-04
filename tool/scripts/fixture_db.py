@@ -30,6 +30,10 @@ America/Chicago):
     are marked deload, each exercise kept half its work sets (rounded up: 3 -> 2, 1 -> 1), loads as they
     were, and its planned sets recorded, as "… › Deload" leaves them. A v1 file has no column for the mark,
     so that week is a normal one.
+  - Alternatives (schema 2 and later): Upper A's cable lateral raise offers the dumbbell side lateral raise
+    and the seated side lateral raise, and the Friday Upper A before last did the dumbbell one instead (a swap:
+    its slot does it, with the three as its choices). A v1 file has no column for either, so that Friday
+    did the cable raise.
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
@@ -47,7 +51,8 @@ exercises: Cable Y-Raise (weight x reps), Hanging Knee Raise (reps only), Machin
 (assisted, help stored negative) and Old Cable Row (hidden, only in the first year's workouts); the
 one-arm dumbbell row is per side, the squat has a cue, the incline press is renamed. A weigh-in every
 day. No workout is left open. In schema 2 and later each deload week's workouts are marked deload (their
-sets stay as built: the same work sets, lighter).
+sets stay as built: the same work sets, lighter), and Lower A's standing calf raise offers the seated one
+(Lower B's, with as long a history) as an alternative.
 
 Usage:
   python3 tool/scripts/fixture_db.py OUT.db [--now 2026-09-24T12:00] [--schema-version N] [--catalog-from SEEDED.db]
@@ -83,10 +88,21 @@ RDL = "romanian-deadlift"
 LEG_PRESS = "leg-press"
 FLYES = "dumbbell-flyes"
 CABLE_ROW = "seated-cable-rows"
+SIDE_LATERAL = "side-lateral-raise"
+SEATED_SIDE_LATERAL = "seated-side-lateral-raise"
 
 
 def kg(lb):
     return lb / LB_PER_KG
+
+
+def json_list(ids):
+    """A list of ids as Lifts stores one: a JSON array with no spaces."""
+    return json.dumps(ids, separators=(",", ":"))
+
+
+def has_column(conn, table, column):
+    return column in {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
 
 
 def millis(moment):
@@ -315,6 +331,20 @@ def gym(conn, now):
                     "SELECT id FROM sets WHERE workoutExerciseId = ? ORDER BY position", (slot_id,),
                 ).fetchall()):
                     conn.execute("UPDATE sets SET position = ? WHERE id = ?", (position, set_id))
+    # Added in B15: the cable lateral raise's alternatives in Upper A, and the Friday before last (week index 6) done
+    # with the dumbbell raise instead, its slot keeping the three choices as a swap leaves them. Nothing random.
+    if has_column(conn, "template_exercises", "alternatives"):
+        choices = [LATERAL, SIDE_LATERAL, SEATED_SIDE_LATERAL]
+        conn.execute(
+            "UPDATE template_exercises SET alternatives = ? WHERE templateId = ? AND exerciseId = ?",
+            (json_list(choices[1:]), upper_t, LATERAL),
+        )
+        friday = dt.datetime.combine(first_monday + dt.timedelta(weeks=6, days=4), dt.time(0, 0), ZONE)
+        conn.execute(
+            "UPDATE workout_exercises SET exerciseId = ?, choices = ? WHERE exerciseId = ? AND workoutId IN "
+            "(SELECT id FROM workouts WHERE name = 'Upper A' AND startedAt >= ? AND startedAt < ?)",
+            (SIDE_LATERAL, json_list(choices), LATERAL, millis(friday), millis(friday + dt.timedelta(days=1))),
+        )
 
 
 # --- Scenario "long": years of four workouts a week ---
@@ -468,6 +498,12 @@ def long_history(conn, now, years=3):
                 " repMin, repMax, targetRir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (template_id, exercise, index, work, rest, warmups, None if hold else lo, None if hold else hi, rir),
             )
+    # Added in B15: the standing calf raise's alternative in Lower A, the seated one (Lower B's).
+    if has_column(conn, "template_exercises", "alternatives"):
+        conn.execute(
+            "UPDATE template_exercises SET alternatives = ? WHERE templateId = ? AND exerciseId = ?",
+            (json_list([SEATED_CALF]), template_ids[1], CALF),
+        )
     today = now.astimezone(ZONE).date()
     this_monday = today - dt.timedelta(days=today.weekday())
     weeks = years * 52
