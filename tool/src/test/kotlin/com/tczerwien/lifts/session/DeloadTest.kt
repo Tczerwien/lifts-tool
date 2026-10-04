@@ -86,6 +86,16 @@ class DeloadTest {
         assertEquals(2, off.addRows)
     }
 
+    @Test
+    fun `a deload's Start Again cuts each exercise to the deload's number of its plan`() {
+        assertEquals(listOf(w, n, n), PlannedSlot("squat", listOf(w, n, n, n), targetSets = 3).deloadTrimmed(50).types)
+        val trimmed = PlannedSlot("squat", listOf(n, n), targetSets = 4)
+        assertEquals(trimmed, trimmed.deloadTrimmed(50), "a copy of one switched on that day: already so")
+        val noPlan = PlannedSlot("curl", listOf(n, n, n))
+        assertEquals(noPlan, noPlan.deloadTrimmed(50))
+        assertEquals(listOf(n), PlannedSlot("row", listOf(n, n, n), targetSets = 3).deloadTrimmed(30).types)
+    }
+
     // --- The RIR it shows (DL-3) ---
 
     @Test

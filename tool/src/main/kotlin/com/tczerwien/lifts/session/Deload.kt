@@ -76,6 +76,25 @@ fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): 
 }
 
 /**
+ * [this] slot as a deload's Start Again begins it: its work sets cut to the deload's number of its plan
+ * ([deloadKeep] at [keepPct]), warm-ups kept; as it is with no plan, or already that short (a copy of a
+ * deload switched on that day). So a workout marked a deload after its Finish, its full sets done, is
+ * copied as a deload too.
+ */
+fun PlannedSlot.deloadTrimmed(keepPct: Int): PlannedSlot {
+    val planned = targetSets ?: return this
+    var workLeft = deloadKeep(planned, keepPct)
+    val kept = types.filter { type ->
+        when {
+            type == SET_TYPE_WARMUP -> true
+            workLeft > 0 -> true.also { workLeft-- }
+            else -> false
+        }
+    }
+    return if (kept.size == types.size) this else copy(types = kept)
+}
+
+/**
  * The RIR a slot shows and its RIR cell starts from (DL-3): in a deload the deload's own ([deloadRir],
  * Settings), else the slot's target. Display only: the slot keeps its own target, so switching the
  * deload off needs nothing put back.

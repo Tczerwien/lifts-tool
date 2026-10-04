@@ -128,7 +128,7 @@ class ActiveSession(
             val workoutId = repository.addWorkout(
                 WorkoutEntity(name = startAgainName(source, now, zone), startedAt = now, deload = source.deload),
             )
-            addPlannedSlots(workoutId, planOf(source.id))
+            addPlannedSlots(workoutId, planAgain(source, deload = source.deload))
             runBlocking { dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId:${if (source.deload) 1 else 0}" } }
             workoutId
         } ?: return null
@@ -158,6 +158,18 @@ class ActiveSession(
         planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
             .filterNot { repository.exerciseById(it.exerciseId)?.hidden == true }
             .withNormalizedGroups()
+
+    /**
+     * What Start Again begins with from [source] ([planOf]); as a [deload], each exercise cut to the deload's
+     * number of its plan ([deloadTrimmed]): a copy of one switched on that day is that short already, and one
+     * marked after its Finish, its full sets done, starts trimmed too.
+     */
+    private fun planAgain(source: WorkoutEntity, deload: Boolean): List<PlannedSlot> {
+        val plan = planOf(source.id)
+        if (!deload) return plan
+        val keepPct = settings.snapshot().deloadKeepPct
+        return plan.map { it.deloadTrimmed(keepPct) }
+    }
 
     /**
      * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
@@ -576,7 +588,7 @@ class ActiveSession(
                 workout.templateId?.let { templateId ->
                     val templateExercises = repository.exercisesForTemplate(templateId)
                     planTemplate(templateExercises, previousGroupsByExercise(templateExercises.map { it.exerciseId }))
-                } ?: source?.let { planOf(it.id) }
+                } ?: source?.let { planAgain(it, deload = startedFrom.deload ?: it.deload) }
             },
             // A name or a rest he set from the "…" menu is his: Back must not throw it away.
             startName = workout.templateId?.let { repository.templateById(it)?.name }

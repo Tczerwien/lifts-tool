@@ -1008,6 +1008,27 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Start Again of a workout marked a deload after its Finish starts trimmed`() {
+        val template = store.addTemplate("Lower A", "squat" to 3)
+        val source = session.startFromTemplate(template, now = 1_000_000)
+        rowsOf(store.exercisesForWorkout(source).single()).forEachIndexed { index, row ->
+            session.completeSet(source, row, 100.0, 5, n, now = 1_100_000L + index * 60_000)
+        }
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(source, now = 1_400_000))
+        assertTrue(session.markDeload(source, on = true), "forgot the switch")
+
+        val again = assertNotNull(session.startFromWorkout(source, now = 5_000_000))
+        assertTrue(store.workoutById(again)!!.deload)
+        val slot = store.exercisesForWorkout(again).single()
+        assertEquals(listOf(n, n), rowsOf(slot).map { it.type }, "two of the three, as a deload keeps")
+        assertEquals(3, slot.targetSets)
+        assertTrue(session.discardIfUntouched(again), "as it started: discarded on Back")
+        val third = assertNotNull(session.startFromWorkout(source, now = 6_000_000))
+        assertTrue(session.setDeload(third, on = false))
+        assertEquals(3, rowsOf(store.exercisesForWorkout(third).single()).size, "off: the full three")
+    }
+
+    @Test
     fun `a superset keeps alternating over a deload's rows, trimmed and put back`() {
         val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
         store.exercisesForTemplate(template).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1, restSecWork = 90) }
