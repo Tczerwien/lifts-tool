@@ -243,11 +243,13 @@ class PreviousTest {
         val template = listOf(
             TemplateExerciseEntity(
                 id = 1, templateId = 7, exerciseId = "incline", position = 0, targetSets = 4, warmupSets = 2,
-                repMin = 6, repMax = 12, targetRir = 1, restSecWork = 150, restSecWarmup = 60,
+                repMin = 6, repMax = 12, targetRir = 1, restSecWork = 150, restSecWarmup = 60, targetRirMax = 2,
             ),
         )
         assertEquals(
-            listOf(PlannedSlot("incline", listOf(w, w, n, n, n, n), 150, 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1)),
+            listOf(
+                PlannedSlot("incline", listOf(w, w, n, n, n, n), 150, 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1, targetRirMax = 2),
+            ),
             planTemplate(template, emptyMap()),
         )
     }

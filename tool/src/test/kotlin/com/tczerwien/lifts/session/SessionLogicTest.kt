@@ -474,6 +474,7 @@ class SessionLogicTest {
             asStarted[0].copy(targetRepMin = 8),
             asStarted[0].copy(targetRepMax = 15),
             asStarted[0].copy(targetRir = null),
+            asStarted[0].copy(targetRirMax = 2),
         )) {
             assertFalse(isUntouched(workout(templateId = 7), listOf(edit) + asStarted.drop(1), sets, { plan }), "$edit")
         }

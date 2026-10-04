@@ -100,10 +100,10 @@ class ActiveSessionTest {
         store.addFinishedWorkout(startedAt = 1_000_000, "incline" to listOf(Triple(w, 20.0, 10), Triple(n, 30.0, 12)))
         val template = store.addTemplate("Upper A", "incline" to 3)
         val row = store.exercisesForTemplate(template).single()
-        store.templateExercises[row.id] = row.copy(warmupSets = 2, repMin = 6, repMax = 12, targetRir = 1, restSecWork = 150)
+        store.templateExercises[row.id] = row.copy(warmupSets = 2, repMin = 6, repMax = 12, targetRir = 1, targetRirMax = 2, restSecWork = 150)
         val workoutId = session.startFromTemplate(template, now = 2_000_000)
         val slot = store.exercisesForWorkout(workoutId).single()
-        assertEquals(listOf(6, 12, 1, 150), listOf(slot.targetRepMin, slot.targetRepMax, slot.targetRir, slot.restSecWork))
+        assertEquals(listOf(6, 12, 1, 2, 150), listOf(slot.targetRepMin, slot.targetRepMax, slot.targetRir, slot.targetRirMax, slot.restSecWork))
         assertEquals(listOf(w, w, n, n, n), store.setsForWorkout(workoutId).map { it.type }, "two warm-ups, not last time's one")
         // Exactly as started: backing out leaves nothing.
         assertTrue(session.discardIfUntouched(workoutId))
@@ -420,7 +420,7 @@ class ActiveSessionTest {
         store.updateWorkout(store.workoutById(workoutId)!!.copy(name = "Evening Workout", notes = "tired"))
         val (incline, fly, _) = store.exercisesForWorkout(workoutId)
         store.slots[incline.id] = incline.copy(
-            restSecWork = 150, restSecWarmup = 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1, notes = "elbow ok",
+            restSecWork = 150, restSecWarmup = 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1, targetRirMax = 2, notes = "elbow ok",
         )
         store.addSet(SetEntity(workoutExerciseId = incline.id, position = 3, type = n, weightKg = 30.0))
         store.skipSlot(workoutId, fly.position)
@@ -439,7 +439,10 @@ class ActiveSessionTest {
         val slots = store.exercisesForWorkout(again)
         assertEquals(listOf("incline", "curl"), slots.map { it.exerciseId }, "the skipped Fly is left out")
         val incline = slots.first()
-        assertEquals(listOf(150, 60, 6, 12, 1), listOf(incline.restSecWork, incline.restSecWarmup, incline.targetRepMin, incline.targetRepMax, incline.targetRir))
+        assertEquals(
+            listOf(150, 60, 6, 12, 1, 2),
+            listOf(incline.restSecWork, incline.restSecWarmup, incline.targetRepMin, incline.targetRepMax, incline.targetRir, incline.targetRirMax),
+        )
         assertNull(incline.notes, "his note stays with the old workout")
         val rows = store.setsForWorkout(again)
         assertEquals(listOf(w, n, n), rows.filter { it.workoutExerciseId == incline.id }.map { it.type }, "warm-up kept, failure as a work set, the unticked set left out")
@@ -606,7 +609,10 @@ class ActiveSessionTest {
         val rows = store.exercisesForTemplate(templateId)
         assertEquals(listOf("incline", "curl"), rows.map { it.exerciseId })
         val first = rows.first()
-        assertEquals(listOf(2, 1, 6, 12, 1, 150), listOf(first.targetSets, first.warmupSets, first.repMin, first.repMax, first.targetRir, first.restSecWork))
+        assertEquals(
+            listOf(2, 1, 6, 12, 1, 2, 150),
+            listOf(first.targetSets, first.warmupSets, first.repMin, first.repMax, first.targetRir, first.targetRirMax, first.restSecWork),
+        )
         assertNull(first.restSecWarmup)
         assertEquals(1, rows[1].targetSets)
         assertNull(rows[1].warmupSets, "no warm-up ticked: last session's, not \"never\"")
@@ -856,7 +862,7 @@ class ActiveSessionTest {
 
     @Test
     fun `version 2's columns ride along unchanged through a whole workout`() {
-        // Set as the v2 features will set them; nothing reads them yet, and no write may drop them.
+        // Set as the v2 features set them (supersets, RIR ranges, deload, alternatives); no write may drop them.
         // (An exercise's countsFor isn't here: a workout never writes exercises.)
         val template = store.addTemplate("Upper A", "fly" to 2, "bench" to 2, "curl" to 2)
         store.exercisesForTemplate(template).forEach {

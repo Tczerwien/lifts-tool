@@ -88,6 +88,7 @@ class ActiveSession(
                     targetRepMax = planned.targetRepMax,
                     targetRir = planned.targetRir,
                     supersetGroup = planned.supersetGroup,
+                    targetRirMax = planned.targetRirMax,
                 ),
             )
             planned.types.forEachIndexed { setIndex, type ->
@@ -152,7 +153,7 @@ class ActiveSession(
      * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
      * workout's name), last in the list, with one exercise per slot he ticked a work set in: that many
      * work sets and warm-ups (none ticked leaves them to last session, as a new template exercise does),
-     * the slot's rep range and RIR target, its superset, and its rests, stored as none where they equal
+     * the slot's rep range and RIR target (a range too), its superset, and its rests, stored as none where they equal
      * Settings' defaults so they follow them. Returns the template's id, or null
      * when the workout is gone or not finished (an unfinished workout counts nowhere). One transaction.
      */
@@ -180,6 +181,7 @@ class ActiveSession(
                     repMax = planned.targetRepMax,
                     targetRir = planned.targetRir,
                     supersetGroup = planned.supersetGroup,
+                    targetRirMax = planned.targetRirMax,
                 ),
             )
         }

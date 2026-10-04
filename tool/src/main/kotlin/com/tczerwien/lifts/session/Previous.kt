@@ -162,8 +162,8 @@ fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null, warmupS
 
 /**
  * One slot as a start creates it: the exercise, its rows' set types in order, its rests, the
- * targets shown at the gym (rep range, RIR) and its superset group, all copied from the template (or
- * the workout started again), so editing that later never changes this workout.
+ * targets shown at the gym (rep range, RIR or an RIR range) and its superset group, all copied from the
+ * template (or the workout started again), so editing that later never changes this workout.
  */
 data class PlannedSlot(
     val exerciseId: String,
@@ -175,6 +175,8 @@ data class PlannedSlot(
     val targetRir: Int? = null,
     /** Slots next to each other sharing one are a superset ([supersetRun]). */
     val supersetGroup: Int? = null,
+    /** The top of an RIR range ([rirTarget]); null: [targetRir] alone. */
+    val targetRirMax: Int? = null,
 )
 
 /**
@@ -202,6 +204,7 @@ fun planTemplate(
             targetRepMax = planned.repMax,
             targetRir = planned.targetRir,
             supersetGroup = planned.supersetGroup,
+            targetRirMax = planned.targetRirMax,
         )
     }.withNormalizedGroups()
 }
@@ -228,6 +231,7 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
             targetRepMax = slot.targetRepMax,
             targetRir = slot.targetRir,
             supersetGroup = slot.supersetGroup,
+            targetRirMax = slot.targetRirMax,
         )
     }.withNormalizedGroups()
 }
