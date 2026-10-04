@@ -36,6 +36,7 @@ import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.BounceGuard
+import com.tczerwien.lifts.session.HistoryVersion
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.ReloadFloor
 import com.tczerwien.lifts.settings.SettingsStore
@@ -326,7 +327,8 @@ class WorkoutDetailViewModel(
     /**
      * The "Deload" row (DL-6): marks this finished workout as a deload, or not, at once on screen and then
      * on the write lane ([ActiveSession.markDeload]); only the mark changes. The exports show it, and an
-     * open workout (this screen is reachable from inside one) re-reads its PREVIOUS ([LiftsShare.deloadMarked]).
+     * open workout (this screen is reachable from inside one) re-reads its PREVIOUS: [HistoryVersion] moves
+     * in the same lane job, so the reload Active Workout queues on the way back can't read the old version.
      */
     fun tapDeload() {
         val state = _uiState.value
@@ -335,8 +337,8 @@ class WorkoutDetailViewModel(
         val next = !state.deload
         deloadFloor.saveQueued()
         _uiState.update { it.copy(deload = next) }
-        LiftsIo.write({ session.markDeload(workoutId, next) }) { changed ->
-            if (changed) share.deloadMarked()
+        LiftsIo.write({ session.markDeload(workoutId, next).also { if (it) HistoryVersion.bump() } }) { changed ->
+            if (changed) share.logChanged()
             deloadFloor.saveLanded()
             refresh()
         }

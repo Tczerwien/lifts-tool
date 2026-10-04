@@ -77,17 +77,8 @@ class LiftsShare private constructor(
     }
 
     /**
-     * Workout Detail marked a finished workout as a deload, or not: the exports show it, and an open
-     * workout's PREVIOUS may come from another session now, so its cached history goes too.
-     */
-    fun deloadMarked() {
-        HistoryVersion.bump()
-        exports.request()
-    }
-
-    /**
      * Something else the export files show was saved: a weigh-in, an exercise's name or cue, a new
-     * custom exercise, a workout's notes, a template, a bar, the weight unit, or a workout reopened
+     * custom exercise, a workout's notes or deload mark, a template, a bar, the weight unit, or a workout reopened
      * (RESUME) or closed as stale. The exports catch up once his edits pause for a second
      * ([ExportWriter.request]). Call it once the save has landed.
      */
