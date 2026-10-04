@@ -67,8 +67,30 @@ class CustomExerciseTest {
     }
 
     @Test
+    fun `a removed exercise leaves every alternatives list, and a slot it was the main of keeps its place`() {
+        val rows = listOf(
+            row(1, templateId = 1, "squat", 0).copy(alternatives = listOf("y-raise", "press")),
+            row(2, templateId = 1, "y-raise", 1).copy(alternatives = listOf("curl", "fly"), supersetGroup = 4),
+            row(3, templateId = 1, "dip", 2).copy(supersetGroup = 4),
+            row(4, templateId = 2, "y-raise", 0).copy(alternatives = listOf("y-raise")),
+            row(5, templateId = 2, "row", 1),
+        )
+        val out = withoutExercise(rows, "y-raise")
+        assertEquals(listOf(4L), out.deleteIds, "the main with no other alternative goes")
+        assertEquals(
+            listOf(
+                row(1, templateId = 1, "squat", 0).copy(alternatives = listOf("press")),
+                // Its first alternative is the main now, the rest its alternatives, in the superset as before.
+                row(2, templateId = 1, "curl", 1).copy(alternatives = listOf("fly"), supersetGroup = 4),
+                row(5, templateId = 2, "row", 0),
+            ),
+            out.updates,
+        )
+    }
+
+    @Test
     fun `an exercise no template asks for changes no template`() {
-        val rows = listOf(row(1, templateId = 1, "bench", 0), row(2, templateId = 1, "curl", 1))
+        val rows = listOf(row(1, templateId = 1, "bench", 0).copy(alternatives = listOf("press")), row(2, templateId = 1, "curl", 1))
         assertEquals(TemplateRemoval(emptyList(), emptyList()), withoutExercise(rows, "y-raise"))
     }
 }

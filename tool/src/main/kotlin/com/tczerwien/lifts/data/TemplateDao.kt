@@ -45,7 +45,13 @@ interface TemplateDao {
     @Query("SELECT templateId, COUNT(*) AS exercises, SUM(targetSets) AS sets FROM template_exercises GROUP BY templateId")
     fun exerciseCounts(): List<TemplateExerciseCount>
 
-    /** The templates that ask for [exerciseId], each once. */
-    @Query("SELECT DISTINCT templateId FROM template_exercises WHERE exerciseId = :exerciseId ORDER BY templateId")
+    /**
+     * The templates that ask for [exerciseId], as an exercise or as one's alternative, each once. The
+     * alternatives are a JSON list of ids: the id in quotes is one of them (ids hold no quote).
+     */
+    @Query(
+        "SELECT DISTINCT templateId FROM template_exercises " +
+            "WHERE exerciseId = :exerciseId OR instr(alternatives, '\"' || :exerciseId || '\"') > 0 ORDER BY templateId"
+    )
     fun templateIdsWith(exerciseId: String): List<Long>
 }

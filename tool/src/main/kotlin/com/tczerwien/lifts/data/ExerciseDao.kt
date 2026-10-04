@@ -38,8 +38,14 @@ interface ExerciseDao {
     @Query("SELECT * FROM exercises WHERE id IN (:ids)")
     fun byIds(ids: List<String>): List<ExerciseEntity>
 
-    /** A workout slot refers to [id], ticked or not, finished or not. */
-    @Query("SELECT EXISTS(SELECT 1 FROM workout_exercises WHERE exerciseId = :id)")
+    /**
+     * A workout slot refers to [id], ticked or not, finished or not, as its exercise or as one of its
+     * choices (a JSON list of ids: the id in quotes is one of them; ids hold no quote).
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM workout_exercises " +
+            "WHERE exerciseId = :id OR instr(choices, '\"' || :id || '\"') > 0)"
+    )
     fun inWorkouts(id: String): Boolean
 
     /** [id] has history: a ticked set in a finished workout (unticked sets and open workouts count nowhere). */

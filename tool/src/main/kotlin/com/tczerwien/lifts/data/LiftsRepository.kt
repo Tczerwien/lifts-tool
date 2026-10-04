@@ -119,9 +119,11 @@ class LiftsRepository private constructor(
     }
 
     /**
-     * Removes custom exercise [id]: first out of every template, the rest of each closing up and a
-     * superset it was in left whole or plain ([withoutExercise]), then deleted when no workout refers to it, else hidden from the picker so
-     * history keeps it ([removalFor]). One transaction, so a workout can't start using it between the
+     * Removes custom exercise [id]: first out of every template, as an exercise or an alternative (an
+     * exercise it was with an alternative left keeps its place, the first alternative its main), the rest
+     * of each closing up and a superset it was in left whole or plain ([withoutExercise]), then deleted
+     * when no workout refers to it (as an exercise or one of a slot's choices), else hidden from the picker
+     * so history keeps it ([removalFor]). One transaction, so a workout can't start using it between the
      * check and the delete. Null when it isn't a custom exercise.
      */
     fun removeCustomExercise(id: String): Removal? = inTransaction {
@@ -136,10 +138,10 @@ class LiftsRepository private constructor(
         }
     }
 
-    /** How many templates ask for exercise [id]: removing it takes it out of them ([removeCustomExercise]). */
+    /** How many templates ask for exercise [id], alternatives too: removing it takes it out of them ([removeCustomExercise]). */
     fun templatesWithExercise(id: String): Int = db.templateDao.templateIdsWith(id).size
 
-    /** A workout has exercise [id], ticked or not; one in use without this is only in templates. */
+    /** A workout has exercise [id], ticked or not, or as a slot's choice; one in use without this is only in templates. */
     fun exerciseInWorkouts(id: String): Boolean = db.exerciseDao.inWorkouts(id)
 
     /** Exercise [id] has a ticked set in a finished workout. */
