@@ -7,15 +7,17 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.preferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.tczerwien.lifts.session.DEFAULT_DELOAD_KEEP_PCT
+import com.tczerwien.lifts.session.RirTarget
 import com.tczerwien.lifts.ui.WeightUnit
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class SettingsStoreTest {
 
@@ -49,6 +51,30 @@ class SettingsStoreTest {
         val settings = store.snapshot()
         assertEquals(SettingsStore.DEFAULT_UNITS, settings.units)
         assertEquals(SettingsStore.DEFAULT_PLATE_INVENTORY_KG, settings.plateInventoryKg)
+    }
+
+    @Test
+    fun deloadSettingsStartAtHalfAndRir4to5AndOnlyTakeWhatTheStepperOffers() {
+        val store = SettingsStore(FakeDataStore(emptyPreferences()))
+        assertEquals(DEFAULT_DELOAD_KEEP_PCT, store.snapshot().deloadKeepPct)
+        assertEquals(RirTarget(4, 5), store.snapshot().deloadRir)
+        runBlocking {
+            store.setDeloadKeepPct(70)
+            store.setDeloadRir(RirTarget(3))
+            store.setDeloadKeepPct(75)
+            store.setDeloadKeepPct(80)
+        }
+        assertEquals(70, store.snapshot().deloadKeepPct, "75 and 80 aren't on offer")
+        assertEquals(RirTarget(3), store.snapshot().deloadRir)
+        val odd = SettingsStore(
+            FakeDataStore(
+                preferencesOf(
+                    intPreferencesKey(SettingsStore.KEY_DELOAD_KEEP_PCT) to 45,
+                    stringPreferencesKey(SettingsStore.KEY_DELOAD_RIR) to "9",
+                ),
+            ),
+        ).snapshot()
+        assertEquals(listOf(DEFAULT_DELOAD_KEEP_PCT, RirTarget(4, 5)), listOf(odd.deloadKeepPct, odd.deloadRir), "stored oddities read as the defaults")
     }
 
     @Test

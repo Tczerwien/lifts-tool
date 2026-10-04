@@ -6,20 +6,21 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.InMemoryLiftsStore
 import com.tczerwien.lifts.session.RestStore
+import com.tczerwien.lifts.session.RirTarget
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 import java.io.File
 import java.nio.file.Files
+import kotlin.test.AfterTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlin.test.AfterTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNull
 
 /** Settings survive a backup and restore, and a restore forgets only the in-workout state. */
 class RestoreSettingsTest {
@@ -52,6 +53,8 @@ class RestoreSettingsTest {
         restBeep = false,
         weightStepLb = 2.5,
         weightStepKg = 1.25,
+        deloadKeepPct = 60,
+        deloadRir = RirTarget(3, 4),
     )
 
     @Test
@@ -71,6 +74,23 @@ class RestoreSettingsTest {
         val rows = SettingsRows.encode(his).toMutableMap()
         rows[SettingsStore.KEY_PLATE_INVENTORY_KG] = SettingsStore.encodePlates(SettingsStore.DEFAULT_PLATE_INVENTORY_KG)
         assertEquals(null, SettingsRows.decode(rows, current = his).customPlatesKg)
+    }
+
+    @Test
+    fun `a backup from before deloads keeps the phone's deload settings`() {
+        val older = SettingsRows.encode(defaults) - SettingsStore.KEY_DELOAD_KEEP_PCT - SettingsStore.KEY_DELOAD_RIR
+        val restored = SettingsRows.decode(older, current = his)
+        assertEquals(listOf(60, RirTarget(3, 4)), listOf(restored.deloadKeepPct, restored.deloadRir))
+        assertEquals(defaults.copy(deloadKeepPct = 60, deloadRir = RirTarget(3, 4)), restored, "everything else from the backup")
+    }
+
+    @Test
+    fun `the deload RIR is stored as one value`() {
+        assertEquals("4-5", SettingsStore.encodeRir(RirTarget(4, 5)))
+        assertEquals("2", SettingsStore.encodeRir(RirTarget(2)))
+        assertEquals(RirTarget(4, 5), SettingsStore.parseRir("4-5"))
+        assertEquals(RirTarget(0), SettingsStore.parseRir("0"))
+        for (bad in listOf("", "x", "6", "-1", "3-3", "4-3", "4-6", "1-2-3", "4–5")) assertNull(SettingsStore.parseRir(bad), bad)
     }
 
     @Test
@@ -104,8 +124,13 @@ class RestoreSettingsTest {
             SettingsStore.KEY_REST_BEEP to "yes",
             SettingsStore.KEY_WEIGHT_STEP_LB to "3.0",
             SettingsStore.KEY_WEIGHT_STEP_KG to "2.5.1",
+            SettingsStore.KEY_DELOAD_KEEP_PCT to "55",
+            SettingsStore.KEY_DELOAD_RIR to "4-9",
         )
         assertEquals(his, SettingsRows.decode(rows, current = his))
+        for (pct in listOf("20", "80", "half")) {
+            assertEquals(60, SettingsRows.decode(mapOf(SettingsStore.KEY_DELOAD_KEEP_PCT to pct), current = his).deloadKeepPct, pct)
+        }
     }
 
     @Test

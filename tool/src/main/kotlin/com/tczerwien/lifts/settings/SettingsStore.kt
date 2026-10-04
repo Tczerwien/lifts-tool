@@ -7,6 +7,13 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.tczerwien.lifts.session.DEFAULT_DELOAD_KEEP_PCT
+import com.tczerwien.lifts.session.DEFAULT_DELOAD_RIR
+import com.tczerwien.lifts.session.DELOAD_KEEP_STEP_PCT
+import com.tczerwien.lifts.session.MAX_DELOAD_KEEP_PCT
+import com.tczerwien.lifts.session.MAX_RIR
+import com.tczerwien.lifts.session.MIN_DELOAD_KEEP_PCT
+import com.tczerwien.lifts.session.RirTarget
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 import kotlinx.coroutines.flow.Flow
@@ -42,6 +49,10 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         val weightStepLb: Double = WeightUnit.LB.defaultWeightStep,
         /** The same when the unit is kg: each unit keeps its own, so switching back finds it as it was. */
         val weightStepKg: Double = WeightUnit.KG.defaultWeightStep,
+        /** The share of each exercise's planned work sets a deload keeps, in percent ([deloadKeep]). */
+        val deloadKeepPct: Int = DEFAULT_DELOAD_KEEP_PCT,
+        /** The RIR a deload aims for, shown instead of the exercises' own targets ([shownRir]). */
+        val deloadRir: RirTarget = DEFAULT_DELOAD_RIR,
     ) {
         /** The plates the calculator loads: his, else the standard set of [units]. */
         val plateInventoryKg: List<Double> get() = customPlatesKg ?: defaultPlatesKg(units)
@@ -71,6 +82,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             restBeep = prefs[REST_BEEP] ?: DEFAULT_REST_BEEP,
             weightStepLb = validStep(prefs[WEIGHT_STEP_LB], WeightUnit.LB),
             weightStepKg = validStep(prefs[WEIGHT_STEP_KG], WeightUnit.KG),
+            deloadKeepPct = validDeloadKeep(prefs[DELOAD_KEEP_PCT]) ?: DEFAULT_DELOAD_KEEP_PCT,
+            deloadRir = prefs[DELOAD_RIR]?.let(::parseRir) ?: DEFAULT_DELOAD_RIR,
         )
     }
 
@@ -115,6 +128,18 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { prefs -> prefs[REST_BEEP] = on }
     }
 
+    /** Settings › Deload's share; one outside what the stepper offers is ignored. */
+    suspend fun setDeloadKeepPct(pct: Int) {
+        val valid = validDeloadKeep(pct) ?: return
+        dataStore.edit { prefs -> prefs[DELOAD_KEEP_PCT] = valid }
+    }
+
+    /** Settings › Deload's RIR. */
+    suspend fun setDeloadRir(rir: RirTarget) {
+        val stored = encodeRir(rir).takeIf { parseRir(it) != null } ?: return
+        dataStore.edit { prefs -> prefs[DELOAD_RIR] = stored }
+    }
+
     suspend fun setPlateInventoryKg(platesKg: List<Double>) {
         dataStore.edit { prefs ->
             prefs[PLATE_INVENTORY_KG] = encodePlates(platesKg)
@@ -132,6 +157,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             prefs[REST_BEEP] = settings.restBeep
             prefs[WEIGHT_STEP_LB] = validStep(settings.weightStepLb, WeightUnit.LB)
             prefs[WEIGHT_STEP_KG] = validStep(settings.weightStepKg, WeightUnit.KG)
+            prefs[DELOAD_KEEP_PCT] = validDeloadKeep(settings.deloadKeepPct) ?: DEFAULT_DELOAD_KEEP_PCT
+            prefs[DELOAD_RIR] = encodeRir(settings.deloadRir).takeIf { parseRir(it) != null } ?: encodeRir(DEFAULT_DELOAD_RIR)
         }
     }
 
@@ -143,6 +170,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         const val KEY_REST_BEEP = "lifts_rest_beep"
         const val KEY_WEIGHT_STEP_LB = "lifts_weight_step_lb"
         const val KEY_WEIGHT_STEP_KG = "lifts_weight_step_kg"
+        const val KEY_DELOAD_KEEP_PCT = "lifts_deload_keep_pct"
+        const val KEY_DELOAD_RIR = "lifts_deload_rir"
 
         private val UNITS = stringPreferencesKey(KEY_UNITS)
         private val DEFAULT_REST_SEC = intPreferencesKey(KEY_DEFAULT_REST_SEC)
@@ -151,6 +180,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val REST_BEEP = booleanPreferencesKey(KEY_REST_BEEP)
         private val WEIGHT_STEP_LB = doublePreferencesKey(KEY_WEIGHT_STEP_LB)
         private val WEIGHT_STEP_KG = doublePreferencesKey(KEY_WEIGHT_STEP_KG)
+        private val DELOAD_KEEP_PCT = intPreferencesKey(KEY_DELOAD_KEEP_PCT)
+        private val DELOAD_RIR = stringPreferencesKey(KEY_DELOAD_RIR)
 
         /** Not a setting (backups leave it out): the one-time fit of types to history has run. */
         private val TRACKING_FITTED = booleanPreferencesKey("lifts_tracking_fitted")
@@ -163,6 +194,24 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
 
         /** [step] when [unit] offers it, else that unit's default: nothing else ever reaches a stepper. */
         fun validStep(step: Double?, unit: WeightUnit): Double = step?.takeIf { it in unit.weightSteps } ?: unit.defaultWeightStep
+
+        /** [pct] when Settings › Deload offers it (30–70 in steps of 10), else null. */
+        fun validDeloadKeep(pct: Int?): Int? =
+            pct?.takeIf { it in MIN_DELOAD_KEEP_PCT..MAX_DELOAD_KEEP_PCT && (it - MIN_DELOAD_KEEP_PCT) % DELOAD_KEEP_STEP_PCT == 0 }
+
+        /** An RIR target as stored: "4-5" for a range, "4" for one number. */
+        fun encodeRir(rir: RirTarget): String = rir.max?.let { "${rir.min}-$it" } ?: "${rir.min}"
+
+        /** [encodeRir] read back; null unless it is a number from 0 to 5, or a range of two rising ones. */
+        fun parseRir(stored: String): RirTarget? {
+            val parts = stored.split('-')
+            val min = parts[0].toIntOrNull()?.takeIf { it in 0..MAX_RIR } ?: return null
+            return when (parts.size) {
+                1 -> RirTarget(min)
+                2 -> parts[1].toIntOrNull()?.takeIf { it in min + 1..MAX_RIR }?.let { RirTarget(min, it) }
+                else -> null
+            }
+        }
 
         private val json = Json
         private val PLATES_SERIALIZER = ListSerializer(Double.serializer())

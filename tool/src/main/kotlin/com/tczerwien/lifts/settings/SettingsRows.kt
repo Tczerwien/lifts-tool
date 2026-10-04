@@ -22,6 +22,8 @@ object SettingsRows {
         SettingsStore.KEY_REST_BEEP to settings.restBeep.toString(),
         SettingsStore.KEY_WEIGHT_STEP_LB to settings.weightStepLb.toString(),
         SettingsStore.KEY_WEIGHT_STEP_KG to settings.weightStepKg.toString(),
+        SettingsStore.KEY_DELOAD_KEEP_PCT to settings.deloadKeepPct.toString(),
+        SettingsStore.KEY_DELOAD_RIR to SettingsStore.encodeRir(settings.deloadRir),
     )
 
     /**
@@ -47,6 +49,9 @@ object SettingsRows {
             restBeep = rows[SettingsStore.KEY_REST_BEEP]?.toBooleanStrictOrNull() ?: current.restBeep,
             weightStepLb = rows[SettingsStore.KEY_WEIGHT_STEP_LB]?.step(WeightUnit.LB) ?: current.weightStepLb,
             weightStepKg = rows[SettingsStore.KEY_WEIGHT_STEP_KG]?.step(WeightUnit.KG) ?: current.weightStepKg,
+            // A backup from before B14 has neither: the phone's deload settings stay.
+            deloadKeepPct = SettingsStore.validDeloadKeep(rows[SettingsStore.KEY_DELOAD_KEEP_PCT]?.toIntOrNull()) ?: current.deloadKeepPct,
+            deloadRir = rows[SettingsStore.KEY_DELOAD_RIR]?.let(SettingsStore::parseRir) ?: current.deloadRir,
         )
 
     private fun String.restSec(): Int? = toIntOrNull()?.takeIf { it in SANE_REST_SEC }
