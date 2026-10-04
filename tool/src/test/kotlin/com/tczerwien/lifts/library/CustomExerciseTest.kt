@@ -89,6 +89,17 @@ class CustomExerciseTest {
     }
 
     @Test
+    fun `only an alternative still usable takes a removed main's place`() {
+        val rows = listOf(
+            row(1, templateId = 1, "y-raise", 0).copy(alternatives = listOf("gone", "press", "fly")),
+            row(2, templateId = 1, "y-raise", 1).copy(alternatives = listOf("gone")),
+        )
+        val out = withoutExercise(rows, "y-raise") { it != "gone" }
+        assertEquals(listOf(row(1, templateId = 1, "press", 0).copy(alternatives = listOf("gone", "fly"))), out.updates)
+        assertEquals(listOf(2L), out.deleteIds, "no usable alternative: it goes, never an Unknown exercise as its main")
+    }
+
+    @Test
     fun `an exercise no template asks for changes no template`() {
         val rows = listOf(row(1, templateId = 1, "bench", 0).copy(alternatives = listOf("press")), row(2, templateId = 1, "curl", 1))
         assertEquals(TemplateRemoval(emptyList(), emptyList()), withoutExercise(rows, "y-raise"))

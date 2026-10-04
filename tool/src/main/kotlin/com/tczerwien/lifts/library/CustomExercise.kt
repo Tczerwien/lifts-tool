@@ -46,20 +46,26 @@ data class TemplateRemoval(val deleteIds: List<Long>, val updates: List<Template
 
 /**
  * [exerciseId] out of the templates [rows] come from (every row of each, any order; ALT-6): it leaves
- * every exercise's alternatives, and an exercise it is goes, unless that one has an alternative left: then
- * the first of them takes its place as the main, so a slot with a fallback keeps its place (and its
- * superset). Each template's other exercises close up to positions 0..n-1 in the order they had, a
- * superset it leaves with one exercise becoming plain ([settledTemplateRows]). A template left with
- * nothing stays, empty. Only rows that change are in [TemplateRemoval.updates].
+ * every exercise's alternatives, and an exercise it is goes, unless that one has an alternative left that
+ * is [usable] (in the log and in the picker): then the first such takes its place as the main, the others
+ * staying its alternatives in order, so a slot with a fallback keeps its place (and its superset). Each
+ * template's other exercises close up to positions 0..n-1 in the order they had, a superset it leaves with
+ * one exercise becoming plain ([settledTemplateRows]). A template left with nothing stays, empty. Only rows
+ * that change are in [TemplateRemoval.updates].
  */
-fun withoutExercise(rows: List<TemplateExerciseEntity>, exerciseId: String): TemplateRemoval {
+fun withoutExercise(
+    rows: List<TemplateExerciseEntity>,
+    exerciseId: String,
+    usable: (String) -> Boolean = { true },
+): TemplateRemoval {
     val deleteIds = mutableListOf<Long>()
     val kept = rows.mapNotNull { row ->
         val others = row.alternatives.filter { it != exerciseId }
+        val promoted = if (row.exerciseId == exerciseId) others.firstOrNull(usable) else null
         when {
             row.exerciseId != exerciseId -> row.copy(alternatives = others)
-            others.isEmpty() -> null.also { deleteIds += row.id }
-            else -> row.copy(exerciseId = others.first(), alternatives = others.drop(1))
+            promoted == null -> null.also { deleteIds += row.id }
+            else -> row.copy(exerciseId = promoted, alternatives = others - promoted)
         }
     }
     val before = rows.associateBy { it.id }

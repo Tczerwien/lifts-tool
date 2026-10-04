@@ -129,7 +129,7 @@ class LiftsRepository private constructor(
     fun removeCustomExercise(id: String): Removal? = inTransaction {
         db.exerciseDao.byId(id)?.takeIf { it.isCustom } ?: return@inTransaction null
         val rows = db.templateDao.templateIdsWith(id).flatMap { db.templateDao.exercisesForTemplate(it) }
-        val out = withoutExercise(rows, id)
+        val out = withoutExercise(rows, id) { other -> db.exerciseDao.byId(other)?.hidden == false }
         out.deleteIds.forEach { db.templateDao.deleteTemplateExercise(it) }
         out.updates.forEach { db.templateDao.updateTemplateExercise(it) }
         when (removalFor(inWorkouts = db.exerciseDao.inWorkouts(id))) {
