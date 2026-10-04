@@ -95,10 +95,11 @@ fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): 
 fun PlannedSlot.deloadTrimmed(keepPct: Int): PlannedSlot {
     val planned = targetSets ?: return this
     var workLeft = deloadKeep(planned, keepPct)
-    var parentKept = false
+    // As in deloadRows: a drop with no work set above it (first, or after a warm-up) stays.
+    var parentKept = true
     val kept = types.filter { type ->
         when (type) {
-            SET_TYPE_WARMUP -> true
+            SET_TYPE_WARMUP -> true.also { parentKept = true }
             SET_TYPE_DROP -> parentKept
             else -> (workLeft > 0).also { keptOne -> parentKept = keptOne; if (keptOne) workLeft-- }
         }

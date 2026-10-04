@@ -97,6 +97,10 @@ class DeloadTest {
         assertEquals(listOf(n), PlannedSlot("row", listOf(n, n, n), targetSets = 3).deloadTrimmed(30).types)
         // A drop goes with its work set and never counts as one (review R2-8).
         assertEquals(listOf(n, d, n, d), PlannedSlot("curl", listOf(n, d, n, d, n, d), targetSets = 3).deloadTrimmed(50).types)
+        // A drop with no work set above it stays, as the switch leaves it (closing check C1-1).
+        assertEquals(listOf(d, n), PlannedSlot("curl", listOf(d, n, n), targetSets = 2).deloadTrimmed(50).types)
+        assertEquals(listOf(n, w, d), PlannedSlot("curl", listOf(n, n, w, d), targetSets = 2).deloadTrimmed(50).types)
+        assertEquals(listOf(d, n), deloadRows(rows(d, n, n), 2, 1, on = true).let { c -> listOf(d, n, n).filterIndexed { i, _ -> i + 1L !in c.deleteIds } })
     }
 
     // --- The RIR it shows (DL-3) ---
