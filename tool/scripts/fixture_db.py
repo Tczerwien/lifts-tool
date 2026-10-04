@@ -26,9 +26,10 @@ America/Chicago):
   - Lower A's targets (schema 2 and later): squat 3–5 reps at RIR 1–2, Romanian deadlift 6–8 at RIR 1–2
     (both reached the top every set last time: ADD LOAD), leg press 10–15 at RIR 2 (last done in Saturday's
     Full Body at 12: no cue). A v1 file has no column for a range, so it gets none of them.
-  - Week 4 is a deload week (schema 2 and later): its three workouts are marked deload, each exercise kept
-    half its work sets (rounded up: 3 -> 2, 1 -> 1), loads as they were, and its planned sets recorded, as
-    "… › Deload" leaves them. A v1 file has no column for the mark, so its week 4 is a normal one.
+  - The fifth week (four weeks before this one) is a deload week (schema 2 and later): its three workouts
+    are marked deload, each exercise kept half its work sets (rounded up: 3 -> 2, 1 -> 1), loads as they
+    were, and its planned sets recorded, as "… › Deload" leaves them. A v1 file has no column for the mark,
+    so that week is a normal one.
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
@@ -292,7 +293,7 @@ def gym(conn, now):
                 "UPDATE template_exercises SET repMin = ?, repMax = ?, targetRir = ?, targetRirMax = ? WHERE templateId = ? AND exerciseId = ?",
                 (rep_min, rep_max, rir, rir_max, lower_t, exercise_id),
             )
-    # Also B14: week 4 as a deload week, as the switch leaves a workout: marked, each exercise cut to half its
+    # Also B14: the fifth week (index 4, four weeks before this one) as a deload week, as the switch leaves a workout: marked, each exercise cut to half its
     # work sets (rounded up), loads as they were, and its planned sets recorded. Nothing random.
     if w.deloads:
         start, end = first_monday + dt.timedelta(weeks=4), first_monday + dt.timedelta(weeks=5)
