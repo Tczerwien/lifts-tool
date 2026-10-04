@@ -249,6 +249,11 @@ class JsonExportTest {
         )
         assertEquals(listOf(ExportFixtures.squat.id), swapped.workouts.map { it.exercises.single().plannedExerciseId }.distinct())
         assertEquals(listOf(ExportFixtures.bench.id, ExportFixtures.squat.id), swapped.exercises.map { it.id })
+        // A main not in the log (a restored file) names nothing: no id the exercises lack.
+        val orphan = JsonExport.render(
+            ExportFixtures.snapshot(slots = ExportFixtures.slots.map { it.copy(choices = listOf("gone-from-the-log", it.exerciseId)) }),
+        )
+        assertTrue("planned_exercise_id" !in orphan && "gone-from-the-log" !in orphan, orphan)
         val offered = Json.decodeFromString(
             JsonExportDocument.serializer(),
             JsonExport.render(

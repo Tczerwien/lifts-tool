@@ -189,7 +189,7 @@ data class SnapshotWorkoutExercise(
     val supersetId: Int? = null,
     /**
      * The exercise its template planned when another of its choices was done instead (a swap): the slot's
-     * first choice, its main; null when that was done, or the slot had no alternatives.
+     * first choice, its main; null when that was done, the slot had no alternatives, or the main isn't in the log.
      */
     val planned: SnapshotExerciseRef? = null,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
@@ -337,7 +337,9 @@ fun buildSnapshot(
                         // Only a real range's top: one at or below the number says nothing more ([rirTarget]).
                         targetRirMax = rirTarget(slot.targetRir, slot.targetRirMax)?.max?.takeIf { exercise?.tracking?.takesReps != false },
                         supersetId = supersetIds[slot.id],
-                        planned = slot.choices.firstOrNull()?.takeIf { it != slot.exerciseId }?.let { SnapshotExerciseRef(it, nameOf(it)) },
+                        // Only one in the log, as for the alternatives: every id the file names is in its exercises.
+                        planned = slot.choices.firstOrNull()?.takeIf { it != slot.exerciseId && it in exercisesById }
+                            ?.let { SnapshotExerciseRef(it, nameOf(it)) },
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,
