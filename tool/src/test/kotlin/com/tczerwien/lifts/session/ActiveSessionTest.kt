@@ -105,6 +105,7 @@ class ActiveSessionTest {
         val slot = store.exercisesForWorkout(workoutId).single()
         assertEquals(listOf(6, 12, 1, 2, 150), listOf(slot.targetRepMin, slot.targetRepMax, slot.targetRir, slot.targetRirMax, slot.restSecWork))
         assertEquals(listOf(w, w, n, n, n), store.setsForWorkout(workoutId).map { it.type }, "two warm-ups, not last time's one")
+        assertEquals(3, slot.targetSets, "the planned work sets, for a deload to restore")
         // Exactly as started: backing out leaves nothing.
         assertTrue(session.discardIfUntouched(workoutId))
     }
@@ -137,6 +138,7 @@ class ActiveSessionTest {
         assertEquals(3, store.setsForWorkout(workoutId).count { it.workoutExerciseId == first })
         assertEquals(2, store.setsForWorkout(workoutId).count { it.workoutExerciseId == second })
         assertEquals(DEFAULT_NEW_EXERCISE_SETS, store.setsForWorkout(workoutId).count { it.workoutExerciseId == third })
+        assertTrue(store.exercisesForWorkout(workoutId).all { it.targetSets == null }, "a hand-added slot has no plan")
     }
 
     @Test
@@ -444,6 +446,7 @@ class ActiveSessionTest {
             listOf(incline.restSecWork, incline.restSecWarmup, incline.targetRepMin, incline.targetRepMax, incline.targetRir, incline.targetRirMax),
         )
         assertNull(incline.notes, "his note stays with the old workout")
+        assertEquals(listOf(2, 1), slots.map { it.targetSets }, "no plan on the source: the work sets it copies")
         val rows = store.setsForWorkout(again)
         assertEquals(listOf(w, n, n), rows.filter { it.workoutExerciseId == incline.id }.map { it.type }, "warm-up kept, failure as a work set, the unticked set left out")
         assertEquals(listOf(n), rows.filter { it.workoutExerciseId == slots[1].id }.map { it.type })

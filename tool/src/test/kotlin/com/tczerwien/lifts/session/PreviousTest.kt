@@ -248,7 +248,10 @@ class PreviousTest {
         )
         assertEquals(
             listOf(
-                PlannedSlot("incline", listOf(w, w, n, n, n, n), 150, 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1, targetRirMax = 2),
+                PlannedSlot(
+                    "incline", listOf(w, w, n, n, n, n), 150, 60, targetRepMin = 6, targetRepMax = 12, targetRir = 1, targetRirMax = 2,
+                    targetSets = 4,
+                ),
             ),
             planTemplate(template, emptyMap()),
         )
@@ -281,6 +284,21 @@ class PreviousTest {
     }
 
     @Test
+    fun `Start Again plans the source slot's work sets, else the work sets it copies`() {
+        // A deload's slot: 4 planned, 2 done (and a warm-up); a slot with no plan (added by hand): 3 done.
+        val slots = listOf(slot(1, "squat", 0).copy(targetSets = 4), slot(2, "curl", 1))
+        val sets = listOf(
+            set(11, slot = 1, type = w, completedAt = 1L), set(12, slot = 1, position = 1, completedAt = 2L),
+            set(13, slot = 1, position = 2, completedAt = 3L),
+            set(21, slot = 2, completedAt = 4L), set(22, slot = 2, position = 1, type = f, completedAt = 5L),
+            set(23, slot = 2, position = 2, completedAt = 6L), set(24, slot = 2, position = 3),
+        )
+        val plan = planFromWorkout(slots, sets)
+        assertEquals(listOf(listOf(w, n, n), listOf(n, n, n)), plan.map { it.types })
+        assertEquals(listOf(4, 3), plan.map { it.targetSets }, "the full plan kept; the ticked work sets otherwise")
+    }
+
+    @Test
     fun `a hand-added exercise mirrors last time's pattern, or starts with three sets`() {
         assertEquals(listOf(w, n, n), prefillTypes(listOf(prev(1, w), prev(2, n), prev(3, f))))
         assertEquals(listOf(n, n, n), prefillTypes(emptyList()))
@@ -303,9 +321,9 @@ class PreviousTest {
         )
         assertEquals(
             listOf(
-                PlannedSlot("bench", listOf(w, n)),
-                PlannedSlot("bench", listOf(n, n, n)),
-                PlannedSlot("rdl", listOf(w, w, n, n, n)),
+                PlannedSlot("bench", listOf(w, n), targetSets = 1),
+                PlannedSlot("bench", listOf(n, n, n), targetSets = 3),
+                PlannedSlot("rdl", listOf(w, w, n, n, n), targetSets = 3),
             ),
             planTemplate(template, groups(lastTime)),
         )

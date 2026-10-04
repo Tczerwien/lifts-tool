@@ -177,6 +177,11 @@ data class PlannedSlot(
     val supersetGroup: Int? = null,
     /** The top of an RIR range ([rirTarget]); null: [targetRir] alone. */
     val targetRirMax: Int? = null,
+    /**
+     * The work sets planned (DL-0): the template's, or for Start Again the source slot's (else the work
+     * sets it copies). What switching a deload off puts back; null for a slot with no plan.
+     */
+    val targetSets: Int? = null,
 )
 
 /**
@@ -205,6 +210,7 @@ fun planTemplate(
             targetRir = planned.targetRir,
             supersetGroup = planned.supersetGroup,
             targetRirMax = planned.targetRirMax,
+            targetSets = planned.targetSets,
         )
     }.withNormalizedGroups()
 }
@@ -212,7 +218,8 @@ fun planTemplate(
 /**
  * The slots "Start again" begins with, from a finished workout's [slots] and [sets]: one per slot
  * with a ticked work set, in position order, each with its ticked sets' pattern (warm-ups kept, every
- * other type a plain work set), the slot's rests and targets, and its superset among the slots kept
+ * other type a plain work set), the slot's rests and targets, its planned work sets (the slot's, else
+ * the work sets copied: a deload's copy keeps the full plan), and its superset among the slots kept
  * (a superset left with one slot is none). Unticked sets count nowhere, so an exercise skipped that
  * day, or left after its warm-ups, is left out; notes stay with the old workout. "Save as template"
  * reads the same plan.
@@ -222,9 +229,10 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
     return slots.sortedBy { it.position }.mapNotNull { slot ->
         val done = ticked[slot.id]?.sortedBy { it.position }?.takeIf { sets -> sets.any { !it.isWarmup() } }
             ?: return@mapNotNull null
+        val types = done.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
         PlannedSlot(
             exerciseId = slot.exerciseId,
-            types = done.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL },
+            types = types,
             restSecWork = slot.restSecWork,
             restSecWarmup = slot.restSecWarmup,
             targetRepMin = slot.targetRepMin,
@@ -232,6 +240,7 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
             targetRir = slot.targetRir,
             supersetGroup = slot.supersetGroup,
             targetRirMax = slot.targetRirMax,
+            targetSets = slot.targetSets ?: types.count { it != SET_TYPE_WARMUP },
         )
     }.withNormalizedGroups()
 }

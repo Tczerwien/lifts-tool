@@ -475,6 +475,7 @@ class SessionLogicTest {
             asStarted[0].copy(targetRepMax = 15),
             asStarted[0].copy(targetRir = null),
             asStarted[0].copy(targetRirMax = 2),
+            asStarted[0].copy(targetSets = 9),
         )) {
             assertFalse(isUntouched(workout(templateId = 7), listOf(edit) + asStarted.drop(1), sets, { plan }), "$edit")
         }
@@ -617,7 +618,16 @@ class SessionLogicTest {
     private fun startedFrom(plan: List<PlannedSlot>): Pair<List<WorkoutExerciseEntity>, List<SetEntity>> {
         var setId = 100L
         val slots = plan.mapIndexed { index, planned ->
-            slot(id = index + 1L, exerciseId = planned.exerciseId, position = index).copy(supersetGroup = planned.supersetGroup)
+            slot(id = index + 1L, exerciseId = planned.exerciseId, position = index).copy(
+                restSecWork = planned.restSecWork,
+                restSecWarmup = planned.restSecWarmup,
+                targetRepMin = planned.targetRepMin,
+                targetRepMax = planned.targetRepMax,
+                targetRir = planned.targetRir,
+                supersetGroup = planned.supersetGroup,
+                targetRirMax = planned.targetRirMax,
+                targetSets = planned.targetSets,
+            )
         }
         val sets = slots.zip(plan).flatMap { (slot, planned) ->
             planned.types.mapIndexed { position, type ->

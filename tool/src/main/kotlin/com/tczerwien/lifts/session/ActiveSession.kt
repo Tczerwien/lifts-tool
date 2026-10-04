@@ -89,6 +89,7 @@ class ActiveSession(
                     targetRir = planned.targetRir,
                     supersetGroup = planned.supersetGroup,
                     targetRirMax = planned.targetRirMax,
+                    targetSets = planned.targetSets,
                 ),
             )
             planned.types.forEachIndexed { setIndex, type ->
