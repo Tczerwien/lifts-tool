@@ -1274,7 +1274,7 @@ class ActiveSessionTest {
 
         val again = assertNotNull(session.startFromWorkout(workoutId, now = 2_000_000))
         val copy = store.exercisesForWorkout(again).first()
-        assertEquals("row" to listOf("row", "squat", "fly"), copy.exerciseId to copy.choices, "the lift done is the copy's main: no swap there")
+        assertEquals("row" to listOf("squat", "row", "fly"), copy.exerciseId to copy.choices, "the template's plan, main first")
         assertTrue(session.discardIfUntouched(again), "a copy as Start Again made it")
 
         val saved = assertNotNull(session.saveAsTemplate(workoutId, "Legs 2"))
@@ -1309,6 +1309,59 @@ class ActiveSessionTest {
         val previous = lastTime(next)
         assertEquals(emptyList(), previous.getValue(nextTop.id), "the top set wasn't done last time: nothing, not the back-offs")
         assertEquals(listOf(82.5, 82.5), previous.getValue(nextBackOffs.id).map { it.weightKg })
+    }
+
+    @Test
+    fun `a Start Again copy of a swapped slot reads PREVIOUS as its source did, and so does the next start`() {
+        store.addFinishedWorkout(
+            startedAt = 500_000,
+            "bench" to listOf(Triple(n, 100.0, 3)),
+            "bench" to listOf(Triple(n, 80.0, 8), Triple(n, 80.0, 8)),
+        )
+        val template = store.addTemplate("Push", "bench" to 1, "bench" to 2)
+        val (topRow) = store.exercisesForTemplate(template)
+        store.templateExercises[topRow.id] = topRow.copy(alternatives = listOf("fly"))
+        fun lastTime(workoutId: Long) = store.exercisesForWorkout(workoutId).let { slots ->
+            previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
+        }
+        fun doAll(workoutId: Long, backOffKg: Double, at: Long) {
+            val (top, backOffs) = store.exercisesForWorkout(workoutId)
+            session.completeSet(workoutId, rowsOf(top).first(), 20.0, 12, n, now = at)
+            rowsOf(backOffs).forEachIndexed { index, row -> session.completeSet(workoutId, row, backOffKg, 8, n, now = at + (index + 1) * 60_000L) }
+            assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = at + 300_000))
+        }
+        val week1 = session.startFromTemplate(template, now = 1_000_000)
+        assertTrue(session.swapExercise(week1, store.exercisesForWorkout(week1).first().id, "fly"))
+        doAll(week1, 82.5, at = 1_060_000)
+
+        val copy = assertNotNull(session.startFromWorkout(week1, now = 2_000_000))
+        val (_, copyBackOffs) = store.exercisesForWorkout(copy)
+        assertEquals(listOf(82.5, 82.5), lastTime(copy).getValue(copyBackOffs.id).map { it.weightKg }, "the back-offs, not the top set's place")
+        doAll(copy, 85.0, at = 2_060_000)
+        val next = session.startFromTemplate(template, now = 3_000_000)
+        val (nextTop, nextBackOffs) = store.exercisesForWorkout(next)
+        assertEquals(emptyList(), lastTime(next).getValue(nextTop.id), "the top set wasn't done in the copy either")
+        assertEquals(listOf(85.0, 85.0), lastTime(next).getValue(nextBackOffs.id).map { it.weightKg })
+    }
+
+    @Test
+    fun `a Start Again copy of a slot swapped to a lift the workout has keeps each slot's own sets`() {
+        val template = store.addTemplate("Legs", "squat" to 1, "row" to 1)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(alternatives = listOf("row"))
+        val source = session.startFromTemplate(template, now = 1_000_000)
+        val (swapped, own) = store.exercisesForWorkout(source)
+        assertTrue(session.swapExercise(source, swapped.id, "row"))
+        session.completeSet(source, rowsOf(swapped).first(), 40.0, 10, n, now = 1_060_000)
+        session.completeSet(source, rowsOf(own).first(), 62.5, 10, n, now = 1_120_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(source, now = 1_200_000))
+
+        val copy = assertNotNull(session.startFromWorkout(source, now = 2_000_000))
+        val (copySwapped, copyOwn) = store.exercisesForWorkout(copy)
+        val slots = store.exercisesForWorkout(copy)
+        val lastTime = previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
+        assertEquals(listOf(40.0), lastTime.getValue(copySwapped.id).map { it.weightKg }, "the swapped slot's own, not crossed")
+        assertEquals(listOf(62.5), lastTime.getValue(copyOwn.id).map { it.weightKg })
     }
 
     @Test

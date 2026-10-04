@@ -74,7 +74,7 @@ object MarkdownExport {
         append(" `(superset 1)` marks the exercises done in turn that day as superset 1: one set of each, then the")
         append(" rest after the round.")
         append(" `(instead of Leg Curl)` after an exercise means it was done in place of the one its template planned,")
-        append(" an alternative swapped in for that workout.")
+        append(" an alternative (a workout started again from another keeps that one's plan).")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }

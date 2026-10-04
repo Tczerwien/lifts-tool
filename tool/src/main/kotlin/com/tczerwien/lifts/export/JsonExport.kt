@@ -44,8 +44,8 @@ import kotlinx.serialization.json.Json
  *
  * 2.6 (B15) added alternatives on template exercises ([{exercise_id, name}], in order: exercises that can
  * stand in for it at the gym, swapped in for one workout; absent without any) and planned_exercise_id on
- * workout exercises (the exercise its template planned when an alternative was done instead; absent
- * otherwise). Every id named is in exercises[].
+ * workout exercises (the exercise its template planned, its main, when an alternative was done instead; a
+ * workout started again from one keeps that template's plan; absent otherwise). Every id named is in exercises[].
  */
 object JsonExport {
 
@@ -305,7 +305,7 @@ data class JsonWorkoutExercise(
     @SerialName("target_rir_max") val targetRirMax: Int? = null,
     /** The workout's exercises sharing it were done as a superset; absent outside one. */
     @SerialName("superset_id") val supersetId: Int? = null,
-    /** The exercise its template planned, when this one was done instead (an alternative); absent otherwise. */
+    /** The exercise its template planned (its main; a Start Again copy keeps the plan), when this one was done instead; absent otherwise. */
     @SerialName("planned_exercise_id") val plannedExerciseId: String? = null,
     val sets: List<JsonSet>,
 )
