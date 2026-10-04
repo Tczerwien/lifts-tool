@@ -31,8 +31,8 @@ America/Chicago):
     were, and its planned sets recorded, as "… › Deload" leaves them. A v1 file has no column for the mark,
     so that week is a normal one.
   - Alternatives (schema 2 and later): Upper A's cable lateral raise offers the dumbbell side lateral raise
-    and the seated side lateral raise, and the Friday Upper A before last did the dumbbell one instead (a swap:
-    its slot does it, with the three as its choices). A v1 file has no column for either, so that Friday
+    and the seated side lateral raise, and the Friday Upper A before last did the dumbbell one instead, at
+    20 lb x 10 (a swap: its slot does it, with the three as its choices). A v1 file has no column for either, so that Friday
     did the cable raise.
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
@@ -332,7 +332,8 @@ def gym(conn, now):
                 ).fetchall()):
                     conn.execute("UPDATE sets SET position = ? WHERE id = ?", (position, set_id))
     # Added in B15: the cable lateral raise's alternatives in Upper A, and the Friday before last (week index 6) done
-    # with the dumbbell raise instead, its slot keeping the three choices as a swap leaves them. Nothing random.
+    # with the dumbbell raise instead, at 20 lb × 10 (so its PREVIOUS reads apart from the cable's 15 × 12), its slot
+    # keeping the three choices as a swap leaves them. Nothing random.
     if has_column(conn, "template_exercises", "alternatives"):
         choices = [LATERAL, SIDE_LATERAL, SEATED_SIDE_LATERAL]
         conn.execute(
@@ -340,11 +341,13 @@ def gym(conn, now):
             (json_list(choices[1:]), upper_t, LATERAL),
         )
         friday = dt.datetime.combine(first_monday + dt.timedelta(weeks=6, days=4), dt.time(0, 0), ZONE)
-        conn.execute(
-            "UPDATE workout_exercises SET exerciseId = ?, choices = ? WHERE exerciseId = ? AND workoutId IN "
-            "(SELECT id FROM workouts WHERE name = 'Upper A' AND startedAt >= ? AND startedAt < ?)",
-            (SIDE_LATERAL, json_list(choices), LATERAL, millis(friday), millis(friday + dt.timedelta(days=1))),
-        )
+        (slot_id,) = conn.execute(
+            "SELECT we.id FROM workout_exercises we JOIN workouts w ON w.id = we.workoutId "
+            "WHERE w.name = 'Upper A' AND w.startedAt >= ? AND w.startedAt < ? AND we.exerciseId = ?",
+            (millis(friday), millis(friday + dt.timedelta(days=1)), LATERAL),
+        ).fetchone()
+        conn.execute("UPDATE workout_exercises SET exerciseId = ?, choices = ? WHERE id = ?", (SIDE_LATERAL, json_list(choices), slot_id))
+        conn.execute("UPDATE sets SET weightKg = ?, reps = 10 WHERE workoutExerciseId = ?", (kg(20), slot_id))
 
 
 # --- Scenario "long": years of four workouts a week ---
