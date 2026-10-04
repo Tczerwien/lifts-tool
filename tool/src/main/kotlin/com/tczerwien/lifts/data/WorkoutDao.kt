@@ -248,15 +248,18 @@ interface WorkoutDao {
  * The finished workouts in brief: how many, the newest one's id, the sum of their ends; how many sets
  * they hold ticked, the sum of those ticks' times, and every ticked set's values (weight in grams,
  * reps, seconds, RIR, type) folded into one whole number, weighted by the set's id so two edits can't
- * cancel out. Whole numbers only: the same sum in any row order, so a backup and the log it copied
+ * cancel out; and which are deloads, as the sum of their ids, so marking one and unmarking another
+ * can't cancel out either (DL-8). Whole numbers only: the same sum in any row order, so a backup and the log it copied
  * agree exactly. Different after any Finish since: a new workout, or a RESUME and Finish again (a
  * later end, more sets ticked, a value corrected, even when the end stays put: the clock set back),
- * a stale close, a delete, a restore. Read the same way from a backup file
- * ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]).
+ * a stale close, a delete, a restore, a deload marked in Workout Detail. Read the same way from a backup file
+ * ([com.tczerwien.lifts.backup.BackupFile.finishedWorkouts]); a backup from before version 2 has no
+ * deload column, can't be read so, and counts as behind: the next check backs up, which heals it.
  */
 const val FINISHED_WORKOUTS_SQL =
-    "SELECT f.count, f.lastId, f.endSum, s.ticked, s.tickSum, s.valueSum FROM " +
-        "(SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum " +
+    "SELECT f.count, f.lastId, f.endSum, s.ticked, s.tickSum, s.valueSum, f.deloadSum FROM " +
+        "(SELECT COUNT(*) AS count, COALESCE(MAX(id), 0) AS lastId, COALESCE(SUM(endedAt), 0) AS endSum, " +
+        "COALESCE(SUM(id * deload), 0) AS deloadSum " +
         "FROM workouts WHERE endedAt IS NOT NULL) AS f, " +
         "(SELECT COUNT(*) AS ticked, COALESCE(SUM(sets.completedAt), 0) AS tickSum, COALESCE(SUM(sets.id * (" +
         "COALESCE(CAST(ROUND(sets.weightKg * 1000) AS INTEGER), 0) + COALESCE(sets.reps, 0) * 1000003 + " +
@@ -275,6 +278,8 @@ data class FinishedWorkouts(
     val ticked: Int = 0,
     val tickSum: Long = 0,
     val valueSum: Long = 0,
+    /** The sum of the deloads' ids. */
+    val deloadSum: Long = 0,
 )
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */

@@ -214,6 +214,8 @@ class BackupPolicyTest {
         // RESUME, a logged weight corrected, Finish again with the end at the last tick.
         val valued = ticked.copy(valueSum = 4_400_000_000_000L)
         assertTrue(BackupPolicy.behindLog(valued, valued.copy(valueSum = valued.valueSum + 2_268L * 9_041)), "a value corrected, same ticks")
+        // A deload marked in Workout Detail after its Finish: nothing else changes.
+        assertTrue(BackupPolicy.behindLog(valued, valued.copy(deloadSum = 57)), "a deload marked")
         assertTrue(BackupPolicy.behindLog(inLatest = null, inLog = copied), "no backup (or one that can't be read)")
         val none = FinishedWorkouts(count = 0, lastId = 0, endSum = 0)
         assertFalse(BackupPolicy.behindLog(inLatest = null, inLog = none), "nothing finished, no backup: isDue's business")
