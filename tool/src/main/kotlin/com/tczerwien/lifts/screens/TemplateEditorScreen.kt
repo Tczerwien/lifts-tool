@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,6 +30,7 @@ import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.library.moved
 import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.MAX_ALTERNATIVES
 import com.tczerwien.lifts.session.MAX_REST_SEC
 import com.tczerwien.lifts.session.MAX_TARGET_REPS
 import com.tczerwien.lifts.session.MAX_TEMPLATE_SETS
@@ -71,6 +74,7 @@ import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.rememberKeyboardOptions
 import com.thelightphone.sdk.ui.LightBarButton
 import com.thelightphone.sdk.ui.LightBottomBar
+import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightScrollView
 import com.thelightphone.sdk.ui.LightText
@@ -101,6 +105,10 @@ private const val STEPPER_LABEL_GAP_UNITS = 0.25f
 private const val SUPERSET_CELL_HEIGHT_UNITS = 4f
 private const val DISABLED_ALPHA = 0.4f
 
+/** An alternative's remove target: this wide and as tall as its row, at the row's end. */
+private const val REMOVE_TARGET_UNITS = 3f
+private const val REMOVE_ICON_UNITS = 1f
+
 class TemplateEditorViewModel(
     private val repository: LiftsRepository,
     private val settingsStore: SettingsStore,
@@ -117,7 +125,16 @@ class TemplateEditorViewModel(
 
         /** Full-screen stepper takeover editing one template exercise. */
         data class EditExercise(val templateExerciseId: Long) : Mode
+
+        /** One template exercise's alternatives, from its overlay: a list with "+" and a remove on each. */
+        data class Alternatives(val templateExerciseId: Long) : Mode
     }
+
+    /**
+     * One of an exercise's alternatives as its list shows it: [usable] false for one gone from the log
+     * ("Unknown exercise") or hidden, which the swap at the gym skips.
+     */
+    data class AlternativeRow(val exerciseId: String, val name: String, val usable: Boolean = true)
 
     data class ExerciseRow(
         val id: Long,
@@ -145,6 +162,8 @@ class TemplateEditorViewModel(
         val supersetWithNext: Boolean = false,
         /** The last exercise: nothing after it to join. */
         val last: Boolean = false,
+        /** Exercises that can stand in for it at the gym, swapped in for one workout. */
+        val alternatives: List<AlternativeRow> = emptyList(),
     )
 
     data class UiState(
@@ -224,6 +243,44 @@ class TemplateEditorViewModel(
         if (_uiState.value.deleting) return false
         disarm()
         return true
+    }
+
+    /** The overlay's Alternatives icon: that exercise's alternatives ([Mode.Alternatives]). */
+    fun openAlternatives(templateExerciseId: Long) {
+        if (_uiState.value.deleting) return
+        disarm()
+        _uiState.update { it.copy(mode = Mode.Alternatives(templateExerciseId)) }
+    }
+
+    /**
+     * Adds [exerciseId], picked for exercise [templateExerciseId], last among its alternatives (ALT-1), up to
+     * [MAX_ALTERNATIVES]; nothing when it is that exercise or already one of them, when the row is gone
+     * (removed while the picker was open), or the exercise is (deleted or removed after the picker read it).
+     */
+    fun addAlternative(templateExerciseId: Long, exerciseId: String) = mutate {
+        repository.inTransaction {
+            val row = templateExercise(templateExerciseId) ?: return@inTransaction false
+            if (exerciseId == row.exerciseId || exerciseId in row.alternatives || row.alternatives.size >= MAX_ALTERNATIVES) {
+                return@inTransaction false
+            }
+            if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction false
+            repository.updateTemplateExercise(row.copy(alternatives = row.alternatives + exerciseId))
+        }
+    }
+
+    /** When an alternative was last removed: the rows below move up under his finger. */
+    private var lastAlternativeRemovedAt: Long? = null
+
+    /**
+     * Takes [exerciseId] out of exercise [templateExerciseId]'s alternatives. One tap (adding it back is a
+     * pick); a tap within [isDoubleTap] of the last removal was aimed at the row that was there, which the
+     * next one has taken, so it is dropped.
+     */
+    fun removeAlternative(templateExerciseId: Long, exerciseId: String) {
+        val now = System.currentTimeMillis()
+        if (lastAlternativeRemovedAt?.let { isDoubleTap(it, now) } == true) return
+        lastAlternativeRemovedAt = now
+        edit(templateExerciseId) { row -> row.copy(alternatives = row.alternatives.filter { it != exerciseId }) }
     }
 
     /**
@@ -407,6 +464,12 @@ class TemplateEditorViewModel(
                 true
             }
 
+            // Back to the exercise the alternatives are for.
+            state.mode is Mode.Alternatives -> {
+                _uiState.update { it.copy(mode = Mode.EditExercise(state.mode.templateExerciseId)) }
+                true
+            }
+
             state.mode != Mode.Overview -> {
                 _uiState.update { it.copy(mode = Mode.Overview) }
                 true
@@ -442,8 +505,8 @@ class TemplateEditorViewModel(
         val template = repository.templateById(templateId)
         val settings = settingsStore.snapshot()
         val exercises = repository.exercisesForTemplate(templateId)
-        // One query for every row's exercise, not one each: each stepper tap reloads.
-        val catalogById = repository.exercisesByIds(exercises.map { it.exerciseId })
+        // One query for every row's exercise and alternatives, not one each: each stepper tap reloads.
+        val catalogById = repository.exercisesByIds(exercises.flatMap { listOf(it.exerciseId) + it.alternatives })
         val groups = exercises.map { it.supersetGroup }
         val rows = exercises.mapIndexed { index, exercise ->
             val catalog = catalogById[exercise.exerciseId]
@@ -464,6 +527,10 @@ class TemplateEditorViewModel(
                 bar = SupersetBar.at(groups, index),
                 supersetWithNext = linkedWithNext(groups, index),
                 last = index == exercises.lastIndex,
+                alternatives = exercise.alternatives.map { id ->
+                    val alternative = catalogById[id]
+                    AlternativeRow(id, alternative?.let(::displayName) ?: UNKNOWN_EXERCISE, usable = alternative?.hidden == false)
+                },
             )
         }
         _uiState.update { it.copy(name = template?.name.orEmpty(), rows = rows) }
@@ -472,11 +539,12 @@ class TemplateEditorViewModel(
 
 /**
  * Template editor (design/screens/template-editor.html): uniform 4gu exercise rows
- * ("name" + "2W + 3 × 8–12 · RIR 1 · rest 3:00"), up/down reorder, "+ Add Exercise" via the picker,
+ * ("name" + "2W + 3 × 8–12 · RIR 1 · or Leg Curl · rest 3:00"), up/down reorder, "+ Add Exercise" via the picker,
  * rename via the tappable top-bar center, trash with a two-tap confirm. Tapping a row
  * opens the card's documented overlay as a full-screen MODE takeover (top bar + steppers in pairs:
  * Sets and Warm-ups, the rep range, RIR and Rest, Warm-up Rest and "Superset With Next") so list rows
- * stay uniform. A superset's rows carry a bar down their left edge.
+ * stay uniform; its bottom bar's loop icon opens the exercise's alternatives, a mode of their own (the
+ * overlay has no room left). A superset's rows carry a bar down their left edge.
  *
  * Constructor and result type are FROZEN (cross-referenced by other screens).
  */
@@ -540,6 +608,11 @@ class TemplateEditorScreen(
                             Overview(uiState)
                         }
                     }
+
+                    is TemplateEditorViewModel.Mode.Alternatives -> {
+                        val row = uiState.rows.firstOrNull { it.id == mode.templateExerciseId }
+                        if (row != null) Alternatives(row = row) else Overview(uiState)
+                    }
                 }
             }
         }
@@ -589,9 +662,12 @@ class TemplateEditorScreen(
                                 RowName(row.name)
                                 LightText(
                                     text = if (row.hold) {
-                                        templateSlotSummary(row.targetSets, row.warmupSets, null, null, null, row.restSec)
+                                        templateSlotSummary(row.targetSets, row.warmupSets, null, null, null, row.restSec, row.alternatives.map { it.name })
                                     } else {
-                                        templateSlotSummary(row.targetSets, row.warmupSets, row.repMin, row.repMax, rirTarget(row.targetRir, row.targetRirMax), row.restSec)
+                                        templateSlotSummary(
+                                            row.targetSets, row.warmupSets, row.repMin, row.repMax, rirTarget(row.targetRir, row.targetRirMax),
+                                            row.restSec, row.alternatives.map { it.name },
+                                        )
                                     },
                                     variant = LightTextVariant.Detail,
                                     lighten = true,
@@ -612,7 +688,8 @@ class TemplateEditorScreen(
                 }
 
                 if (uiState.rows.isNotEmpty()) RowDivider()
-                AddExerciseRow(
+                AddRow(
+                    label = "+ Add Exercise",
                     onClick = {
                         // The state as it is now, not as this frame drew it: the delete may be a moment old.
                         if (viewModel.canAddExercise()) {
@@ -751,15 +828,82 @@ class TemplateEditorScreen(
             if (removeArmed) {
                 ArmedHint(text = "TAP AGAIN TO REMOVE")
             }
+            // The trash stays in the middle, where it always was; the alternatives at the end, away from it.
             LightBottomBar(
                 items = listOf(
+                    null,
                     LightBarButton.LightIcon(
                         icon = LightIcons.TRASH,
                         contentDescription = "remove exercise",
                         onClick = viewModel::tapRemoveExercise,
                     ),
+                    LightBarButton.LightIcon(
+                        icon = LightIcons.LOOP,
+                        contentDescription = "alternatives",
+                        onClick = { viewModel.openAlternatives(row.id) },
+                    ),
                 ),
             )
+        }
+    }
+
+    /**
+     * One exercise's alternatives (ALT-1): exercises that can stand in for it at the gym, where the loop icon
+     * by its name swaps one in for that workout. Each row has a remove target at its end; "+ Add Alternative"
+     * opens the picker, up to [MAX_ALTERNATIVES]. One gone from the log or hidden shows dimmed: the swap
+     * skips it. Back returns to the exercise.
+     */
+    @Composable
+    private fun Alternatives(row: TemplateEditorViewModel.ExerciseRow) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LightTopBar(
+                leftButton = LightBarButton.LightIcon(
+                    icon = LightIcons.BACK,
+                    onClick = { goBack() },
+                ),
+                center = LightTopBarCenter.TwoLineDetail(line1 = "Alternatives", line2 = row.name),
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                row.alternatives.forEachIndexed { index, alternative ->
+                    if (index > 0) RowDivider()
+                    LiftsListRow(
+                        right = {
+                            Box(
+                                modifier = Modifier
+                                    .width(REMOVE_TARGET_UNITS.gridUnitsAsDp())
+                                    .fillMaxHeight()
+                                    .lightClickable { viewModel.removeAlternative(row.id, alternative.exerciseId) },
+                                contentAlignment = Alignment.CenterEnd,
+                            ) {
+                                LightIcon(icon = LightIcons.CLOSE, size = REMOVE_ICON_UNITS, contentDescription = "remove alternative")
+                            }
+                        },
+                    ) {
+                        RowName(alternative.name, lighten = !alternative.usable)
+                    }
+                }
+                if (row.alternatives.size < MAX_ALTERNATIVES) {
+                    if (row.alternatives.isNotEmpty()) RowDivider()
+                    AddRow(
+                        label = "+ Add Alternative",
+                        onClick = {
+                            if (viewModel.canAddExercise()) {
+                                navigateTo(::ExercisePickerScreen) { exerciseId -> viewModel.addAlternative(row.id, exerciseId) }
+                            }
+                        },
+                    )
+                }
+                LightText(
+                    text = "At the gym, the loop by its name swaps one in, for that workout only.".uppercase(),
+                    variant = LightTextVariant.Superfine,
+                    lighten = true,
+                    modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp(), vertical = 1f.gridUnitsAsDp()),
+                )
+            }
         }
     }
 
@@ -852,9 +996,9 @@ private fun TemplateStepper(
     }
 }
 
-/** Centered "+ ADD EXERCISE" 3gu row (design .listrow.add). */
+/** Centered "+ ADD EXERCISE" (or "+ ADD ALTERNATIVE") 3gu row (design .listrow.add). */
 @Composable
-private fun AddExerciseRow(onClick: () -> Unit) {
+private fun AddRow(label: String, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -863,7 +1007,7 @@ private fun AddExerciseRow(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         LightText(
-            text = "+ Add Exercise".uppercase(),
+            text = label.uppercase(),
             variant = LightTextVariant.Button,
             lighten = true,
             maxLines = 1,

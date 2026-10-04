@@ -197,13 +197,23 @@ fun progressionHint(
 private const val WEIGHT_EPSILON_KG = 0.01
 
 /**
- * A template exercise in one line for the Template Editor's list: "2W + 3 × 8–12 · RIR 1–2 · rest 3:00".
+ * A template exercise in one line for the Template Editor's list: "2W + 3 × 8–12 · RIR 1–2 · or Leg Curl · rest 3:00".
  * Warm-ups show when the template sets a number, "0W +" included (nothing: last session's); without a
- * range it is "3 sets"; [restSec] is the rest in effect (the slot's or Settings').
+ * range it is "3 sets"; its [alternatives]' names as "or Leg Curl", "or Leg Curl +1" with two; [restSec] is
+ * the rest in effect (the slot's or Settings'). The rest is last: a long line loses it first.
  */
-fun templateSlotSummary(targetSets: Int, warmupSets: Int?, repMin: Int?, repMax: Int?, rir: RirTarget?, restSec: Int): String {
+fun templateSlotSummary(
+    targetSets: Int,
+    warmupSets: Int?,
+    repMin: Int?,
+    repMax: Int?,
+    rir: RirTarget?,
+    restSec: Int,
+    alternatives: List<String> = emptyList(),
+): String {
     val range = repRangeText(repMin, repMax)
     val sets = if (range != null) "$targetSets × $range" else "$targetSets ${if (targetSets == 1) "set" else "sets"}"
     val warmups = warmupSets?.let { "${it}W + " }.orEmpty()
-    return listOfNotNull(warmups + sets, rir?.let { "RIR ${it.text}" }, "rest ${Format.clock(restSec)}").joinToString(" · ")
+    val or = alternatives.firstOrNull()?.let { first -> "or $first" + if (alternatives.size > 1) " +${alternatives.size - 1}" else "" }
+    return listOfNotNull(warmups + sets, rir?.let { "RIR ${it.text}" }, or, "rest ${Format.clock(restSec)}").joinToString(" · ")
 }

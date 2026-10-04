@@ -187,6 +187,9 @@ class TargetsTest {
         assertEquals("0W + 1 set · rest 1:00", templateSlotSummary(1, 0, null, null, null, 60), "no warm-ups, on purpose")
         assertEquals("1 set · rest 1:00", templateSlotSummary(1, null, null, null, null, 60), "last session's")
         assertEquals("3 sets · RIR 2 · rest 3:00", templateSlotSummary(3, null, null, null, RirTarget(2), 180))
+        // Its alternatives: the first by name, how many more after it; the rest still last.
+        assertEquals("3 × 8–12 · RIR 2 · or Leg Curl · rest 1:30", templateSlotSummary(3, null, 8, 12, RirTarget(2), 90, listOf("Leg Curl")))
+        assertEquals("3 sets · or Leg Curl +2 · rest 1:30", templateSlotSummary(3, null, null, null, null, 90, listOf("Leg Curl", "Nordic", "Glute Ham")))
     }
 
     // --- RIR ranges (DL-9) ---
