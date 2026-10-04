@@ -135,7 +135,8 @@ fun restOverride(restSec: Int, defaultSec: Int): Int? = restSec.coerceAtLeast(0)
 /**
  * The Active Workout header's target line: "6–12 REPS · RIR 1–2" ("REPS/SIDE" on an exercise done one
  * side at a time, [perSide]), with [hint] after it, and "SUPERSET" last on an exercise done in turn
- * with its neighbour ([superset]); null when the slot has none of these.
+ * with its neighbour ([superset]); null when the slot has none of these. In a [deload] the hint's place
+ * says [DELOAD_TAG], on every exercise: "8–12 REPS · RIR 4–5 · DELOAD".
  */
 fun targetLine(
     repMin: Int?,
@@ -144,11 +145,12 @@ fun targetLine(
     hint: String? = null,
     perSide: Boolean = false,
     superset: Boolean = false,
+    deload: Boolean = false,
 ): String? {
     val parts = listOfNotNull(
         repRangeText(repMin, repMax)?.let { if (perSide) "$it REPS/SIDE" else "$it REPS" },
         rir?.let { "RIR ${it.text}" },
-        hint,
+        if (deload) DELOAD_TAG else hint,
         SUPERSET_TAG.takeIf { superset },
     )
     return parts.takeIf { it.isNotEmpty() }?.joinToString(" · ")
@@ -169,14 +171,17 @@ const val HINT_LESS_HELP = "LESS HELP"
  * already start heavier than last time's heaviest: he has added the load. On an assisted exercise,
  * less help is the load ([HINT_LESS_HELP]); weights are stored signed, so "heavier" means that too.
  * With no help left to take away (a set last time done without any), there is no cue.
- * RIR plays no part: it isn't logged reliably enough to hold a cue back.
+ * RIR plays no part: it isn't logged reliably enough to hold a cue back. None in a [deload] (DL-4): it
+ * is no day to add load, and [lastTime] is the last normal session, so next week's cue is as it was.
  */
 fun progressionHint(
     tracking: Tracking,
     repMax: Int?,
     lastTime: List<SetEntity>,
     todayWeightsKg: List<Double?> = emptyList(),
+    deload: Boolean = false,
 ): String? {
+    if (deload) return null
     repMax ?: return null
     if (!tracking.takesWeight || !tracking.takesReps) return null
     val work = lastTime.filter { it.completedAt != null && it.type != SET_TYPE_WARMUP && it.type != SET_TYPE_DROP }

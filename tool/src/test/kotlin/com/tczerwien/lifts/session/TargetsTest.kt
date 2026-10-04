@@ -88,6 +88,13 @@ class TargetsTest {
         assertEquals("SUPERSET", targetLine(null, null, null, superset = true), "a superset without a target still says so")
     }
 
+    @Test
+    fun `a deload says so where the hint goes, on every exercise`() {
+        assertEquals("8–12 REPS · RIR 4–5 · DELOAD", targetLine(8, 12, RirTarget(4, 5), deload = true))
+        assertEquals("8–12 REPS · DELOAD", targetLine(8, 12, null, HINT_ADD_LOAD, deload = true), "never beside ADD LOAD")
+        assertEquals("DELOAD · SUPERSET", targetLine(null, null, null, superset = true, deload = true), "a hold in a superset")
+    }
+
     // --- Progression hint ---
 
     private var nextId = 1L
@@ -154,6 +161,13 @@ class TargetsTest {
         // Starting today with 25 of help (-11.3) is less help already.
         assertNull(progressionHint(Tracking.ASSISTED_BODYWEIGHT, 12, last, listOf(-11.3)))
         assertEquals(HINT_ADD_LOAD, progressionHint(Tracking.WEIGHTED_BODYWEIGHT, 12, listOf(done(SET_TYPE_NORMAL, 10.0, 12))))
+    }
+
+    @Test
+    fun `no cue in a deload`() {
+        val last = listOf(done(SET_TYPE_NORMAL, 60.0, 12), done(SET_TYPE_NORMAL, 60.0, 12))
+        assertEquals(HINT_ADD_LOAD, progressionHint(Tracking.WEIGHT_REPS, 12, last))
+        assertNull(progressionHint(Tracking.WEIGHT_REPS, 12, last, deload = true))
     }
 
     @Test
