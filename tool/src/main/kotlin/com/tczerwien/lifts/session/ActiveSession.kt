@@ -45,7 +45,7 @@ class ActiveSession(
 
     /**
      * Creates a workout from [templateId]: one workout_exercises row per template slot (copying rest
-     * overrides, the rep range and RIR target, and its superset), each starting with the template's warm-ups, or last
+     * overrides, the rep range and RIR target, its superset and its alternatives), each starting with the template's warm-ups, or last
      * session's for that slot when it leaves them to last session, then targetSets work sets
      * ([planTemplate]), so PREVIOUS lines up warm-up to warm-up. Rows start empty; their
      * starting values are only shown ([seedRows]). A vanished template degrades to an empty
@@ -90,6 +90,7 @@ class ActiveSession(
                     supersetGroup = planned.supersetGroup,
                     targetRirMax = planned.targetRirMax,
                     targetSets = planned.targetSets,
+                    choices = planned.choices,
                 ),
             )
             planned.types.forEachIndexed { setIndex, type ->

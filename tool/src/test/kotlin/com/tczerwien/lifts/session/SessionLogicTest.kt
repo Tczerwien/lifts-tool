@@ -511,6 +511,19 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a swap, or alternatives changed in the template since the start, count as touched`() {
+        val template = benchAndSquat.map { if (it.exerciseId == "squat") it.copy(alternatives = listOf("press")) else it }
+        val plan = planTemplate(template, benchLastTime)
+        val (slots, sets) = startedFrom(plan)
+        assertTrue(isUntouched(workout(templateId = 7), slots, sets, { plan }))
+        val swapped = slots.map { if (it.exerciseId == "squat") it.copy(exerciseId = "press") else it }
+        assertFalse(isUntouched(workout(templateId = 7), swapped, sets, { plan }), "swapped for today")
+        assertFalse(isUntouched(workout(templateId = 7), slots, sets, { benchAndSquatPlan }), "the alternative taken out since")
+        val (plainSlots, plainSets) = startedFrom(benchAndSquatPlan)
+        assertFalse(isUntouched(workout(templateId = 7), plainSlots, plainSets, { plan }), "added since")
+    }
+
+    @Test
     fun `a workout used within four hours is kept`() {
         val hour = 3_600_000L
         val sets = listOf(set(id = 1, completedAt = 10 * hour))
@@ -641,6 +654,7 @@ class SessionLogicTest {
                 supersetGroup = planned.supersetGroup,
                 targetRirMax = planned.targetRirMax,
                 targetSets = planned.targetSets,
+                choices = planned.choices,
             )
         }
         val sets = slots.zip(plan).flatMap { (slot, planned) ->

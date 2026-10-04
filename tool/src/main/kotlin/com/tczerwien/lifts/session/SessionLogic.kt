@@ -347,10 +347,9 @@ fun lastActivityMillis(startedAt: Long, sets: List<SetEntity>): Long =
 
 /**
  * True when nothing has changed since the workout was created, so discarding it loses nothing: no
- * notes, the name it started with, no set logged or given a value, and the slots, their set types,
- * their rests, their targets (an RIR range's top and the planned work sets too) and their supersets
- * ([sameGrouping]) are exactly what the
- * start made. That is no slots at all for an empty workout, and [planned] ([planTemplate] from the
+ * notes, the name it started with, no set logged or given a value, and the slots, their exercises (a
+ * swap changes it), set types, rests, targets (an RIR range's top and the planned work sets too), choices
+ * and supersets ([sameGrouping]) are exactly what the start made. That is no slots at all for an empty workout, and [planned] ([planTemplate] from the
  * template as it is now) for a template workout; [planned] gives null for a workout with no template.
  * Any doubt (the template was edited or deleted since) counts as touched, so the workout is kept.
  * Starting values are only shown, never written at the start, so any stored value means a change.
@@ -388,6 +387,7 @@ fun isUntouched(
             slot.restSecWork == plannedSlot.restSecWork && slot.restSecWarmup == plannedSlot.restSecWarmup &&
             slot.targetRepMin == plannedSlot.targetRepMin && slot.targetRepMax == plannedSlot.targetRepMax &&
             slot.targetRir == plannedSlot.targetRir && slot.targetRirMax == plannedSlot.targetRirMax &&
+            slot.choices == plannedSlot.choices &&
             // No plan on the slot: started before B14 wrote one, or added by hand (then an extra, which fails the
             // count above, or the planned exercise put back the way it started: nothing to lose).
             (slot.targetSets == null || slot.targetSets == plannedSlot.targetSets)

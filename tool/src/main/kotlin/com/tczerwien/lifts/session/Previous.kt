@@ -182,14 +182,17 @@ data class PlannedSlot(
      * sets it copies). What switching a deload off puts back; null for a slot with no plan.
      */
     val targetSets: Int? = null,
+    /** The exercises the swap cycles through, main first ([slotChoices]); empty: no alternatives. */
+    val choices: List<String> = emptyList(),
 )
 
 /**
  * The slots a workout started from [templateExercises] begins with: one per template exercise in
  * position order, each with [prefillTypes] from its occurrence's slot group last session
- * ([groupsByExercise], from [previousGroups]), and the template's supersets ([normalizeGroups]: a
- * group the template holds apart, or alone, starts plain). ActiveSession.startFromTemplate creates
- * exactly these, and [isUntouched] compares against them, so the two can't drift apart.
+ * ([groupsByExercise], from [previousGroups]), its alternatives as the slot's choices ([slotChoices]),
+ * and the template's supersets ([normalizeGroups]: a group the template holds apart, or alone, starts
+ * plain). ActiveSession.startFromTemplate creates exactly these, and [isUntouched] compares against
+ * them, so the two can't drift apart.
  */
 fun planTemplate(
     templateExercises: List<TemplateExerciseEntity>,
@@ -211,6 +214,7 @@ fun planTemplate(
             supersetGroup = planned.supersetGroup,
             targetRirMax = planned.targetRirMax,
             targetSets = planned.targetSets,
+            choices = slotChoices(planned.exerciseId, planned.alternatives),
         )
     }.withNormalizedGroups()
 }

@@ -258,6 +258,15 @@ class PreviousTest {
     }
 
     @Test
+    fun `a template exercise's alternatives reach the plan as its choices, main first`() {
+        val template = listOf(
+            TemplateExerciseEntity(id = 1, templateId = 7, exerciseId = "squat", position = 0, targetSets = 3, alternatives = listOf("press", "lunge")),
+            TemplateExerciseEntity(id = 2, templateId = 7, exerciseId = "curl", position = 1, targetSets = 3),
+        )
+        assertEquals(listOf(listOf("squat", "press", "lunge"), emptyList()), planTemplate(template, emptyMap()).map { it.choices })
+    }
+
+    @Test
     fun `a template's supersets reach the plan, and a slot it holds apart starts plain`() {
         val groups = listOf(null, 3, 3, null, 3)
         val template = groups.mapIndexed { index, group ->

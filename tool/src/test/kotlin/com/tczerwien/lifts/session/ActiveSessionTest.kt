@@ -1093,6 +1093,21 @@ class ActiveSessionTest {
 
     // --- Version 2's columns ---
 
+    // --- Alternatives ---
+
+    @Test
+    fun `a template's alternatives reach the workout as each slot's choices, and Back discards it as started`() {
+        val template = store.addTemplate("Legs", "squat" to 3, "curl" to 2)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(alternatives = listOf("row", "fly"))
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        assertEquals(
+            listOf(listOf("squat", "row", "fly"), emptyList()),
+            store.exercisesForWorkout(workoutId).map { it.choices },
+        )
+        assertTrue(session.discardIfUntouched(workoutId), "as the template started it")
+    }
+
     @Test
     fun `version 2's columns ride along unchanged through a whole workout`() {
         // Set as the v2 features set them (supersets, RIR ranges, deload, alternatives); no write may drop them.
