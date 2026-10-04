@@ -91,7 +91,7 @@ object RestorePlan {
         report(rows.templateExercises.count { it.templateId !in templateIds }, "template rows with no template")
         // A slot or template row naming an exercise that isn't there breaks no key (exerciseId has
         // none), and every screen shows it as an unknown exercise: refusing the whole log for it would
-        // lose everything else in it.
+        // lose everything else in it. The same for one among a row's alternatives or choices: the swap skips it.
         val badIds = rows.workouts.count { it.id <= 0 } + rows.workoutExercises.count { it.id <= 0 } +
             rows.sets.count { it.id <= 0 } + rows.templates.count { it.id <= 0 } +
             rows.templateExercises.count { it.id <= 0 } + rows.bodyweight.count { it.id <= 0 } +

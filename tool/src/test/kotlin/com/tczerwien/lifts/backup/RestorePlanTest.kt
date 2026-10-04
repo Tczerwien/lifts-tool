@@ -128,6 +128,16 @@ class RestorePlanTest {
     }
 
     @Test
+    fun `alternatives and choices naming a missing exercise don't refuse the log`() {
+        // The swap skips such a choice (AlternativesTest), so the rest of the log restores as it is (ALT-7).
+        val orphan = rows.copy(
+            workoutExercises = rows.workoutExercises.map { if (it.id == 13L) it.copy(choices = listOf("custom-1", "custom-gone")) else it },
+            templateExercises = rows.templateExercises.map { it.copy(alternatives = listOf("custom-gone", "squat")) },
+        )
+        assertEquals(emptyList(), RestorePlan.problems(orphan))
+    }
+
+    @Test
     fun `a file without the exercise catalog is refused`() {
         val bare = rows.copy(exercises = emptyList())
         assertEquals("it has no exercises at all", RestorePlan.problems(bare).first())
