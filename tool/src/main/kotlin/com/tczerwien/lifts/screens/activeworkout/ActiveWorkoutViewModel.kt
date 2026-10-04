@@ -55,6 +55,7 @@ import com.tczerwien.lifts.ui.displayName
 import com.tczerwien.lifts.ui.namesEquipment
 import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SimpleLightScreen
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -361,9 +362,18 @@ class ActiveWorkoutViewModel(
      */
     private fun beginRowAction(): Boolean = !rowsJustMoved(System.currentTimeMillis()) && beginAction()
 
-    /** Whether a tap on the rows at [now] was aimed at rows that have since moved under his finger. */
+    /**
+     * Whether a tap on the rows at [now] was aimed at rows that have since moved under his finger, or that a
+     * deload switch still on its way may yet delete ([deloadSwitching]).
+     */
     private fun rowsJustMoved(now: Long): Boolean =
-        tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true
+        tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true || deloadSwitching.get() > 0
+
+    /**
+     * Deload switches waiting on the lane or for their reload ([setDeload]): until one lands, a tick on a row
+     * it deletes would show, then vanish with no rest (the lane can be held for seconds by a backup).
+     */
+    private val deloadSwitching = AtomicInteger()
 
     /**
      * He opened a screen about this exercise or workout (Exercise Detail, the exercise list, the "…"
@@ -995,18 +1005,19 @@ class ActiveWorkoutViewModel(
     /**
      * Menu: makes this workout a deload ([on]) or a normal one again ([ActiveSession.setDeload]): its rows
      * are trimmed to the sets a deload keeps, or put back. DELOAD shows at once; the rows change as the
-     * save's reload lands, under his finger, so the rows ignore taps for a moment.
+     * save's reload lands, under his finger, so the rows ignore taps until then and for a moment after.
      */
     fun setDeload(on: Boolean) {
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
-        rowsMovedUnderFinger()
+        deloadSwitching.incrementAndGet()
         val meta = editMeta { withDeload(it, on) }
         LiftsIo.write({ session.setDeload(workoutId, on) }) {
-            // The rows change when this reload lands, which a busy lane can put past the guard's second.
-            rowsMovedUnderFinger()
             settleMeta(meta)
             refresh()
+            // The rows have changed under his finger only now: taps aimed at the old ones are dropped a moment longer.
+            rowsMovedUnderFinger()
+            deloadSwitching.decrementAndGet()
         }
     }
 
