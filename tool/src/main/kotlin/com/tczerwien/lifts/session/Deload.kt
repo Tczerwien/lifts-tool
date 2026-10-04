@@ -88,18 +88,19 @@ fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): 
 
 /**
  * [this] slot as a deload's Start Again begins it: its work sets cut to the deload's number of its plan
- * ([deloadKeep] at [keepPct]), warm-ups kept; as it is with no plan, or already that short (a copy of a
- * deload switched on that day). So a workout marked a deload after its Finish, its full sets done, is
- * copied as a deload too.
+ * ([deloadKeep] at [keepPct]), warm-ups kept, a drop with its work set ([deloadRows]' rule); as it is with no
+ * plan, or already that short (a copy of a deload switched on that day). So a workout marked a deload after
+ * its Finish, its full sets done, is copied as a deload too.
  */
 fun PlannedSlot.deloadTrimmed(keepPct: Int): PlannedSlot {
     val planned = targetSets ?: return this
     var workLeft = deloadKeep(planned, keepPct)
+    var parentKept = false
     val kept = types.filter { type ->
-        when {
-            type == SET_TYPE_WARMUP -> true
-            workLeft > 0 -> true.also { workLeft-- }
-            else -> false
+        when (type) {
+            SET_TYPE_WARMUP -> true
+            SET_TYPE_DROP -> parentKept
+            else -> (workLeft > 0).also { keptOne -> parentKept = keptOne; if (keptOne) workLeft-- }
         }
     }
     return if (kept.size == types.size) this else copy(types = kept)

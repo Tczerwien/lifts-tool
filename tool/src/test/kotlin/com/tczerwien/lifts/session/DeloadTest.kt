@@ -95,6 +95,8 @@ class DeloadTest {
         val noPlan = PlannedSlot("curl", listOf(n, n, n))
         assertEquals(noPlan, noPlan.deloadTrimmed(50))
         assertEquals(listOf(n), PlannedSlot("row", listOf(n, n, n), targetSets = 3).deloadTrimmed(30).types)
+        // A drop goes with its work set and never counts as one (review R2-8).
+        assertEquals(listOf(n, d, n, d), PlannedSlot("curl", listOf(n, d, n, d, n, d), targetSets = 3).deloadTrimmed(50).types)
     }
 
     // --- The RIR it shows (DL-3) ---
