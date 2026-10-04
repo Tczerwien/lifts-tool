@@ -202,7 +202,7 @@ private fun SummaryBody(summary: WorkoutSummary, units: WeightUnit) {
 
         Gap(1.5f)
         // Digits in monospace as the mockup draws them, the comma and words not: "3,330", never "3 , 330".
-        MonoDigits(Format.durationMin(summary.durationSec * 1000L), LightTextVariant.Copy)
+        MonoDigits(Format.withDeload(Format.durationMin(summary.durationSec * 1000L), summary.deload), LightTextVariant.Copy)
         MonoDigits(
             "${Format.count(summary.completedSetCount, "set")} · ${volumeDisplay(summary.totalVolumeKg, units)} ${units.suffix} volume",
             LightTextVariant.Copy,

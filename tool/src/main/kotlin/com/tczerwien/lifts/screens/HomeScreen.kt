@@ -77,7 +77,7 @@ class HomeViewModel(
 
     data class UnfinishedRow(val workoutId: Long, val name: String, val startedAt: Long)
 
-    data class RecentRow(val workoutId: Long, val name: String, val dateMillis: Long, val setCount: Int)
+    data class RecentRow(val workoutId: Long, val name: String, val dateMillis: Long, val setCount: Int, val deload: Boolean = false)
 
     /** A file uploaded to Tool Manager › Lifts › Restore, waiting to be checked. */
     data class RestoreWaiting(val name: String, val path: String)
@@ -254,6 +254,7 @@ class HomeViewModel(
                 // Dated by its start, as History dates it.
                 dateMillis = workout.startedAt,
                 setCount = completedSets,
+                deload = workout.deload,
             )
         }
         return UiState(
@@ -452,7 +453,10 @@ class HomeScreen(private val sealedActivity: SealedLightActivity) :
                                 },
                                 right = {
                                     LightText(
-                                        text = "${Format.dateShort(recent.dateMillis)} · ${Format.count(recent.setCount, "set")}",
+                                        text = Format.withDeload(
+                                            "${Format.dateShort(recent.dateMillis)} · ${Format.count(recent.setCount, "set")}",
+                                            recent.deload,
+                                        ),
                                         variant = LightTextVariant.Detail,
                                         lighten = true,
                                         maxLines = 1,

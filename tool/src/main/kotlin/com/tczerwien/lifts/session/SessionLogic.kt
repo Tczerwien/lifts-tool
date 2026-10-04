@@ -262,6 +262,8 @@ data class WorkoutSummary(
     val prs: List<PrRecord>,
     /** The weigh-in that goes with the workout ([workoutBodyweight]), null without one. */
     val bodyweight: WorkoutBodyweight?,
+    /** It was a deload: the duration line says so. */
+    val deload: Boolean = false,
 )
 
 /**

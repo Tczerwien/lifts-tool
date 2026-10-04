@@ -621,6 +621,7 @@ class ActiveSession(
             totalVolumeKg = totalVolumeKg(sets),
             prs = prRecords(slots, sets, prIds, names, tracking, perSide = exercises.filterValues { it.perSide }.keys),
             bodyweight = workoutBodyweight(workout.startedAt, weighIns, zone),
+            deload = workout.deload,
         )
     }
 

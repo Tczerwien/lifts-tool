@@ -52,6 +52,8 @@ class HistoryViewModel(
         val setCount: Int,
         /** "62 min" ([Format.durationMin]), as Workout Complete, Workout Detail and the exports have it. */
         val duration: String,
+        /** A deload: the date line says so. */
+        val deload: Boolean = false,
     )
 
     data class UiState(
@@ -81,6 +83,7 @@ class HistoryViewModel(
                 dateMillis = workout.startedAt,
                 setCount = completedSets,
                 duration = Format.durationMin(endedAt - workout.startedAt),
+                deload = workout.deload,
             )
         }
         _uiState.value = UiState(loaded = true, rows = rows)
@@ -156,7 +159,7 @@ class HistoryScreen(
                                         Column {
                                             RowName(row.name)
                                             LightText(
-                                                text = Format.dateShort(row.dateMillis),
+                                                text = Format.withDeload(Format.dateShort(row.dateMillis), row.deload),
                                                 variant = LightTextVariant.Detail,
                                                 lighten = true,
                                                 maxLines = 1,

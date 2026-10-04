@@ -248,6 +248,12 @@ class FormatTest {
     }
 
     @Test
+    fun `a deload workout's line says so`() {
+        assertEquals("62 min · Deload", Format.withDeload("62 min", deload = true))
+        assertEquals("Sep 30 · 18 sets", Format.withDeload("Sep 30 · 18 sets", deload = false))
+    }
+
+    @Test
     fun `date with year appends the year`() {
         assertEquals("Jul 18, 2026", Format.dateWithYear(millis("2026-07-18T12:00:00Z"), utc))
     }

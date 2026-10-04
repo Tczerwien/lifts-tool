@@ -965,6 +965,7 @@ class ActiveSessionTest {
             session.completeSet(source, row, 90.0, 5, n, now = 1_100_000L + index * 60_000)
         }
         assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(source, now = 1_300_000))
+        assertTrue(session.summarize(source)!!.deload, "Workout Complete says so")
 
         val again = assertNotNull(session.startFromWorkout(source, now = 5_000_000))
         assertTrue(store.workoutById(again)!!.deload)
