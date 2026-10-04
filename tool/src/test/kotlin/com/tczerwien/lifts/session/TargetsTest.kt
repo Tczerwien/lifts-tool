@@ -86,12 +86,13 @@ class TargetsTest {
 
     @Test
     fun `the header's target line`() {
-        assertEquals("6–12 REPS · RIR 1", targetLine(6, 12, 1))
+        assertEquals("6–12 REPS · RIR 1", targetLine(6, 12, RirTarget(1)))
+        assertEquals("8–12 REPS · RIR 1–2", targetLine(8, 12, RirTarget(1, 2)))
         assertEquals("8–12 REPS · ADD LOAD", targetLine(8, 12, null, HINT_ADD_LOAD))
-        assertEquals("RIR 0", targetLine(null, null, 0))
-        assertEquals("10–12 REPS/SIDE · RIR 2", targetLine(10, 12, 2, perSide = true))
+        assertEquals("RIR 0", targetLine(null, null, RirTarget(0)))
+        assertEquals("10–12 REPS/SIDE · RIR 2", targetLine(10, 12, RirTarget(2), perSide = true))
         assertNull(targetLine(null, null, null))
-        assertEquals("10–15 REPS · RIR 1 · SUPERSET", targetLine(10, 15, 1, superset = true))
+        assertEquals("10–15 REPS · RIR 1 · SUPERSET", targetLine(10, 15, RirTarget(1), superset = true))
         assertEquals("8–12 REPS · ADD LOAD · SUPERSET", targetLine(8, 12, null, HINT_ADD_LOAD, superset = true))
         assertEquals("SUPERSET", targetLine(null, null, null, superset = true), "a superset without a target still says so")
     }
@@ -175,10 +176,50 @@ class TargetsTest {
 
     @Test
     fun `a template exercise in one line`() {
-        assertEquals("3 × 8–12 · RIR 1 · rest 3:00", templateSlotSummary(3, null, 8, 12, 1, 180))
+        assertEquals("3 × 8–12 · RIR 1 · rest 3:00", templateSlotSummary(3, null, 8, 12, RirTarget(1), 180))
+        assertEquals("3 × 8–12 · RIR 0–1 · rest 3:00", templateSlotSummary(3, null, 8, 12, RirTarget(0, 1), 180))
         assertEquals("2W + 4 × 6–12 · rest 2:30", templateSlotSummary(4, 2, 6, 12, null, 150))
         assertEquals("0W + 1 set · rest 1:00", templateSlotSummary(1, 0, null, null, null, 60), "no warm-ups, on purpose")
         assertEquals("1 set · rest 1:00", templateSlotSummary(1, null, null, null, null, 60), "last session's")
-        assertEquals("3 sets · RIR 2 · rest 3:00", templateSlotSummary(3, null, null, null, 2, 180))
+        assertEquals("3 sets · RIR 2 · rest 3:00", templateSlotSummary(3, null, null, null, RirTarget(2), 180))
+    }
+
+    // --- RIR ranges (DL-9) ---
+
+    @Test
+    fun `an RIR target is one number or a range, as the slot stores it`() {
+        assertEquals(RirTarget(1, 2), rirTarget(1, 2))
+        assertEquals(RirTarget(1), rirTarget(1, null))
+        assertNull(rirTarget(null, 2), "a top alone says nothing")
+        assertEquals(RirTarget(2), rirTarget(2, 2), "a top equal to the number is the number")
+        assertEquals(RirTarget(2), rirTarget(2, 1), "nor one below it")
+        assertEquals("1–2", RirTarget(1, 2).text)
+        assertEquals("3", RirTarget(3).text)
+        assertEquals(2, RirTarget(1, 2).top)
+        assertEquals(3, RirTarget(3).top)
+    }
+
+    @Test
+    fun `the RIR stepper goes through none, 0, 0–1, 1 … 4–5, 5`() {
+        val up = generateSequence(stepRirTarget(null, +1)) { stepRirTarget(it, +1).takeIf { next -> next != it } }.toList()
+        assertEquals(listOf("0", "0–1", "1", "1–2", "2", "2–3", "3", "3–4", "4", "4–5", "5"), up.map { it.text })
+        assertNull(stepRirTarget(null, -1))
+        assertNull(stepRirTarget(RirTarget(0), -1), "below 0 clears it")
+        assertEquals(RirTarget(0), stepRirTarget(RirTarget(0), -1, allowNone = false), "unless it must have one")
+        assertEquals(RirTarget(5), stepRirTarget(RirTarget(5), +1), "5 is the most")
+        assertEquals(RirTarget(1), stepRirTarget(RirTarget(1, 2), -1))
+        assertEquals(RirTarget(3, 4), stepRirTarget(RirTarget(3), +1))
+        // A range the steps don't hold (from a restore) steps as its low end's range would.
+        assertEquals(RirTarget(2), stepRirTarget(RirTarget(1, 3), +1))
+        assertEquals(RirTarget(1), stepRirTarget(RirTarget(1, 3), -1))
+        assertEquals(RirTarget(5), stepRirTarget(RirTarget(7), +1), "a number above the steps comes back to them")
+        assertEquals(RirTarget(4, 5), stepRirTarget(RirTarget(7), -1))
+    }
+
+    @Test
+    fun `a range's first tap on the RIR cell is its top, then down, then up`() {
+        var rir: Int? = null
+        val taps = List(7) { nextRir(rir, RirTarget(1, 2).top).also { rir = it } }
+        assertEquals(listOf(2, 1, 0, 3, 4, 5, null), taps)
     }
 }

@@ -40,6 +40,7 @@ import com.tczerwien.lifts.session.linkWithNext
 import com.tczerwien.lifts.session.linkedWithNext
 import com.tczerwien.lifts.session.moveTarget
 import com.tczerwien.lifts.session.restOverride
+import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.settledTemplateRows
 import com.tczerwien.lifts.session.stepRepMax
 import com.tczerwien.lifts.session.stepRepMin
@@ -128,6 +129,8 @@ class TemplateEditorViewModel(
         val repMin: Int? = null,
         val repMax: Int? = null,
         val targetRir: Int? = null,
+        /** The top of an RIR range ("1–2"); null: [targetRir] alone. */
+        val targetRirMax: Int? = null,
         /** Effective work rest — explicit value or the settings default. */
         val restSec: Int,
         /** Effective warmup rest — explicit value or the settings default. */
@@ -452,6 +455,7 @@ class TemplateEditorViewModel(
                 repMin = exercise.repMin,
                 repMax = exercise.repMax,
                 targetRir = exercise.targetRir,
+                targetRirMax = exercise.targetRirMax,
                 restSec = exercise.restSecWork ?: settings.defaultRestSec,
                 warmupRestSec = exercise.restSecWarmup ?: settings.warmupRestSec,
                 restIsDefault = exercise.restSecWork == null,
@@ -586,7 +590,7 @@ class TemplateEditorScreen(
                                     text = if (row.hold) {
                                         templateSlotSummary(row.targetSets, row.warmupSets, null, null, null, row.restSec)
                                     } else {
-                                        templateSlotSummary(row.targetSets, row.warmupSets, row.repMin, row.repMax, row.targetRir, row.restSec)
+                                        templateSlotSummary(row.targetSets, row.warmupSets, row.repMin, row.repMax, rirTarget(row.targetRir, row.targetRirMax), row.restSec)
                                     },
                                     variant = LightTextVariant.Detail,
                                     lighten = true,

@@ -16,6 +16,7 @@ import com.tczerwien.lifts.session.DURATION_STEP_SEC
 import com.tczerwien.lifts.session.HistoryCache
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.RestTimerState
+import com.tczerwien.lifts.session.RirTarget
 import com.tczerwien.lifts.session.RowValues
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.TypedWeight
@@ -37,6 +38,7 @@ import com.tczerwien.lifts.session.prSetIds
 import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.progressionHint
 import com.tczerwien.lifts.session.rirOf
+import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
@@ -103,8 +105,11 @@ class ActiveWorkoutViewModel(
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
         val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking)
 
+        /** The RIR this slot aims for, one number or a range ([rirTarget]): the RIR cell's first tap is its top. */
+        val rir: RirTarget? = rirTarget(slot.targetRir, slot.targetRirMax)
+
         /**
-         * The template's target for this slot, "8–12 REPS · RIR 1", and "ADD LOAD" once every work set last
+         * The template's target for this slot, "8–12 REPS · RIR 1–2", and "ADD LOAD" once every work set last
          * time reached the top of the range, until today's rows start heavier ([progressionHint]), then
          * "SUPERSET" in a superset; null with none of these (a hold shows only "SUPERSET").
          */
@@ -112,7 +117,7 @@ class ActiveWorkoutViewModel(
             // A hold is seconds: a rep range or RIR (set before its type changed) says nothing about it.
             repMin = slot.targetRepMin?.takeIf { tracking.takesReps },
             repMax = slot.targetRepMax?.takeIf { tracking.takesReps },
-            targetRir = slot.targetRir?.takeIf { tracking.takesReps },
+            rir = rir?.takeIf { tracking.takesReps },
             hint = progressionHint(
                 tracking = tracking,
                 repMax = slot.targetRepMax,
@@ -427,8 +432,8 @@ class ActiveWorkoutViewModel(
     }
 
     /**
-     * A tap on a row's RIR cell cycles it from the slot's RIR target, else 2, down to 0, then up to 5,
-     * then blank ([nextRir]), stored as RPE = 10 − RIR.
+     * A tap on a row's RIR cell cycles it from the slot's RIR target (the top of a range: "1–2" gives 2),
+     * else 2, down to 0, then up to 5, then blank ([nextRir]), stored as RPE = 10 − RIR.
      * Ticked rows too: the effort is known once the set is done, usually while resting. It rates the
      * set without moving the steppers or cancelling a pending move to the next exercise, but a tap in
      * the second after the screen moved on was aimed at the rows before and is dropped. On the row
@@ -438,7 +443,7 @@ class ActiveWorkoutViewModel(
     fun onRirTapped(setId: Long) {
         val now = System.currentTimeMillis()
         if (locked || rowsJustMoved(now)) return
-        val target = locate(setId)?.block?.slot?.targetRir
+        val target = locate(setId)?.block?.rir?.top
         val edit = applySetChange(setId) { it.copy(rpe = rpeOf(nextRir(rirOf(it.rpe), target))) } ?: return
         pendingAdvance.update { pending -> if (pending?.setId == setId) pending.copy(waitFrom = now) else pending }
         persistSet(edit)

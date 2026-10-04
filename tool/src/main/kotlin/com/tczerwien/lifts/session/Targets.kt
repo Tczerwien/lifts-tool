@@ -6,7 +6,7 @@ import com.tczerwien.lifts.ui.Format
 
 /**
  * A template's prescription for one exercise, and what the gym sees of it: the rep range and RIR
- * target the Template Editor steps ("6–12 reps · RIR 1"), the warm-ups it starts with, and the hint
+ * target the Template Editor steps ("6–12 reps · RIR 1–2"), the warm-ups it starts with, and the hint
  * that the top of the range was reached on every work set ("ADD LOAD", double progression). Pure,
  * covered by TargetsTest.
  */
@@ -75,6 +75,48 @@ fun repRangeText(min: Int?, max: Int?): String? = when {
 fun stepTargetRir(rir: Int?, delta: Int): Int? = stepOptional(rir, delta, MAX_RIR)
 
 /**
+ * An RIR target: one number ([min] alone) or a range, "1–2" ([min] 1, [max] 2), as a slot stores it
+ * (targetRir, targetRirMax). Ranges replaced B10's one number (B14).
+ */
+data class RirTarget(val min: Int, val max: Int? = null) {
+    /** Where the RIR cell's first tap starts ([nextRir]): the top of the range, so "1–2" gives 2, then 1. */
+    val top: Int get() = max ?: min
+
+    /** "1", or "1–2" for a range. */
+    val text: String get() = if (max != null) "$min–$max" else "$min"
+}
+
+/**
+ * The target a slot or template stores as [targetRir] and [targetRirMax]: null without a number, and one
+ * number when the top isn't above it (a top alone, or one at or below the number, says nothing more).
+ */
+fun rirTarget(targetRir: Int?, targetRirMax: Int?): RirTarget? =
+    targetRir?.let { min -> RirTarget(min, targetRirMax?.takeIf { it > min }) }
+
+/** The RIR stepper's steps after none: 0, 0–1, 1, 1–2, … 4–5, 5. */
+val RIR_TARGET_STEPS: List<RirTarget> =
+    (0..MAX_RIR).flatMap { n -> listOfNotNull(RirTarget(n), RirTarget(n, n + 1).takeIf { n < MAX_RIR }) }
+
+/**
+ * The RIR target moved [delta] steps along none, then [RIR_TARGET_STEPS]: up from none it is 0, down from
+ * 0 it clears ([allowNone] false stops it at 0, for a target that must have one); 5 is the most. A range the
+ * steps don't hold (1–3, from a restore) steps as its low end's range (1–2) would.
+ */
+fun stepRirTarget(target: RirTarget?, delta: Int, allowNone: Boolean = true): RirTarget? {
+    val steps = RIR_TARGET_STEPS
+    val index = when {
+        target == null -> -1
+        else -> steps.indexOf(if (target.max != null) RirTarget(target.min, target.min + 1) else target)
+            .takeIf { it >= 0 } ?: steps.indexOfLast { it.min <= target.min }.coerceAtLeast(0)
+    }
+    val next = index + delta
+    return when {
+        next < 0 && allowNone -> null
+        else -> steps[next.coerceIn(0, steps.lastIndex)]
+    }
+}
+
+/**
  * The warm-ups a template asks for, moved [delta]: none (null: repeat last session's, the default),
  * then 0 to [MAX_TEMPLATE_WARMUPS]. Below 0 goes back to last session's.
  */
@@ -94,21 +136,21 @@ private fun stepOptional(value: Int?, delta: Int, max: Int): Int? = when {
 fun restOverride(restSec: Int, defaultSec: Int): Int? = restSec.coerceAtLeast(0).takeIf { it != defaultSec }
 
 /**
- * The Active Workout header's target line: "6–12 REPS · RIR 1" ("REPS/SIDE" on an exercise done one
+ * The Active Workout header's target line: "6–12 REPS · RIR 1–2" ("REPS/SIDE" on an exercise done one
  * side at a time, [perSide]), with [hint] after it, and "SUPERSET" last on an exercise done in turn
  * with its neighbour ([superset]); null when the slot has none of these.
  */
 fun targetLine(
     repMin: Int?,
     repMax: Int?,
-    targetRir: Int?,
+    rir: RirTarget?,
     hint: String? = null,
     perSide: Boolean = false,
     superset: Boolean = false,
 ): String? {
     val parts = listOfNotNull(
         repRangeText(repMin, repMax)?.let { if (perSide) "$it REPS/SIDE" else "$it REPS" },
-        targetRir?.let { "RIR $it" },
+        rir?.let { "RIR ${it.text}" },
         hint,
         SUPERSET_TAG.takeIf { superset },
     )
@@ -153,13 +195,13 @@ fun progressionHint(
 private const val WEIGHT_EPSILON_KG = 0.01
 
 /**
- * A template exercise in one line for the Template Editor's list: "2W + 3 × 8–12 · RIR 1 · rest 3:00".
+ * A template exercise in one line for the Template Editor's list: "2W + 3 × 8–12 · RIR 1–2 · rest 3:00".
  * Warm-ups show when the template sets a number, "0W +" included (nothing: last session's); without a
  * range it is "3 sets"; [restSec] is the rest in effect (the slot's or Settings').
  */
-fun templateSlotSummary(targetSets: Int, warmupSets: Int?, repMin: Int?, repMax: Int?, targetRir: Int?, restSec: Int): String {
+fun templateSlotSummary(targetSets: Int, warmupSets: Int?, repMin: Int?, repMax: Int?, rir: RirTarget?, restSec: Int): String {
     val range = repRangeText(repMin, repMax)
     val sets = if (range != null) "$targetSets × $range" else "$targetSets ${if (targetSets == 1) "set" else "sets"}"
     val warmups = warmupSets?.let { "${it}W + " }.orEmpty()
-    return listOfNotNull(warmups + sets, targetRir?.let { "RIR $it" }, "rest ${Format.clock(restSec)}").joinToString(" · ")
+    return listOfNotNull(warmups + sets, rir?.let { "RIR ${it.text}" }, "rest ${Format.clock(restSec)}").joinToString(" · ")
 }
