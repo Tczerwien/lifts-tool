@@ -1043,6 +1043,19 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a copy saved before the deload flag was stored falls back to the source's mark`() {
+        val template = store.addTemplate("Lower A", "squat" to 4)
+        val source = session.startFromTemplate(template, now = 1_000_000)
+        assertTrue(session.setDeload(source, on = true))
+        rowsOf(store.exercisesForWorkout(source).single()).forEach { session.completeSet(source, it, 90.0, 5, n, now = 1_100_000) }
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(source, now = 1_300_000))
+        val again = assertNotNull(session.startFromWorkout(source, now = 5_000_000))
+        // As 0.14.0 would have saved it: "copy:source", no third part (review R2-7).
+        runBlocking<Unit> { dataStore.edit { prefs -> prefs[stringPreferencesKey("lifts_started_from")] = "$again:$source" } }
+        assertTrue(session.discardIfUntouched(again), "the source is a deload, so the copy started as one")
+    }
+
+    @Test
     fun `a superset keeps alternating over a deload's rows, trimmed and put back`() {
         val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
         store.exercisesForTemplate(template).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1, restSecWork = 90) }
