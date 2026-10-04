@@ -46,9 +46,10 @@ data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: In
 /**
  * What switching a deload [on] or off does to one slot's [rows] (in position order) (DL-2).
  *
- * On: the slot keeps [keep] work sets, the ticked ones first: a ticked row is never deleted and counts
- * toward the number, then the unticked ones stay in order until it is reached, and the rest are deleted,
- * each with the unticked drops after it. Warm-ups stay, and a drop never counts as a kept work set: it goes
+ * On: the slot keeps [keep] work sets, the done ones first: a work set ticked, or with a ticked drop after
+ * it, is never deleted and counts toward the number (so a logged drop never loses the set above it), then
+ * the unticked ones stay in order until it is reached, and the rest are deleted, each with the unticked
+ * drops after it. Warm-ups stay, and a drop never counts as a kept work set: it goes
  * with the work set before it. Values typed into a deleted row go with it.
  *
  * Off: plain work rows are added until the slot has its [targetSets] work sets again (drops not counted);
@@ -56,16 +57,26 @@ data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: In
  */
 fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): DeloadChange {
     if (!on) return DeloadChange(addRows = (targetSets - deloadWorkSets(rows)).coerceAtLeast(0))
+    // The work sets done: ticked, or with a ticked drop after them.
+    val done = HashSet<Long>()
+    var parent: SetEntity? = null
+    for (row in rows) {
+        when {
+            row.isWorkSet() -> parent = row.also { if (it.completedAt != null) done += it.id }
+            row.type == SET_TYPE_DROP -> if (row.completedAt != null) parent?.let { done += it.id }
+            else -> parent = null
+        }
+    }
     val delete = ArrayList<Long>()
-    // The unticked work sets that may stay: what the ticked ones leave of the kept number.
-    var untickedLeft = keep - rows.count { it.isWorkSet() && it.completedAt != null }
+    // The not-done work sets that may stay: what the done ones leave of the kept number.
+    var untickedLeft = keep - done.size
     var parentDeleted = false
     for (row in rows) {
         when {
             row.isWorkSet() -> {
-                val ticked = row.completedAt != null
-                parentDeleted = !ticked && untickedLeft <= 0
-                if (!ticked) untickedLeft--
+                val isDone = row.id in done
+                parentDeleted = !isDone && untickedLeft <= 0
+                if (!isDone) untickedLeft--
                 if (parentDeleted) delete += row.id
             }
             row.type == SET_TYPE_DROP -> if (parentDeleted && row.completedAt == null) delete += row.id

@@ -64,8 +64,9 @@ class DeloadTest {
         assertEquals(DeloadChange(deleteIds = listOf(3, 4, 5, 6)), deloadRows(rows(n, d, n, d, n, d), targetSets = 3, keep = 1, on = true))
         // Two drops after the first set don't take the second set's place.
         assertEquals(DeloadChange(deleteIds = listOf(4)), deloadRows(rows(n, d, d, n), targetSets = 2, keep = 1, on = true))
-        // A ticked drop stays, even under a set that goes.
-        assertEquals(DeloadChange(deleteIds = listOf(2)), deloadRows(rows(n, n, "D"), targetSets = 2, keep = 1, on = true))
+        // A set whose drop is ticked is done: it stays with its drop, and the other is the one that goes (review R2-1).
+        assertEquals(DeloadChange(deleteIds = listOf(1)), deloadRows(rows(n, n, "D"), targetSets = 2, keep = 1, on = true))
+        assertEquals(DeloadChange(), deloadRows(rows(n, "D", "N", "N"), targetSets = 3, keep = 2, on = true), "three done: none goes")
     }
 
     @Test
