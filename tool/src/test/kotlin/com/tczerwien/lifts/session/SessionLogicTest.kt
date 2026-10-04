@@ -482,6 +482,12 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a workout started before planned sets were written can still be untouched`() {
+        val (slots, sets) = startedFrom(benchAndSquatPlan)
+        assertTrue(isUntouched(workout(templateId = 7), slots.map { it.copy(targetSets = null) }, sets, { benchAndSquatPlan }))
+    }
+
+    @Test
     fun `a deload switched on counts as touched, a copy of a deload as it started doesn't`() {
         val (slots, sets) = startedFrom(benchAndSquatPlan)
         assertFalse(isUntouched(workout(templateId = 7).copy(deload = true), slots, sets, { benchAndSquatPlan }))
