@@ -296,7 +296,7 @@ class TemplateEditorViewModel(
      * Appends the picked exercise with [DEFAULT_TARGET_SETS] sets and settings-default rests; nothing
      * when the template is gone (deleted while the picker was open), which would break the foreign key,
      * or the exercise is (deleted or removed after the picker read its list): a row naming a missing
-     * exercise would make every backup of the log refused.
+     * exercise would start every workout of the template on "Unknown exercise".
      */
     fun addExercise(exerciseId: String) = mutate {
         repository.inTransaction {
