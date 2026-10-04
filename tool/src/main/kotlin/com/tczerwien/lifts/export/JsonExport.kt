@@ -41,6 +41,11 @@ import kotlinx.serialization.json.Json
  * target_rir_max 2; absent for one number) and workouts[].deload (true for a deload: fewer work sets at
  * an easier effort, the deload's RIR from Settings applying instead of the targets; absent otherwise).
  * A deload's exercises keep their template's target_rir and target_rir_max.
+ *
+ * 2.6 (B15) added alternatives on template exercises ([{exercise_id, name}], in order: exercises that can
+ * stand in for it at the gym, swapped in for one workout; absent without any) and planned_exercise_id on
+ * workout exercises (the exercise its template planned when an alternative was done instead; absent
+ * otherwise). Every id named is in exercises[].
  */
 object JsonExport {
 
@@ -90,6 +95,8 @@ object JsonExport {
                             warmupRestSeconds = it.restSecWarmup,
                             supersetId = it.supersetId,
                             targetRirMax = it.targetRirMax,
+                            alternatives = it.alternatives.takeIf { alternatives -> alternatives.isNotEmpty() }
+                                ?.map { alternative -> JsonExerciseRef(alternative.exerciseId, alternative.name) },
                         )
                     },
                 )
@@ -114,6 +121,7 @@ object JsonExport {
                             targetRir = exercise.targetRir,
                             targetRirMax = exercise.targetRirMax,
                             supersetId = exercise.supersetId,
+                            plannedExerciseId = exercise.planned?.exerciseId,
                             sets = exercise.sets.map { set ->
                                 JsonSet(
                                     index = set.index,
@@ -259,6 +267,15 @@ data class JsonTemplateExercise(
     @SerialName("superset_id") val supersetId: Int? = null,
     /** The top of an RIR range ("1–2"); absent for one number. */
     @SerialName("target_rir_max") val targetRirMax: Int? = null,
+    /** Exercises that can stand in for it at the gym, swapped in for one workout; absent without any. */
+    val alternatives: List<JsonExerciseRef>? = null,
+)
+
+/** An exercise by its id (as exercises[] lists it) and name. */
+@Serializable
+data class JsonExerciseRef(
+    @SerialName("exercise_id") val exerciseId: String,
+    val name: String,
 )
 
 @Serializable
@@ -288,6 +305,8 @@ data class JsonWorkoutExercise(
     @SerialName("target_rir_max") val targetRirMax: Int? = null,
     /** The workout's exercises sharing it were done as a superset; absent outside one. */
     @SerialName("superset_id") val supersetId: Int? = null,
+    /** The exercise its template planned, when this one was done instead (an alternative); absent otherwise. */
+    @SerialName("planned_exercise_id") val plannedExerciseId: String? = null,
     val sets: List<JsonSet>,
 )
 

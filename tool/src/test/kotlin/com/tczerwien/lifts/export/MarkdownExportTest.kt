@@ -17,7 +17,7 @@ class MarkdownExportTest {
     @Test
     fun frontMatterIsFirstAndComplete() {
         assertTrue(markdown.startsWith("---\n"), "front matter must open the file")
-        assertContains(lines, "schema_version: \"2.5\"")
+        assertContains(lines, "schema_version: \"2.6\"")
         assertContains(lines, "exported_at: ${ExportFixtures.EXPORTED_AT}")
         assertContains(lines, "units:")
         assertContains(lines, "  weight: kg")
@@ -144,6 +144,14 @@ class MarkdownExportTest {
     }
 
     @Test
+    fun aSwappedExerciseSaysWhatItWasDoneInsteadOf() {
+        val swapped = ExportFixtures.slots.map { if (it.id == 2L) it.copy(choices = listOf(ExportFixtures.squat.id, it.exerciseId)) else it }
+        val log = MarkdownExport.render(ExportFixtures.snapshot(slots = swapped)).lines()
+        assertTrue(log.any { it.startsWith("- **Bench Press (Barbell)** (instead of Squat (Barbell)) [") }, log.joinToString("\n"))
+        assertEquals(1, log.count { "(instead of" in it && it.startsWith("- **") }, "only the swapped one")
+    }
+
+    @Test
     fun aDeloadSaysSoInItsHeadingAndAnRirRangeInItsTarget() {
         val ranged = ExportFixtures.slots.map { if (it.id == 2L) it.copy(targetRepMin = 8, targetRepMax = 12, targetRir = 1, targetRirMax = 2) else it }
         val log = MarkdownExport.render(
@@ -159,7 +167,7 @@ class MarkdownExportTest {
         val legend = lines.single { it.startsWith("How to read this:") }
         for (term in listOf(
             "`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)", "`(superset 1)`",
-            "`deload`", "RIR 1–2",
+            "`deload`", "RIR 1–2", "`(instead of",
         )) {
             assertTrue(term in legend, "legend lacks $term: $legend")
         }

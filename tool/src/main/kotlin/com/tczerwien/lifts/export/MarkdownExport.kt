@@ -73,6 +73,8 @@ object MarkdownExport {
         append(" reserve) than the targets shown, which are its template's.")
         append(" `(superset 1)` marks the exercises done in turn that day as superset 1: one set of each, then the")
         append(" rest after the round.")
+        append(" `(instead of Leg Curl)` after an exercise means it was done in place of the one its template planned,")
+        append(" an alternative swapped in for that workout.")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }
@@ -159,6 +161,7 @@ object MarkdownExport {
             workout.notes?.let { append('\n').append(quote(it, indent = "")) }
             for (exercise in workout.exercises) {
                 append("\n- **").append(exercise.name).append("**")
+                exercise.planned?.let { append(" (instead of ").append(it.name).append(')') }
                 exercise.supersetId?.let { append(" (superset ").append(it).append(')') }
                 muscleTag(exercise)?.let { append(' ').append(it) }
                 targetTag(exercise)?.let { append(' ').append(it) }

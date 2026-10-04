@@ -41,6 +41,7 @@ class JsonExportTest {
         TemplateExerciseEntity(
             id = 1, templateId = 1, exerciseId = ExportFixtures.bench.id, position = 0, targetSets = 3,
             restSecWork = 180, restSecWarmup = 90, warmupSets = 2, repMin = 5, repMax = 8, targetRir = 2, targetRirMax = 3,
+            alternatives = listOf(ExportFixtures.squat.id, "gone-from-the-log"),
         ),
         TemplateExerciseEntity(id = 2, templateId = 1, exerciseId = customRow.id, position = 1, targetSets = 2),
         TemplateExerciseEntity(id = 3, templateId = 1, exerciseId = ExportFixtures.squat.id, position = 2, targetSets = 2, supersetGroup = 4),
@@ -49,14 +50,17 @@ class JsonExportTest {
 
     /**
      * The newest workout's bench done as a superset with a squat (2.4), aiming for 1–2 reps in reserve
-     * (2.5), in a deload (2.5).
+     * (2.5), in a deload (2.5); the squat done instead of the custom exercise its template planned (2.6).
      */
     private val pairedSlots = ExportFixtures.slots.map { if (it.id == 2L) it.copy(supersetGroup = 9, targetRir = 1, targetRirMax = 2) else it } +
-        WorkoutExerciseEntity(id = 3, workoutId = 2, exerciseId = ExportFixtures.squat.id, position = 1, supersetGroup = 9)
+        WorkoutExerciseEntity(
+            id = 3, workoutId = 2, exerciseId = ExportFixtures.squat.id, position = 1, supersetGroup = 9,
+            choices = listOf(customRow.id, ExportFixtures.squat.id),
+        )
 
     /**
      * Every optional field filled somewhere: a timed set, a template, a hidden custom exercise with a cue, a
-     * superset, an RIR range, a deload.
+     * superset, an RIR range, a deload, an alternative and a swap.
      */
     private val full = JsonExport.render(
         ExportFixtures.snapshot(
@@ -97,7 +101,9 @@ class JsonExportTest {
             "summary.prs[].best_set_weight_kg", "summary.prs[].exercise_id", "summary.prs[].max_weight_date",
             "summary.prs[].max_weight_kg", "summary.prs[].name",
             "summary.week_starts", "summary.weekly_sets_per_muscle",
-            "templates", "templates[].exercises", "templates[].exercises[].exercise_id", "templates[].exercises[].name",
+            "templates", "templates[].exercises", "templates[].exercises[].alternatives",
+            "templates[].exercises[].alternatives[].exercise_id", "templates[].exercises[].alternatives[].name",
+            "templates[].exercises[].exercise_id", "templates[].exercises[].name",
             "templates[].exercises[].rep_max", "templates[].exercises[].rep_min", "templates[].exercises[].rest_seconds",
             "templates[].exercises[].superset_id", "templates[].exercises[].target_rir", "templates[].exercises[].target_rir_max",
             "templates[].exercises[].target_sets",
@@ -106,7 +112,7 @@ class JsonExportTest {
             "units", "units.display", "units.weight",
             "workouts", "workouts[].bodyweight_date", "workouts[].bodyweight_kg", "workouts[].deload", "workouts[].end_time",
             "workouts[].exercises", "workouts[].exercises[].exercise_id", "workouts[].exercises[].name",
-            "workouts[].exercises[].notes", "workouts[].exercises[].superset_id",
+            "workouts[].exercises[].notes", "workouts[].exercises[].planned_exercise_id", "workouts[].exercises[].superset_id",
             "workouts[].exercises[].target_rir", "workouts[].exercises[].target_rir_max",
             "workouts[].exercises[].sets", "workouts[].exercises[].sets[].completed_at",
             "workouts[].exercises[].sets[].duration_seconds", "workouts[].exercises[].sets[].index",
@@ -135,7 +141,7 @@ class JsonExportTest {
 
     @Test
     fun topLevelFields() {
-        assertEquals("2.5", decoded.schemaVersion)
+        assertEquals("2.6", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals(JsonUnits(weight = "kg", display = "kg"), decoded.units)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)
@@ -188,6 +194,7 @@ class JsonExportTest {
             JsonTemplateExercise(
                 exerciseId = ExportFixtures.bench.id, name = "Bench Press (Barbell)", targetSets = 3, warmupSets = 2,
                 repMin = 5, repMax = 8, targetRir = 2, restSeconds = 180, warmupRestSeconds = 90, targetRirMax = 3,
+                alternatives = listOf(JsonExerciseRef(ExportFixtures.squat.id, "Squat (Barbell)")),
             ),
             push.exercises.first(),
         )
@@ -219,6 +226,36 @@ class JsonExportTest {
             ),
         )
         assertTrue("superset_id" !in warmedUp, warmedUp)
+    }
+
+    @Test
+    fun alternativesAreNamedAndASwapSaysWhatWasPlanned() {
+        val document = Json.decodeFromString(JsonExportDocument.serializer(), full)
+        val bench = document.templates.single().exercises.first()
+        assertEquals(listOf(ExportFixtures.squat.id), bench.alternatives?.map { it.exerciseId }, "one not in the log is left out")
+        assertNull(document.templates.single().exercises[1].alternatives, "absent without any")
+        val newest = document.workouts.first()
+        assertEquals(listOf(null, customRow.id), newest.exercises.map { it.plannedExerciseId }, "the squat was done instead")
+        assertTrue("planned_exercise_id" !in rendered && "alternatives" !in rendered, "nothing written in a file without them")
+        // An exercise the file names only as planned, or as an alternative, is in its exercises too.
+        val swapped = Json.decodeFromString(
+            JsonExportDocument.serializer(),
+            JsonExport.render(
+                ExportFixtures.snapshot(slots = ExportFixtures.slots.map { it.copy(choices = listOf(ExportFixtures.squat.id, it.exerciseId)) }),
+            ),
+        )
+        assertEquals(listOf(ExportFixtures.squat.id), swapped.workouts.map { it.exercises.single().plannedExerciseId }.distinct())
+        assertEquals(listOf(ExportFixtures.bench.id, ExportFixtures.squat.id), swapped.exercises.map { it.id })
+        val offered = Json.decodeFromString(
+            JsonExportDocument.serializer(),
+            JsonExport.render(
+                ExportFixtures.snapshot(
+                    templates = listOf(template),
+                    templateExercises = listOf(templateSlots.first().copy(alternatives = listOf(ExportFixtures.squat.id))),
+                ),
+            ),
+        )
+        assertEquals(listOf(ExportFixtures.bench.id, ExportFixtures.squat.id), offered.exercises.map { it.id })
     }
 
     @Test

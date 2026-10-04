@@ -36,7 +36,7 @@ import java.util.Locale
  */
 
 /** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.5: B14). */
-const val EXPORT_SCHEMA_VERSION = "2.5"
+const val EXPORT_SCHEMA_VERSION = "2.6"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -117,6 +117,9 @@ data class SnapshotExercise(
 
 data class SnapshotTemplate(val name: String, val exercises: List<SnapshotTemplateExercise>)
 
+/** An exercise named by id with its shown name: a template exercise's alternative. */
+data class SnapshotExerciseRef(val exerciseId: String, val name: String)
+
 data class SnapshotTemplateExercise(
     val exerciseId: String,
     val name: String,
@@ -133,6 +136,8 @@ data class SnapshotTemplateExercise(
     val supersetId: Int? = null,
     /** The top of an RIR range ("1–2": [targetRir] 1, this 2); null for one number. */
     val targetRirMax: Int? = null,
+    /** Exercises that can stand in for it at the gym, in order; one not in the log is left out. */
+    val alternatives: List<SnapshotExerciseRef> = emptyList(),
 )
 
 data class SnapshotWorkout(
@@ -182,6 +187,11 @@ data class SnapshotWorkoutExercise(
      * only, or here for its note alone).
      */
     val supersetId: Int? = null,
+    /**
+     * The exercise its template planned when another of its choices was done instead (a swap): the slot's
+     * first choice, its main; null when that was done, or the slot had no alternatives.
+     */
+    val planned: SnapshotExerciseRef? = null,
     /** Completed sets only, ordered by position, [SnapshotSet.index] 1-based. */
     val sets: List<SnapshotSet>,
 )
@@ -327,6 +337,7 @@ fun buildSnapshot(
                         // Only a real range's top: one at or below the number says nothing more ([rirTarget]).
                         targetRirMax = rirTarget(slot.targetRir, slot.targetRirMax)?.max?.takeIf { exercise?.tracking?.takesReps != false },
                         supersetId = supersetIds[slot.id],
+                        planned = slot.choices.firstOrNull()?.takeIf { it != slot.exerciseId }?.let { SnapshotExerciseRef(it, nameOf(it)) },
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
                                 index = i + 1,
@@ -379,13 +390,15 @@ fun buildSnapshot(
                     restSecWarmup = it.restSecWarmup,
                     supersetId = supersetIds[index],
                     targetRirMax = rirTarget(it.targetRir, it.targetRirMax)?.max?.takeIf { _ -> tracking[it.exerciseId]?.takesReps != false },
+                    alternatives = it.alternatives.filter { id -> id in exercisesById }.map { id -> SnapshotExerciseRef(id, nameOf(id)) },
                 )
             },
         )
     }
 
-    val usedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.map { it.exerciseId } } +
-        rows.templateExercises.map { it.exerciseId }
+    // Every id the file names is in its exercises: a swap's planned one and a template's alternatives too.
+    val usedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.flatMap { listOfNotNull(it.exerciseId, it.planned?.exerciseId) } } +
+        rows.templateExercises.flatMap { listOf(it.exerciseId) + it.alternatives }
     val snapshotExercises = exercises
         .filter { it.id in usedIds || it.isCustom || it.pinnedNote != null }
         .map {
