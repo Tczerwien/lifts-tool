@@ -461,9 +461,17 @@ class TemplateEditorViewModel(
         super.onCleared()
     }
 
-    /** Back collapses armed trash states and overlay modes before letting the screen pop. */
+    /**
+     * Back collapses armed trash states and overlay modes before letting the screen pop. A mode whose exercise
+     * has gone meanwhile (removed from the picker) shows the list already, so Back is the list's.
+     */
     override fun onBackPressed(): Boolean {
         val state = _uiState.value
+        val shown = when (val mode = state.mode) {
+            is Mode.EditExercise -> mode.takeIf { state.rows.any { it.id == mode.templateExerciseId } }
+            is Mode.Alternatives -> mode.takeIf { state.rows.any { it.id == mode.templateExerciseId } }
+            else -> mode
+        } ?: Mode.Overview
         return when {
             // The template is going: its exit (or his Back) leaves, whatever else is open.
             state.deleting -> false
@@ -474,12 +482,12 @@ class TemplateEditorViewModel(
             }
 
             // Back to the exercise the alternatives are for.
-            state.mode is Mode.Alternatives -> {
-                _uiState.update { it.copy(mode = Mode.EditExercise(state.mode.templateExerciseId)) }
+            shown is Mode.Alternatives -> {
+                _uiState.update { it.copy(mode = Mode.EditExercise(shown.templateExerciseId)) }
                 true
             }
 
-            state.mode != Mode.Overview -> {
+            shown != Mode.Overview -> {
                 _uiState.update { it.copy(mode = Mode.Overview) }
                 true
             }
