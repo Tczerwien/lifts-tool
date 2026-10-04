@@ -65,7 +65,7 @@ fun withoutExercise(
         when {
             row.exerciseId != exerciseId -> row.copy(alternatives = others)
             promoted == null -> null.also { deleteIds += row.id }
-            else -> row.copy(exerciseId = promoted, alternatives = others - promoted)
+            else -> row.copy(exerciseId = promoted, alternatives = others.filter { it != promoted })
         }
     }
     val before = rows.associateBy { it.id }
