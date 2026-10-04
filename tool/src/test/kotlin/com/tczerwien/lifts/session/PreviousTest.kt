@@ -84,6 +84,21 @@ class PreviousTest {
     }
 
     @Test
+    fun `two slots swapped across last time, each lift reads its sets from the other slot`() {
+        // Last week slot 10, planned as bench, did the fly; slot 11, planned as the row, did bench.
+        val lastWeek = listOf(slot(10, "fly", 0).copy(choices = listOf("bench", "fly")), slot(11, "bench", 1).copy(choices = listOf("row", "bench")))
+        val groups = mapOf(
+            "bench" to previousGroups(listOf(set(1, slot = 11, weightKg = 80.0)), lastWeek, "bench"),
+            "fly" to previousGroups(listOf(set(2, slot = 10, weightKg = 14.0)), lastWeek, "fly"),
+        )
+        val today = listOf(slot(20, "bench", 0).copy(choices = listOf("bench", "fly")), slot(21, "row", 1).copy(choices = listOf("row", "bench")))
+        assertEquals(listOf(1L), previousForSlots(today, groups).getValue(20).map { it.id }, "bench, done last week in the row's slot")
+        // A slot only skipped last time stays empty: the swapped-in sets are a swap's, not a skip's.
+        val skipped = mapOf("bench" to previousGroups(emptyList(), listOf(slot(10, "bench", 0)), "bench"))
+        assertEquals(emptyList(), previousForSlots(listOf(slot(20, "bench", 0)), skipped).getValue(20))
+    }
+
+    @Test
     fun `an alternative reads the lift's last session wherever it was done, and back`() {
         // Last time the press was the main of another workout: swapped in today, it reads that.
         val asMain = groups(mapOf("press" to listOf(set(1, slot = 11, weightKg = 60.0))))

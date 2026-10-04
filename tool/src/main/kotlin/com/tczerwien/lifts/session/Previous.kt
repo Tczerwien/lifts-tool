@@ -20,9 +20,10 @@ private fun SetEntity.isWarmup(): Boolean = type == SET_TYPE_WARMUP
 
 /**
  * One of last session's slots for an exercise ([previousGroups]): its sets of that exercise in position
- * order, and whether the slot did it in place of the lift its start planned ([swappedIn], an alternative).
+ * order, and whether the slot did it in place of the lift its start planned ([swappedIn], an alternative),
+ * or was planned as it but did another ([swappedAway]: no sets of it).
  */
-data class LastSlot(val sets: List<SetEntity>, val swappedIn: Boolean = false)
+data class LastSlot(val sets: List<SetEntity>, val swappedIn: Boolean = false, val swappedAway: Boolean = false)
 
 /**
  * Last session's completed sets of [exerciseId] ([previous]) split into one group per slot of that session
@@ -36,6 +37,7 @@ fun previousGroups(previous: List<SetEntity>, slots: List<WorkoutExerciseEntity>
         LastSlot(
             sets = if (slot.exerciseId == exerciseId) bySlot[slot.id].orEmpty().sortedBy { it.position } else emptyList(),
             swappedIn = slot.plannedExerciseId != exerciseId,
+            swappedAway = slot.exerciseId != exerciseId,
         )
     }
 }
@@ -47,7 +49,9 @@ fun previousGroups(previous: List<SetEntity>, slots: List<WorkoutExerciseEntity>
  * back-off Bench slot is compared with last week's back-off sets, not the top sets, whichever of them a swap
  * took; the k-th slot swapped to an exercise gets last time's k-th slot swapped to it. A slot with no such
  * counterpart then takes, in order, last time's sets of that exercise no slot was matched with (the lift done
- * last time as an alternative, or as the main elsewhere: its numbers, never another slot's); else nothing.
+ * last time as an alternative, or as the main elsewhere: its numbers, never another slot's); else nothing. One
+ * whose counterpart did another lift (swapped away, not skipped) takes only sets of the exercise done last time
+ * as an alternative (two slots swapped across).
  */
 fun previousForSlots(
     slots: List<WorkoutExerciseEntity>,
@@ -60,7 +64,8 @@ fun previousForSlots(
         val plannedAt = last.indices.filter { !last[it].swappedIn }
         val swappedAt = last.indices.filter { last[it].swappedIn }
         val claimed = HashSet<Int>()
-        val withoutCounterpart = mutableListOf<Long>()
+        // Slots still to fill, in position order, each with whether only swapped-in sets will do.
+        val withoutCounterpart = mutableListOf<Pair<Long, Boolean>>()
         var plannedSeen = 0
         var swappedSeen = 0
         for (slot in ordered) {
@@ -71,15 +76,22 @@ fun previousForSlots(
             }
             // A slot planned as it but doing another lift today only keeps its place.
             if (slot.exerciseId != exerciseId) continue
-            if (index == null) {
-                withoutCounterpart += slot.id
-            } else {
-                claimed += index
-                result[slot.id] = last[index].sets
+            when {
+                index == null -> withoutCounterpart += slot.id to false
+                last[index].swappedAway -> {
+                    claimed += index
+                    withoutCounterpart += slot.id to true
+                }
+                else -> {
+                    claimed += index
+                    result[slot.id] = last[index].sets
+                }
             }
         }
-        val unclaimed = last.indices.filter { it !in claimed && last[it].sets.isNotEmpty() }.iterator()
-        for (slotId in withoutCounterpart) result[slotId] = if (unclaimed.hasNext()) last[unclaimed.next()].sets else emptyList()
+        for ((slotId, swappedInOnly) in withoutCounterpart) {
+            val pick = last.indices.firstOrNull { it !in claimed && last[it].sets.isNotEmpty() && (!swappedInOnly || last[it].swappedIn) }
+            result[slotId] = pick?.let { claimed += it; last[it].sets }.orEmpty()
+        }
     }
     return result
 }
