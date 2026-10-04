@@ -1197,6 +1197,28 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a slot that did a lift removed since starts again on its first choice still in the picker`() {
+        val template = store.addTemplate("Legs", "squat" to 2, "curl" to 2)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(alternatives = listOf("row", "fly"))
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (squat, curl) = store.exercisesForWorkout(workoutId)
+        assertTrue(session.swapExercise(workoutId, squat.id, "row"))
+        session.completeSet(workoutId, rowsOf(squat).first(), 60.0, 10, n, now = 1_060_000)
+        session.completeSet(workoutId, rowsOf(curl).first(), 20.0, 10, n, now = 1_120_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        store.exercises["row"] = store.exercises.getValue("row").copy(hidden = true)
+
+        val again = assertNotNull(session.startFromWorkout(workoutId, now = 2_000_000))
+        val copy = store.exercisesForWorkout(again).first()
+        assertEquals("squat" to listOf("squat", "fly"), copy.exerciseId to copy.choices, "the main, not the slot dropped")
+        assertEquals(listOf(n), rowsOf(copy).map { it.type }, "the pattern done that day")
+        assertTrue(session.discardIfUntouched(again))
+        val saved = assertNotNull(session.saveAsTemplate(workoutId, "Legs 2"))
+        assertEquals("squat" to listOf("fly"), store.exercisesForTemplate(saved).first().let { it.exerciseId to it.alternatives })
+    }
+
+    @Test
     fun `a swapped superset member keeps the pair alternating and a deload's rows, which off still puts back`() {
         val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
         val (flyRow, curlRow) = store.exercisesForTemplate(template)

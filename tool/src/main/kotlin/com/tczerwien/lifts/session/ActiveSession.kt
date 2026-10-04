@@ -155,14 +155,22 @@ class ActiveSession(
      * What [planFromWorkout] makes of stored workout [workoutId], without the exercises he removed
      * (hidden, kept only for their history): removing one took it out of his templates, so neither a
      * Start Again nor a Save as Template brings it back, as an exercise or as a choice ([keptChoices];
-     * one gone from the log goes too). A superset it leaves with one slot is none.
+     * one gone from the log goes too). A slot that did one as a swap starts on its first other choice still
+     * in the picker, as removing it from a template promotes the first alternative; with none, it goes. A
+     * superset a slot leaves with one slot is none.
      */
     private fun planOf(workoutId: Long): List<PlannedSlot> {
         val usable = HashMap<String, Boolean>()
         fun usable(id: String) = usable.getOrPut(id) { repository.exerciseById(id)?.hidden == false }
         return planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
-            .filterNot { repository.exerciseById(it.exerciseId)?.hidden == true }
-            .map { it.copy(choices = keptChoices(it.choices, it.exerciseId, ::usable)) }
+            .mapNotNull { planned ->
+                val exerciseId = if (repository.exerciseById(planned.exerciseId)?.hidden == true) {
+                    planned.choices.firstOrNull { it != planned.exerciseId && usable(it) } ?: return@mapNotNull null
+                } else {
+                    planned.exerciseId
+                }
+                planned.copy(exerciseId = exerciseId, choices = keptChoices(planned.choices, exerciseId, ::usable))
+            }
             .withNormalizedGroups()
     }
 
