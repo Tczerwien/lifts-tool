@@ -11,7 +11,8 @@ import com.tczerwien.lifts.data.WorkoutExerciseEntity
 
 /**
  * [LiftsStore] in memory, following the DAO's rules: auto-increment ids, the same orderings, and
- * previousPerformance's "latest finished workout where the exercise has a completed set". The
+ * previousPerformance's "latest finished workout where the exercise has a completed set", a deload
+ * only when no other has one. The
  * queries themselves are checked on the emulator against the real database.
  */
 class InMemoryLiftsStore : LiftsStore {
@@ -119,7 +120,7 @@ class InMemoryLiftsStore : LiftsStore {
 
     override fun previousSlotIds(exerciseId: String): List<Long> = previousSlots(exerciseId).map { it.id }
 
-    /** The exercise's slots in the latest finished workout where it has a ticked set. */
+    /** The exercise's slots in the latest finished workout where it has a ticked set; a deload only when no other has one. */
     private fun previousSlots(exerciseId: String): List<WorkoutExerciseEntity> {
         val latest = workouts.values
             .filter { workout ->
@@ -127,7 +128,7 @@ class InMemoryLiftsStore : LiftsStore {
                     slot.exerciseId == exerciseId && setsOf(slot.id).any { it.completedAt != null }
                 }
             }
-            .maxWithOrNull(compareBy<WorkoutEntity> { it.startedAt }.thenBy { it.id })
+            .maxWithOrNull(compareBy<WorkoutEntity> { !it.deload }.thenBy { it.startedAt }.thenBy { it.id })
             ?: return emptyList()
         return exercisesForWorkout(latest.id).filter { it.exerciseId == exerciseId }
     }

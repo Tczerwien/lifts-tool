@@ -58,7 +58,7 @@ interface LiftsStore {
 
     /**
      * Completed sets of the most recent finished workout in which [exerciseId] had a completed set,
-     * by slot position then set position.
+     * by slot position then set position; a deload only when no other workout has one (DL-5).
      */
     fun previousPerformance(exerciseId: String): List<SetEntity>
 

@@ -166,7 +166,8 @@ interface WorkoutDao {
     /**
      * Completed sets of the most recent FINISHED workout (endedAt not null) in which [exerciseId]
      * had at least one completed set, ordered by slot position then set position. A workout
-     * where the exercise was added but skipped doesn't count. Empty if it was never performed.
+     * where the exercise was added but skipped doesn't count. Empty if it was never performed. A
+     * deload counts only when no other workout has the exercise (DL-5): its light sets are no "last time".
      */
     @Query(
         "SELECT sets.* FROM sets " +
@@ -178,7 +179,7 @@ interface WorkoutDao {
             "JOIN workout_exercises we ON we.workoutId = w.id " +
             "WHERE we.exerciseId = :exerciseId AND w.endedAt IS NOT NULL " +
             "AND EXISTS (SELECT 1 FROM sets s WHERE s.workoutExerciseId = we.id AND s.completedAt IS NOT NULL) " +
-            "ORDER BY w.startedAt DESC, w.id DESC LIMIT 1" +
+            "ORDER BY w.deload, w.startedAt DESC, w.id DESC LIMIT 1" +
             ") " +
             "ORDER BY workout_exercises.position, sets.position"
     )
@@ -196,7 +197,7 @@ interface WorkoutDao {
             "JOIN workout_exercises we ON we.workoutId = w.id " +
             "WHERE we.exerciseId = :exerciseId AND w.endedAt IS NOT NULL " +
             "AND EXISTS (SELECT 1 FROM sets s WHERE s.workoutExerciseId = we.id AND s.completedAt IS NOT NULL) " +
-            "ORDER BY w.startedAt DESC, w.id DESC LIMIT 1" +
+            "ORDER BY w.deload, w.startedAt DESC, w.id DESC LIMIT 1" +
             ") " +
             "ORDER BY workout_exercises.position"
     )

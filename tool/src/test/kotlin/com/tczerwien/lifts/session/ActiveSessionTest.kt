@@ -861,6 +861,29 @@ class ActiveSessionTest {
         assertEquals(listOf("fly" to null, "row" to null), store.exercisesForWorkout(again).map { it.exerciseId to it.supersetGroup })
     }
 
+    // --- Deload (B14) ---
+
+    @Test
+    fun `last session skips a deload, unless only deloads did the exercise`() {
+        store.addFinishedWorkout(
+            startedAt = 1_000_000,
+            "squat" to listOf(Triple(w, 60.0, 5), Triple(n, 100.0, 5), Triple(n, 100.0, 5), Triple(n, 100.0, 5)),
+        )
+        val deload = store.addFinishedWorkout(
+            startedAt = 2_000_000,
+            "squat" to listOf(Triple(n, 90.0, 5), Triple(n, 90.0, 5)),
+            "curl" to listOf(Triple(n, 12.0, 10)),
+        )
+        store.updateWorkout(store.workoutById(deload)!!.copy(deload = true))
+        val groups = session.previousGroupsByExercise(listOf("squat", "curl"))
+        assertEquals(listOf(60.0, 100.0, 100.0, 100.0), groups.getValue("squat").single().map { it.weightKg }, "the normal session, though older")
+        assertEquals(listOf(12.0), groups.getValue("curl").single().map { it.weightKg }, "only a deload did it: that is last time")
+        // The next start plans from it too: the normal session's warm-up, not the deload's none.
+        val template = store.addTemplate("Lower A", "squat" to 3)
+        val workoutId = session.startFromTemplate(template, now = 3_000_000)
+        assertEquals(listOf(w, n, n, n), store.setsForWorkout(workoutId).map { it.type })
+    }
+
     // --- Version 2's columns ---
 
     @Test
