@@ -52,7 +52,10 @@ class JsonExportTest {
      * The newest workout's bench done as a superset with a squat (2.4), aiming for 1–2 reps in reserve
      * (2.5), in a deload (2.5); the squat done instead of the custom exercise its template planned (2.6).
      */
-    private val pairedSlots = ExportFixtures.slots.map { if (it.id == 2L) it.copy(supersetGroup = 9, targetRir = 1, targetRirMax = 2) else it } +
+    private val pairedSlots = ExportFixtures.slots.map {
+        // The bench was its own slot's main: offered an alternative, but done as planned.
+        if (it.id == 2L) it.copy(supersetGroup = 9, targetRir = 1, targetRirMax = 2, choices = listOf(it.exerciseId, ExportFixtures.squat.id)) else it
+    } +
         WorkoutExerciseEntity(
             id = 3, workoutId = 2, exerciseId = ExportFixtures.squat.id, position = 1, supersetGroup = 9,
             choices = listOf(customRow.id, ExportFixtures.squat.id),
@@ -235,7 +238,7 @@ class JsonExportTest {
         assertEquals(listOf(ExportFixtures.squat.id), bench.alternatives?.map { it.exerciseId }, "one not in the log is left out")
         assertNull(document.templates.single().exercises[1].alternatives, "absent without any")
         val newest = document.workouts.first()
-        assertEquals(listOf(null, customRow.id), newest.exercises.map { it.plannedExerciseId }, "the squat was done instead")
+        assertEquals(listOf(null, customRow.id), newest.exercises.map { it.plannedExerciseId }, "the squat was done instead; the bench as planned")
         assertTrue("planned_exercise_id" !in rendered && "alternatives" !in rendered, "nothing written in a file without them")
         // An exercise the file names only as planned, or as an alternative, is in its exercises too.
         val swapped = Json.decodeFromString(

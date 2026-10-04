@@ -1197,6 +1197,46 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a swapped superset member keeps the pair alternating and a deload's rows, which off still puts back`() {
+        val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
+        val (flyRow, curlRow) = store.exercisesForTemplate(template)
+        store.templateExercises[flyRow.id] = flyRow.copy(supersetGroup = 1, alternatives = listOf("row"))
+        store.templateExercises[curlRow.id] = curlRow.copy(supersetGroup = 1, restSecWork = 90)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        assertTrue(session.setDeload(workoutId, on = true))
+        val (fly, curl) = store.exercisesForWorkout(workoutId)
+        assertEquals(2, rowsOf(fly).size, "half of 3, rounded up")
+
+        assertTrue(session.swapExercise(workoutId, fly.id, "row"))
+        val swapped = store.exercisesForWorkout(workoutId).first()
+        assertTrue(sameGrouping(listOf(1, 1), store.exercisesForWorkout(workoutId).map { it.supersetGroup }), "still a pair")
+        assertEquals(2 to 3, rowsOf(swapped).size to swapped.targetSets, "the deload's rows; the plan kept")
+        val a1 = assertNotNull(session.completeSet(workoutId, rowsOf(swapped)[0], 40.0, 10, n, now = 1_010_000))
+        assertEquals(0, a1.restDurationSec, "the turn passes to the curl: no rest")
+        val b1 = assertNotNull(session.completeSet(workoutId, rowsOf(curl)[0], 12.0, 10, n, now = 1_040_000))
+        assertEquals(90, b1.restDurationSec, "the round's rest")
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertEquals(3, rowsOf(swapped).size, "back up to the plan")
+    }
+
+    @Test
+    fun `a swapped slot's last session skips a deload of that lift, as any slot's does`() {
+        store.addFinishedWorkout(startedAt = 100_000, "row" to listOf(Triple(n, 60.0, 10)))
+        val deload = store.addFinishedWorkout(startedAt = 200_000, "row" to listOf(Triple(n, 40.0, 10)))
+        store.workouts[deload] = store.workoutById(deload)!!.copy(deload = true)
+        val template = store.addTemplate("Back", "pullup" to 2)
+        val (row) = store.exercisesForTemplate(template)
+        store.templateExercises[row.id] = row.copy(alternatives = listOf("row"))
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val slot = store.exercisesForWorkout(workoutId).single()
+        assertTrue(session.swapExercise(workoutId, slot.id, "row"))
+
+        val slots = store.exercisesForWorkout(workoutId)
+        val lastTime = previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
+        assertEquals(listOf(60.0), lastTime.getValue(slot.id).map { it.weightKg }, "the normal session, not the deload")
+    }
+
+    @Test
     fun `Start Again keeps the exercise done and its choices, Save as Template makes it the main`() {
         val template = store.addTemplate("Legs", "squat" to 2, "curl" to 2)
         val (squatRow) = store.exercisesForTemplate(template)
