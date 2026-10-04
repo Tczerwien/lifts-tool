@@ -1052,12 +1052,14 @@ class ActiveWorkoutViewModel(
         val workoutId = resolvedWorkoutId ?: return
         val block = _uiState.value.exercises.firstOrNull { it.slot.id == slotId } ?: return
         val to = block.swapTo ?: return
+        val perf = Perf.start()
         rowsMovedUnderFinger()
         rowsChanging.incrementAndGet()
         LiftsIo.write({ session.swapExercise(workoutId, slotId, to) }) { swapped ->
             // Its rows' values were the other lift's and are gone: a reload must not put back any still pending.
             if (swapped) synchronized(refreshLock) { pendingEdits.keys.removeAll(block.sets.mapTo(HashSet()) { it.id }) }
             refresh()
+            Perf.done("aw.swap", perf, to)
             rowsMovedUnderFinger()
             rowsChanging.decrementAndGet()
         }
