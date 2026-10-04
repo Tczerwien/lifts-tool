@@ -51,11 +51,11 @@ fun swapTarget(choices: List<String>, current: String, rows: List<SetEntity>, us
 }
 
 /**
- * The choices a copy of a slot doing [current] keeps (Start Again, Save as Template; ALT-5): its [choices]
- * that [usable] keeps (an exercise he removed comes back nowhere), and [current] itself, in their order;
- * none when no other is left.
+ * The choices a copy of a slot doing [current] keeps (Start Again, Save as Template; ALT-5): [current] first,
+ * the main of the copy (it starts on it, so it is no swap there), then the others of its [choices] that [usable]
+ * keeps (an exercise he removed comes back nowhere), each once, in their order; none when no other is left.
  */
 fun keptChoices(choices: List<String>, current: String, usable: (String) -> Boolean): List<String> {
-    val kept = choices.filter { it == current || usable(it) }
-    return if (kept.none { it != current }) emptyList() else kept
+    val others = choices.filter { it != current && usable(it) }.distinct()
+    return if (others.isEmpty()) emptyList() else listOf(current) + others
 }

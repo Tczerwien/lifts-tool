@@ -58,10 +58,11 @@ class AlternativesTest {
     // --- ALT-5: what a copy keeps ---
 
     @Test
-    fun `a copy keeps the choices still in the picker and the exercise done, else none`() {
-        val choices = listOf("squat", "removed", "press", "gone")
+    fun `a copy keeps the exercise done as its main, then the choices still in the picker, else none`() {
+        val choices = listOf("squat", "removed", "press", "gone", "squat")
         val usable = { id: String -> id == "squat" || id == "press" }
-        assertEquals(listOf("squat", "press"), keptChoices(choices, "press", usable))
+        assertEquals(listOf("press", "squat"), keptChoices(choices, "press", usable), "the one done first: no swap in the copy")
+        assertEquals(listOf("squat", "press"), keptChoices(choices, "squat", usable), "each once")
         assertEquals(listOf("removed", "press"), keptChoices(listOf("removed", "press"), "removed", { it == "press" }), "the one done stays")
         assertEquals(emptyList(), keptChoices(listOf("squat", "removed"), "squat", usable), "no other left")
         assertEquals(emptyList(), keptChoices(emptyList(), "squat", usable))

@@ -1252,7 +1252,7 @@ class ActiveSessionTest {
 
         val again = assertNotNull(session.startFromWorkout(workoutId, now = 2_000_000))
         val copy = store.exercisesForWorkout(again).first()
-        assertEquals("row" to listOf("squat", "row", "fly"), copy.exerciseId to copy.choices)
+        assertEquals("row" to listOf("row", "squat", "fly"), copy.exerciseId to copy.choices, "the lift done is the copy's main: no swap there")
         assertTrue(session.discardIfUntouched(again), "a copy as Start Again made it")
 
         val saved = assertNotNull(session.saveAsTemplate(workoutId, "Legs 2"))

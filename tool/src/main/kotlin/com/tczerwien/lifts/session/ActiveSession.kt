@@ -111,7 +111,7 @@ class ActiveSession(
 
     /**
      * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises (the ones done, a swapped
-     * one too, with the slot's choices), each with the set
+     * one too, with the slot's choices, the one done its main: [keptChoices]), each with the set
      * pattern he ticked that day, its rests, its targets and its superset ([planFromWorkout]), and a
      * deload again when the source was one (its trimmed rows, its full plan: off restores it); the rows start empty,
      * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
