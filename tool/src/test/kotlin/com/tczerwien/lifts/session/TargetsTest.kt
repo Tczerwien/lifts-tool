@@ -55,15 +55,6 @@ class TargetsTest {
     // --- RIR target and warm-ups ---
 
     @Test
-    fun `RIR steps none then 0 to 5 and back to none below 0`() {
-        assertEquals(0, stepTargetRir(null, +1))
-        assertNull(stepTargetRir(null, -1))
-        assertEquals(2, stepTargetRir(1, +1))
-        assertEquals(5, stepTargetRir(5, +1), "5 is the most")
-        assertNull(stepTargetRir(0, -1))
-    }
-
-    @Test
     fun `template warm-ups step from last session's to a count`() {
         assertEquals(0, stepTemplateWarmups(null, +1), "none: an explicit no warm-ups")
         assertEquals(2, stepTemplateWarmups(1, +1))

@@ -29,7 +29,6 @@ import com.tczerwien.lifts.library.moved
 import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.MAX_REST_SEC
-import com.tczerwien.lifts.session.MAX_RIR
 import com.tczerwien.lifts.session.MAX_TARGET_REPS
 import com.tczerwien.lifts.session.MAX_TEMPLATE_SETS
 import com.tczerwien.lifts.session.MAX_TEMPLATE_WARMUPS
@@ -44,7 +43,7 @@ import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.settledTemplateRows
 import com.tczerwien.lifts.session.stepRepMax
 import com.tczerwien.lifts.session.stepRepMin
-import com.tczerwien.lifts.session.stepTargetRir
+import com.tczerwien.lifts.session.stepRirTarget
 import com.tczerwien.lifts.session.stepTemplateWarmups
 import com.tczerwien.lifts.session.templateSlotSummary
 import com.tczerwien.lifts.settings.SettingsStore
@@ -298,8 +297,10 @@ class TemplateEditorViewModel(
         exercise.copy(repMin = range.min, repMax = range.max)
     }
 
+    /** RIR: none, then 0, 0–1, 1, … 4–5, 5 ([stepRirTarget]); a range is stored as its two ends. */
     fun stepRir(templateExerciseId: Long, delta: Int) = edit(templateExerciseId) { exercise ->
-        exercise.copy(targetRir = stepTargetRir(exercise.targetRir, delta))
+        val next = stepRirTarget(rirTarget(exercise.targetRir, exercise.targetRirMax), delta)
+        exercise.copy(targetRir = next?.min, targetRirMax = next?.max)
     }
 
     /** "Superset With Next" taps: a bounce or a double tap would flip it straight back. */
@@ -706,11 +707,12 @@ class TemplateEditorScreen(
                     )
                     StepperPair(
                         left = {
+                            val rir = rirTarget(row.targetRir, row.targetRirMax)
                             TemplateStepper(
                                 label = "RIR",
-                                value = row.targetRir?.toString() ?: "—",
-                                decrementEnabled = row.targetRir != null,
-                                incrementEnabled = (row.targetRir ?: -1) < MAX_RIR,
+                                value = rir?.text ?: "—",
+                                decrementEnabled = rir != null,
+                                incrementEnabled = stepRirTarget(rir, +1) != rir,
                                 onStep = { viewModel.stepRir(row.id, it) },
                             )
                         },

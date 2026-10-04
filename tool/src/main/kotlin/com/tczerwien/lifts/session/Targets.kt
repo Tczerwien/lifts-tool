@@ -71,9 +71,6 @@ fun repRangeText(min: Int?, max: Int?): String? = when {
     else -> null
 }
 
-/** The RIR target moved [delta]: none, then 0 to [MAX_RIR]; below 0 clears it. */
-fun stepTargetRir(rir: Int?, delta: Int): Int? = stepOptional(rir, delta, MAX_RIR)
-
 /**
  * An RIR target: one number ([min] alone) or a range, "1–2" ([min] 1, [max] 2), as a slot stores it
  * (targetRir, targetRirMax). Ranges replaced B10's one number (B14).
