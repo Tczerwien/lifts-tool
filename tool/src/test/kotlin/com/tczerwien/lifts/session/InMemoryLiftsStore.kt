@@ -151,12 +151,13 @@ class InMemoryLiftsStore : LiftsStore {
         exercisesForWorkout(workoutId).flatMap { slot -> setsOf(slot.id) }
 
     override fun previousPerformance(exerciseId: String): List<SetEntity> =
-        previousSlots(exerciseId).flatMap { slot -> setsOf(slot.id).filter { it.completedAt != null } }
+        previousSlots(exerciseId).filter { it.exerciseId == exerciseId }.flatMap { slot -> setsOf(slot.id).filter { it.completedAt != null } }
 
-    override fun previousSlotIds(exerciseId: String): List<Long> = previousSlots(exerciseId).map { it.id }
-
-    /** The exercise's slots in the latest finished workout where it has a ticked set; a deload only when no other has one. */
-    private fun previousSlots(exerciseId: String): List<WorkoutExerciseEntity> {
+    /**
+     * The slots that did the exercise, or were planned as it (their first choice), in the latest finished workout
+     * where it has a ticked set; a deload only when no other has one.
+     */
+    override fun previousSlots(exerciseId: String): List<WorkoutExerciseEntity> {
         val latest = workouts.values
             .filter { workout ->
                 workout.endedAt != null && exercisesForWorkout(workout.id).any { slot ->
@@ -165,7 +166,7 @@ class InMemoryLiftsStore : LiftsStore {
             }
             .maxWithOrNull(compareBy<WorkoutEntity> { !it.deload }.thenBy { it.startedAt }.thenBy { it.id })
             ?: return emptyList()
-        return exercisesForWorkout(latest.id).filter { it.exerciseId == exerciseId }
+        return exercisesForWorkout(latest.id).filter { it.exerciseId == exerciseId || it.choices.firstOrNull() == exerciseId }
     }
 
     override fun completedSetsByExercise(

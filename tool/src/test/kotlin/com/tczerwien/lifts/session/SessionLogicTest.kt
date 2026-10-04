@@ -634,9 +634,9 @@ class SessionLogicTest {
 
     /** Last session's Bench: one warm-up, then three work sets. */
     private val benchLastTime = mapOf(
-        "bench" to listOf(listOf(
+        "bench" to listOf(LastSlot(listOf(
             set(id = 50, slotId = 40, position = 0, type = SET_TYPE_WARMUP, weightKg = 40.0, reps = 10, completedAt = 1L),
-        ) + List(3) { set(id = 51L + it, slotId = 40, position = it + 1, weightKg = 60.0, reps = 5, completedAt = 2L + it) }),
+        ) + List(3) { set(id = 51L + it, slotId = 40, position = it + 1, weightKg = 60.0, reps = 5, completedAt = 2L + it) })),
     )
 
     private val benchAndSquatPlan = planTemplate(benchAndSquat, benchLastTime)

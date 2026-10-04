@@ -100,14 +100,14 @@ class ActiveSession(
     }
 
     /**
-     * Last session's sets of each of [exerciseIds], one group per slot that session had, empty
-     * slots included ([previousGroups]). Two queries per exercise.
+     * Last session's sets of each of [exerciseIds], one group per slot that session had that did it or was
+     * planned as it, empty slots included ([previousGroups]). Two queries per exercise.
      */
-    fun previousGroupsByExercise(exerciseIds: Collection<String>): Map<String, List<List<SetEntity>>> =
+    fun previousGroupsByExercise(exerciseIds: Collection<String>): Map<String, List<LastSlot>> =
         exerciseIds.distinct().associateWith { previousGroupsOf(it) }
 
-    private fun previousGroupsOf(exerciseId: String): List<List<SetEntity>> =
-        previousGroups(repository.previousPerformance(exerciseId), repository.previousSlotIds(exerciseId))
+    private fun previousGroupsOf(exerciseId: String): List<LastSlot> =
+        previousGroups(repository.previousPerformance(exerciseId), repository.previousSlots(exerciseId), exerciseId)
 
     /**
      * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises (the ones done, a swapped
@@ -251,10 +251,10 @@ class ActiveSession(
         if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction null
         val slots = repository.exercisesForWorkout(workoutId)
         val position = slots.maxOfOrNull { it.position + 1 } ?: 0
-        val occurrence = slots.count { it.exerciseId == exerciseId }
         val slot = WorkoutExerciseEntity(workoutId = workoutId, exerciseId = exerciseId, position = position)
         val slotId = repository.addWorkoutExercise(slot)
-        val lastTime = previousGroupsOf(exerciseId).getOrElse(occurrence) { emptyList() }
+        // Matched as PREVIOUS will match it, after the slots already there ([previousForSlots]).
+        val lastTime = previousForSlots(slots + slot.copy(id = slotId), mapOf(exerciseId to previousGroupsOf(exerciseId)))[slotId].orEmpty()
         val rows = prefillTypes(lastTime).mapIndexed { index, type ->
             SetEntity(workoutExerciseId = slotId, position = index, type = type).let { it.copy(id = repository.addSet(it)) }
         }

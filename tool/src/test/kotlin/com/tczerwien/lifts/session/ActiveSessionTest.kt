@@ -876,8 +876,8 @@ class ActiveSessionTest {
         )
         store.updateWorkout(store.workoutById(deload)!!.copy(deload = true))
         val groups = session.previousGroupsByExercise(listOf("squat", "curl"))
-        assertEquals(listOf(60.0, 100.0, 100.0, 100.0), groups.getValue("squat").single().map { it.weightKg }, "the normal session, though older")
-        assertEquals(listOf(12.0), groups.getValue("curl").single().map { it.weightKg }, "only a deload did it: that is last time")
+        assertEquals(listOf(60.0, 100.0, 100.0, 100.0), groups.getValue("squat").single().sets.map { it.weightKg }, "the normal session, though older")
+        assertEquals(listOf(12.0), groups.getValue("curl").single().sets.map { it.weightKg }, "only a deload did it: that is last time")
         // The next start plans from it too: the normal session's warm-up, not the deload's none.
         val template = store.addTemplate("Lower A", "squat" to 3)
         val workoutId = session.startFromTemplate(template, now = 3_000_000)
@@ -1004,15 +1004,15 @@ class ActiveSessionTest {
         val older = store.addFinishedWorkout(startedAt = 1_000_000, "squat" to listOf(Triple(n, 100.0, 5), Triple(n, 100.0, 5)))
         val last = store.addFinishedWorkout(startedAt = 2_000_000, "squat" to listOf(Triple(n, 90.0, 5)))
         val rows = store.setsForWorkout(last)
-        assertEquals(listOf(90.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().map { it.weightKg })
+        assertEquals(listOf(90.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().sets.map { it.weightKg })
 
         assertTrue(session.markDeload(last, on = true))
         assertTrue(store.workoutById(last)!!.deload)
         assertEquals(rows, store.setsForWorkout(last), "only the mark")
-        assertEquals(listOf(100.0, 100.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().map { it.weightKg })
+        assertEquals(listOf(100.0, 100.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().sets.map { it.weightKg })
         assertFalse(session.markDeload(last, on = true), "already so")
         assertTrue(session.markDeload(last, on = false))
-        assertEquals(listOf(90.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().map { it.weightKg })
+        assertEquals(listOf(90.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().sets.map { it.weightKg })
 
         val open = session.startEmpty(now = 3_000_000)
         assertFalse(session.markDeload(open, on = true), "an open workout takes the menu's switch")
@@ -1175,7 +1175,7 @@ class ActiveSessionTest {
     }
 
     @Test
-    fun `a swap to a lift the workout already has reads last session's next slot of it`() {
+    fun `a swap to a lift the workout already has reads last session's sets of it that no slot as planned reads`() {
         // Last session: a bench top set, then bench back-offs as a second slot.
         store.addFinishedWorkout(
             startedAt = 500_000,
@@ -1189,7 +1189,7 @@ class ActiveSessionTest {
         val fly = store.exercisesForWorkout(workoutId)[1]
         assertTrue(session.swapExercise(workoutId, fly.id, "bench"))
 
-        // Slots match last time's by position order: the swapped slot is today's second bench.
+        // The bench as planned reads last time's first bench slot; the swapped one the one left, the back-offs.
         val slots = store.exercisesForWorkout(workoutId)
         val lastTime = previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
         assertEquals(listOf(100.0), lastTime.getValue(slots[0].id).map { it.weightKg })
@@ -1259,6 +1259,34 @@ class ActiveSessionTest {
         val main = store.exercisesForTemplate(saved).first()
         assertEquals("row" to listOf("squat", "fly"), main.exerciseId to main.alternatives)
         assertEquals(emptyList(), store.exercisesForTemplate(saved)[1].alternatives)
+    }
+
+    @Test
+    fun `swapping one of two slots of a lift leaves the other's PREVIOUS, this week and next, as it was`() {
+        store.addFinishedWorkout(
+            startedAt = 500_000,
+            "bench" to listOf(Triple(n, 100.0, 3)),
+            "bench" to listOf(Triple(n, 80.0, 8), Triple(n, 80.0, 8)),
+        )
+        val template = store.addTemplate("Push", "bench" to 1, "bench" to 2)
+        val (topRow) = store.exercisesForTemplate(template)
+        store.templateExercises[topRow.id] = topRow.copy(alternatives = listOf("fly"))
+        fun lastTime(workoutId: Long) = store.exercisesForWorkout(workoutId).let { slots ->
+            previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
+        }
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (top, backOffs) = store.exercisesForWorkout(workoutId)
+        assertTrue(session.swapExercise(workoutId, top.id, "fly"))
+        assertEquals(listOf(80.0, 80.0), lastTime(workoutId).getValue(backOffs.id).map { it.weightKg }, "the back-offs, not the top set")
+
+        session.completeSet(workoutId, rowsOf(top).first(), 20.0, 12, n, now = 1_060_000)
+        rowsOf(backOffs).forEachIndexed { index, row -> session.completeSet(workoutId, row, 82.5, 8, n, now = 1_120_000 + index * 60_000L) }
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_300_000))
+        val next = session.startFromTemplate(template, now = 2_000_000)
+        val (nextTop, nextBackOffs) = store.exercisesForWorkout(next)
+        val previous = lastTime(next)
+        assertEquals(emptyList(), previous.getValue(nextTop.id), "the top set wasn't done last time: nothing, not the back-offs")
+        assertEquals(listOf(82.5, 82.5), previous.getValue(nextBackOffs.id).map { it.weightKg })
     }
 
     @Test

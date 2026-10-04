@@ -24,7 +24,10 @@ class PreviousTest {
             set(2, slot = 11, position = 0, weightKg = 70.0, reps = 8),
             set(3, slot = 11, position = 1, weightKg = 70.0, reps = 8),
         )
-        assertEquals(listOf(listOf(1L), listOf(2L, 3L)), previousGroups(previous, listOf(10, 11)).map { g -> g.map { it.id } })
+        assertEquals(
+            listOf(listOf(1L), listOf(2L, 3L)),
+            previousGroups(previous, listOf(slot(11, "bench", 1), slot(10, "bench", 0)), "bench").map { g -> g.sets.map { it.id } },
+        )
     }
 
     @Test
@@ -34,10 +37,65 @@ class PreviousTest {
             set(2, slot = 11, position = 0, weightKg = 70.0, reps = 8),
             set(3, slot = 11, position = 1, weightKg = 70.0, reps = 8),
         )
-        val groups = mapOf("bench" to previousGroups(previous, slotIds = listOf(10, 11)))
+        val groups = mapOf("bench" to previousGroups(previous, listOf(slot(10, "bench", 0), slot(11, "bench", 1)), "bench"))
         val bySlot = previousForSlots(listOf(slot(20, "bench", 0), slot(21, "bench", 1)), groups)
         assertEquals(emptyList(), bySlot.getValue(20), "the top slot has no PREVIOUS")
         assertEquals(listOf(2L, 3L), bySlot.getValue(21).map { it.id }, "the back-off slot still gets the back-off sets")
+    }
+
+    // --- Slot matching with alternatives (B15 review R1-1, A1) ---
+
+    @Test
+    fun `a slot swapped away keeps its place, so the other slot of that lift still reads its own sets`() {
+        // Last week: bench top set (slot 10), bench back-offs (slot 11). Today the top set's slot does the press.
+        val lastWeek = groups(mapOf("bench" to listOf(set(1, slot = 10, weightKg = 100.0), set(2, slot = 11, weightKg = 85.0))))
+        val today = listOf(slot(20, "press", 0).copy(choices = listOf("bench", "press")), slot(21, "bench", 1))
+        val bySlot = previousForSlots(today, lastWeek)
+        assertEquals(listOf(2L), bySlot.getValue(21).map { it.id }, "the back-offs, not the top set")
+        assertEquals(emptyList(), bySlot.getValue(20), "the press has no last session")
+
+        // The next week, as planned: the top set wasn't done last time, as if skipped; the back-offs read theirs.
+        val swappedWeek = listOf(slot(10, "press", 0).copy(choices = listOf("bench", "press")), slot(11, "bench", 1))
+        val after = mapOf(
+            "bench" to previousGroups(listOf(set(4, slot = 11, weightKg = 85.0)), swappedWeek, "bench"),
+            "press" to previousGroups(listOf(set(3, slot = 10, weightKg = 30.0)), swappedWeek, "press"),
+        )
+        val nextWeek = previousForSlots(listOf(slot(30, "bench", 0), slot(31, "bench", 1)), after)
+        assertEquals(emptyList(), nextWeek.getValue(30), "not the back-offs moved up")
+        assertEquals(listOf(4L), nextWeek.getValue(31).map { it.id })
+    }
+
+    @Test
+    fun `a slot swapped to a lift the workout has as its own never takes that slot's sets`() {
+        // Today: slot 0 planned as the squat, swapped to the press; slot 1 the press as planned.
+        val lastWeek = groups(mapOf("press" to listOf(set(1, slot = 11, weightKg = 60.0))))
+        val today = listOf(slot(20, "press", 0).copy(choices = listOf("squat", "press")), slot(21, "press", 1))
+        val bySlot = previousForSlots(today, lastWeek)
+        assertEquals(listOf(1L), bySlot.getValue(21).map { it.id }, "the press as planned keeps its own")
+        assertEquals(emptyList(), bySlot.getValue(20), "the swapped one takes nothing from it")
+
+        // The next week, as planned: the press slot reads its own sets, not the swapped slot's.
+        val swappedWeek = listOf(slot(10, "press", 0).copy(choices = listOf("squat", "press")), slot(11, "press", 1))
+        val after = mapOf(
+            "press" to previousGroups(listOf(set(2, slot = 10, weightKg = 40.0), set(3, slot = 11, weightKg = 62.5)), swappedWeek, "press"),
+        )
+        val nextWeek = previousForSlots(listOf(slot(30, "squat", 0), slot(31, "press", 1)), after)
+        assertEquals(listOf(3L), nextWeek.getValue(31).map { it.id })
+    }
+
+    @Test
+    fun `an alternative reads the lift's last session wherever it was done, and back`() {
+        // Last time the press was the main of another workout: swapped in today, it reads that.
+        val asMain = groups(mapOf("press" to listOf(set(1, slot = 11, weightKg = 60.0))))
+        val swapped = slot(20, "press", 0).copy(choices = listOf("squat", "press"))
+        assertEquals(listOf(1L), previousForSlots(listOf(swapped), asMain).getValue(20).map { it.id })
+        // Last time it was swapped in elsewhere: done as the main today, it reads that.
+        val asAlternative = mapOf(
+            "press" to previousGroups(listOf(set(2, slot = 10, weightKg = 62.5)), listOf(slot(10, "press", 0).copy(choices = listOf("squat", "press"))), "press"),
+        )
+        assertEquals(listOf(2L), previousForSlots(listOf(slot(21, "press", 0)), asAlternative).getValue(21).map { it.id })
+        // And swapped in again: like with like.
+        assertEquals(listOf(2L), previousForSlots(listOf(swapped), asAlternative).getValue(20).map { it.id })
     }
 
     @Test
@@ -448,8 +506,11 @@ class PreviousTest {
     // --- Fixtures ---
 
     /** Last session's sets per exercise, grouped per slot in the order the slots first appear. */
-    private fun groups(byExercise: Map<String, List<SetEntity>>): Map<String, List<List<SetEntity>>> =
-        byExercise.mapValues { (_, sets) -> previousGroups(sets, sets.map { it.workoutExerciseId }.distinct()) }
+    /** Last session's groups from its sets alone: one slot per slot id, in order, each doing its exercise as planned. */
+    private fun groups(byExercise: Map<String, List<SetEntity>>): Map<String, List<LastSlot>> =
+        byExercise.mapValues { (exerciseId, sets) ->
+            previousGroups(sets, sets.map { it.workoutExerciseId }.distinct().mapIndexed { index, id -> slot(id, exerciseId, index) }, exerciseId)
+        }
 
     private fun rows(vararg types: String): List<SetEntity> =
         types.mapIndexed { index, type -> set(100L + index, position = index, type = type) }

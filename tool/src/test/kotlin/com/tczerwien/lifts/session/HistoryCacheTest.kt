@@ -14,7 +14,7 @@ class HistoryCacheTest {
 
     /** What a read answers for an exercise: its sets tagged with the version they were read at. */
     private fun snapshot(ids: List<String>) = HistoryCache.Snapshot(
-        lastTime = ids.associateWith { listOf(listOf(set(version))) },
+        lastTime = ids.associateWith { listOf(LastSlot(listOf(set(version)))) },
         prior = ids.associateWith { PriorHistory(listOf(set(version))) },
     )
 
@@ -26,7 +26,7 @@ class HistoryCacheTest {
         snapshot(ids)
     }
 
-    private fun HistoryCache.readAt(exerciseId: String): Long? = snapshot.lastTime[exerciseId]?.single()?.single()?.id?.minus(1)
+    private fun HistoryCache.readAt(exerciseId: String): Long? = snapshot.lastTime[exerciseId]?.single()?.sets?.single()?.id?.minus(1)
 
     @Test
     fun `each exercise is read once for the life of the screen`() {

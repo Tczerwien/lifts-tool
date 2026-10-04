@@ -19,31 +19,69 @@ const val DEFAULT_NEW_EXERCISE_SETS = 3
 private fun SetEntity.isWarmup(): Boolean = type == SET_TYPE_WARMUP
 
 /**
- * Last session's completed sets of one exercise ([previous]) split into one group per slot of
- * that session ([slotIds], in slot order), so a slot where nothing was ticked is an empty group
- * and keeps its place: the next slot's sets don't slide up into it.
+ * One of last session's slots for an exercise ([previousGroups]): its sets of that exercise in position
+ * order, and whether the slot did it in place of the lift its start planned ([swappedIn], an alternative).
  */
-fun previousGroups(previous: List<SetEntity>, slotIds: List<Long>): List<List<SetEntity>> {
+data class LastSlot(val sets: List<SetEntity>, val swappedIn: Boolean = false)
+
+/**
+ * Last session's completed sets of [exerciseId] ([previous]) split into one group per slot of that session
+ * that did it or was planned as it ([slots], any order; [plannedExerciseId]), in slot order. A slot where
+ * nothing was ticked, or that did another lift in its place (swapped away), is an empty group and keeps
+ * its place: the next slot's sets don't slide up into it.
+ */
+fun previousGroups(previous: List<SetEntity>, slots: List<WorkoutExerciseEntity>, exerciseId: String): List<LastSlot> {
     val bySlot = previous.groupBy { it.workoutExerciseId }
-    return slotIds.map { slotId -> bySlot[slotId].orEmpty().sortedBy { it.position } }
+    return slots.sortedBy { it.position }.map { slot ->
+        LastSlot(
+            sets = if (slot.exerciseId == exerciseId) bySlot[slot.id].orEmpty().sortedBy { it.position } else emptyList(),
+            swappedIn = slot.plannedExerciseId != exerciseId,
+        )
+    }
 }
 
 /**
- * Last session's sets for each of today's [slots], keyed by slot id. Slots are matched by
- * occurrence: the k-th slot of an exercise (in position order) gets the k-th slot group from last
- * time ([groupsByExercise], from [previousGroups]), so a back-off Bench slot is compared with last
- * week's back-off sets, not the top sets. A slot last time had no counterpart for gets an empty list.
+ * Last session's sets for each of today's [slots], keyed by slot id ([lastTime], from [previousGroups]).
+ * Like is matched with like, by occurrence in position order: the k-th slot planned as an exercise (counting
+ * one swapped for another today, which keeps its place) gets last time's k-th slot planned as it, so a
+ * back-off Bench slot is compared with last week's back-off sets, not the top sets, whichever of them a swap
+ * took; the k-th slot swapped to an exercise gets last time's k-th slot swapped to it. A slot with no such
+ * counterpart then takes, in order, last time's sets of that exercise no slot was matched with (the lift done
+ * last time as an alternative, or as the main elsewhere: its numbers, never another slot's); else nothing.
  */
 fun previousForSlots(
     slots: List<WorkoutExerciseEntity>,
-    groupsByExercise: Map<String, List<List<SetEntity>>>,
+    lastTime: Map<String, List<LastSlot>>,
 ): Map<Long, List<SetEntity>> {
-    val seen = HashMap<String, Int>()
-    return slots.sortedBy { it.position }.associate { slot ->
-        val occurrence = seen[slot.exerciseId] ?: 0
-        seen[slot.exerciseId] = occurrence + 1
-        slot.id to groupsByExercise[slot.exerciseId].orEmpty().getOrElse(occurrence) { emptyList() }
+    val ordered = slots.sortedBy { it.position }
+    val result = HashMap<Long, List<SetEntity>>()
+    for (exerciseId in ordered.mapTo(LinkedHashSet()) { it.exerciseId }) {
+        val last = lastTime[exerciseId].orEmpty()
+        val plannedAt = last.indices.filter { !last[it].swappedIn }
+        val swappedAt = last.indices.filter { last[it].swappedIn }
+        val claimed = HashSet<Int>()
+        val withoutCounterpart = mutableListOf<Long>()
+        var plannedSeen = 0
+        var swappedSeen = 0
+        for (slot in ordered) {
+            val index = when {
+                slot.plannedExerciseId == exerciseId -> plannedAt.getOrNull(plannedSeen++)
+                slot.exerciseId == exerciseId -> swappedAt.getOrNull(swappedSeen++)
+                else -> continue
+            }
+            // A slot planned as it but doing another lift today only keeps its place.
+            if (slot.exerciseId != exerciseId) continue
+            if (index == null) {
+                withoutCounterpart += slot.id
+            } else {
+                claimed += index
+                result[slot.id] = last[index].sets
+            }
+        }
+        val unclaimed = last.indices.filter { it !in claimed && last[it].sets.isNotEmpty() }.iterator()
+        for (slotId in withoutCounterpart) result[slotId] = if (unclaimed.hasNext()) last[unclaimed.next()].sets else emptyList()
     }
+    return result
 }
 
 /**
@@ -188,21 +226,24 @@ data class PlannedSlot(
 
 /**
  * The slots a workout started from [templateExercises] begins with: one per template exercise in
- * position order, each with [prefillTypes] from its occurrence's slot group last session
- * ([groupsByExercise], from [previousGroups]), its alternatives as the slot's choices ([slotChoices]),
+ * position order, each with [prefillTypes] from its slot group last session as [previousForSlots] matches
+ * it ([lastTime], from [previousGroups]), its alternatives as the slot's choices ([slotChoices]),
  * and the template's supersets ([normalizeGroups]: a group the template holds apart, or alone, starts
  * plain). ActiveSession.startFromTemplate creates exactly these, and [isUntouched] compares against
  * them, so the two can't drift apart.
  */
 fun planTemplate(
     templateExercises: List<TemplateExerciseEntity>,
-    groupsByExercise: Map<String, List<List<SetEntity>>>,
+    lastTime: Map<String, List<LastSlot>>,
 ): List<PlannedSlot> {
-    val seen = HashMap<String, Int>()
-    return templateExercises.sortedBy { it.position }.map { planned ->
-        val occurrence = seen[planned.exerciseId] ?: 0
-        seen[planned.exerciseId] = occurrence + 1
-        val lastTime = groupsByExercise[planned.exerciseId].orEmpty().getOrElse(occurrence) { emptyList() }
+    val ordered = templateExercises.sortedBy { it.position }
+    // A start is as planned: each template exercise a slot doing its main.
+    val lastTimeByRow = previousForSlots(
+        ordered.mapIndexed { index, row -> WorkoutExerciseEntity(id = row.id, workoutId = 0, exerciseId = row.exerciseId, position = index) },
+        lastTime,
+    )
+    return ordered.map { planned ->
+        val lastTime = lastTimeByRow[planned.id].orEmpty()
         PlannedSlot(
             planned.exerciseId,
             prefillTypes(lastTime, targetWorkSets = planned.targetSets, warmupSets = planned.warmupSets),

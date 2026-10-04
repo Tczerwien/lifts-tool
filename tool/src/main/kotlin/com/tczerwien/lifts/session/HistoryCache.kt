@@ -23,7 +23,7 @@ class HistoryCache(
      * the PR stars.
      */
     data class Snapshot(
-        val lastTime: Map<String, List<List<SetEntity>>> = emptyMap(),
+        val lastTime: Map<String, List<LastSlot>> = emptyMap(),
         val prior: Map<String, PriorHistory> = emptyMap(),
     ) {
         operator fun plus(other: Snapshot) = Snapshot(lastTime + other.lastTime, prior + other.prior)

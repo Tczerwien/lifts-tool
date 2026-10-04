@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.WorkoutExerciseEntity
 
 /**
  * Exercise alternatives: other exercises a template exercise names as stand-ins (the machine is taken),
@@ -8,6 +9,12 @@ import com.tczerwien.lifts.data.SetEntity
  * choices, main first ([slotChoices]), so the swap can cycle through them ([swapTarget]) and the next
  * start begins with the main again. Pure, covered by AlternativesTest.
  */
+
+/**
+ * The exercise this slot's start planned: its first choice, the main, when it has choices (a swap leaves
+ * that one), else the one it does. A slot doing another is one swapped in for it.
+ */
+val WorkoutExerciseEntity.plannedExerciseId: String get() = choices.firstOrNull() ?: exerciseId
 
 /** At most this many alternatives per template exercise: the Template Editor's "+" stops there. */
 const val MAX_ALTERNATIVES = 3

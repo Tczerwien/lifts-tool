@@ -208,12 +208,14 @@ interface WorkoutDao {
     fun previousPerformance(exerciseId: String): List<SetEntity>
 
     /**
-     * Every slot of [exerciseId] in the workout [previousPerformance] reads, in position order,
-     * including slots where nothing was ticked, so a skipped slot keeps its place.
+     * Every slot of the workout [previousPerformance] reads that did [exerciseId], or was planned as it
+     * (its choices, a JSON list of ids, start with it: a slot that swapped it for another lift), in position
+     * order, including slots where nothing was ticked, so a skipped or swapped-away slot keeps its place.
      */
     @Query(
-        "SELECT workout_exercises.id FROM workout_exercises " +
-            "WHERE workout_exercises.exerciseId = :exerciseId " +
+        "SELECT workout_exercises.* FROM workout_exercises " +
+            "WHERE (workout_exercises.exerciseId = :exerciseId " +
+            "OR instr(workout_exercises.choices, '[\"' || :exerciseId || '\"') = 1) " +
             "AND workout_exercises.workoutId = (" +
             "SELECT w.id FROM workouts w " +
             "JOIN workout_exercises we ON we.workoutId = w.id " +
@@ -223,7 +225,7 @@ interface WorkoutDao {
             ") " +
             "ORDER BY workout_exercises.position"
     )
-    fun previousSlotIds(exerciseId: String): List<Long>
+    fun previousSlots(exerciseId: String): List<WorkoutExerciseEntity>
 
     /**
      * Every completed set of the given exercises, from any workout (finished or not) except
