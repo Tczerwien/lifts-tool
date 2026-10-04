@@ -957,6 +957,31 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Start Again of a deload is a deload with its trimmed rows and the full plan`() {
+        val template = store.addTemplate("Lower A", "squat" to 4)
+        val source = session.startFromTemplate(template, now = 1_000_000)
+        assertTrue(session.setDeload(source, on = true))
+        rowsOf(store.exercisesForWorkout(source).single()).forEachIndexed { index, row ->
+            session.completeSet(source, row, 90.0, 5, n, now = 1_100_000L + index * 60_000)
+        }
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(source, now = 1_300_000))
+
+        val again = assertNotNull(session.startFromWorkout(source, now = 5_000_000))
+        assertTrue(store.workoutById(again)!!.deload)
+        val slot = store.exercisesForWorkout(again).single()
+        assertEquals(listOf(n, n), rowsOf(slot).map { it.type }, "the two done that day")
+        assertEquals(4, slot.targetSets, "the full plan")
+        // Backed out at once: nothing done, so nothing is kept.
+        assertTrue(session.discardIfUntouched(again))
+        assertNull(store.workoutById(again))
+        // Switched off, the copy has the full four.
+        val third = assertNotNull(session.startFromWorkout(source, now = 6_000_000))
+        assertTrue(session.setDeload(third, on = false))
+        assertEquals(4, rowsOf(store.exercisesForWorkout(third).single()).size)
+        assertFalse(session.discardIfUntouched(third), "switched off: his")
+    }
+
+    @Test
     fun `a superset keeps alternating over a deload's rows, trimmed and put back`() {
         val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
         store.exercisesForTemplate(template).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1, restSecWork = 90) }

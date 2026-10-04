@@ -352,6 +352,7 @@ fun lastActivityMillis(startedAt: Long, sets: List<SetEntity>): Long =
  * template as it is now) for a template workout; [planned] gives null for a workout with no template.
  * Any doubt (the template was edited or deleted since) counts as touched, so the workout is kept.
  * Starting values are only shown, never written at the start, so any stored value means a change.
+ * A deload switched on (or off) since the start is his too ([startDeload]).
  * [planned] is read last, only when nothing cheaper has decided: working out a template's plan takes
  * a query per exercise, and Home asks on every show.
  */
@@ -362,9 +363,12 @@ fun isUntouched(
     planned: () -> List<PlannedSlot>?,
     /** The name the start gave it (the template's, or [defaultWorkoutName]); another name is his. */
     startName: String? = null,
+    /** Whether the start made it a deload: never for a template, the source's mark for Start Again. */
+    startDeload: Boolean = false,
 ): Boolean {
     if (!workout.notes.isNullOrBlank() || slots.any { !it.notes.isNullOrBlank() }) return false
     if (startName != null && workout.name != startName) return false
+    if (workout.deload != startDeload) return false
     val hasValue = sets.any { set ->
         set.completedAt != null || set.weightKg != null || set.reps != null ||
             set.durationSec != null || set.rpe != null

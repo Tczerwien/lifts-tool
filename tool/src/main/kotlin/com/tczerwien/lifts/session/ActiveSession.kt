@@ -110,7 +110,8 @@ class ActiveSession(
 
     /**
      * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises, each with the set
-     * pattern he ticked that day, its rests, its targets and its superset ([planFromWorkout]); the rows start empty,
+     * pattern he ticked that day, its rests, its targets and its superset ([planFromWorkout]), and a
+     * deload again when the source was one (its trimmed rows, its full plan: off restores it); the rows start empty,
      * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
      * that name was only its time of day ([startAgainName]). Written in one transaction; any leftover
      * rest is cleared, and the source is remembered by the new workout's id, so the untouched check
@@ -124,7 +125,9 @@ class ActiveSession(
         val workoutId = repository.inTransaction {
             val source = repository.workoutById(sourceId)?.takeIf { it.endedAt != null } ?: return@inTransaction null
             if (repository.listOpenWorkouts().isNotEmpty()) return@inTransaction null
-            val workoutId = repository.addWorkout(WorkoutEntity(name = startAgainName(source, now, zone), startedAt = now))
+            val workoutId = repository.addWorkout(
+                WorkoutEntity(name = startAgainName(source, now, zone), startedAt = now, deload = source.deload),
+            )
             addPlannedSlots(workoutId, planOf(source.id))
             runBlocking { dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId" } }
             workoutId
@@ -561,6 +564,8 @@ class ActiveSession(
             startName = workout.templateId?.let { repository.templateById(it)?.name }
                 ?: source?.let { startAgainName(it, workout.startedAt, zone) }
                 ?: defaultWorkoutName(workout.startedAt, zone),
+            // So is a deload switched on; a copy of a deload is one from the start.
+            startDeload = source?.deload == true,
         )
     }
 

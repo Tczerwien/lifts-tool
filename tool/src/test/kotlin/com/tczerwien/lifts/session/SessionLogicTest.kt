@@ -482,6 +482,14 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a deload switched on counts as touched, a copy of a deload as it started doesn't`() {
+        val (slots, sets) = startedFrom(benchAndSquatPlan)
+        assertFalse(isUntouched(workout(templateId = 7).copy(deload = true), slots, sets, { benchAndSquatPlan }))
+        assertTrue(isUntouched(workout().copy(deload = true), slots, sets, { benchAndSquatPlan }, startDeload = true), "Start Again of a deload")
+        assertFalse(isUntouched(workout(), slots, sets, { benchAndSquatPlan }, startDeload = true), "switched off since")
+    }
+
+    @Test
     fun `a superset joined or split since the start counts as touched, whatever its numbers`() {
         val plan = planTemplate(benchAndSquat.map { it.copy(supersetGroup = 4) }, benchLastTime)
         assertEquals(listOf(4, 4), plan.map { it.supersetGroup }, "the template's pair")
