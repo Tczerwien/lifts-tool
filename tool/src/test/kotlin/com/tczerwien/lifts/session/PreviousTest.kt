@@ -96,6 +96,11 @@ class PreviousTest {
         assertEquals(listOf(2L), previousForSlots(listOf(slot(21, "press", 0)), asAlternative).getValue(21).map { it.id })
         // And swapped in again: like with like.
         assertEquals(listOf(2L), previousForSlots(listOf(swapped), asAlternative).getValue(20).map { it.id })
+        // Its sets, not a slot of it skipped last time: the top set skipped, the back-offs done.
+        val skippedFirst = mapOf(
+            "press" to previousGroups(listOf(set(3, slot = 11, weightKg = 50.0)), listOf(slot(10, "press", 0), slot(11, "press", 1)), "press"),
+        )
+        assertEquals(listOf(3L), previousForSlots(listOf(swapped), skippedFirst).getValue(20).map { it.id })
     }
 
     @Test
