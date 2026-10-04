@@ -1109,6 +1109,94 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a swap does another choice for this workout only, its rows kept and emptied, the template untouched`() {
+        val template = store.addTemplate("Legs", "squat" to 3, "curl" to 2)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(
+            alternatives = listOf("row", "fly"), warmupSets = 1, repMin = 8, repMax = 12, targetRir = 2, restSecWork = 150,
+        )
+        val templateRows = store.exercisesForTemplate(template)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val squat = store.exercisesForWorkout(workoutId).first()
+        // A weight typed in and an effort rated before the swap were the squat's: they go with it.
+        session.updateSet(workoutId, rowsOf(squat)[1].copy(weightKg = 100.0, reps = 5, rpe = 8.0))
+
+        assertTrue(session.swapExercise(workoutId, squat.id, "row"))
+        val swapped = store.exercisesForWorkout(workoutId).first()
+        assertEquals(squat.copy(exerciseId = "row"), swapped, "only the exercise changes: targets, rests, choices stay")
+        assertEquals(listOf(w, n, n, n), rowsOf(swapped).map { it.type }, "its rows stay, the warm-up too (not recounted)")
+        assertTrue(rowsOf(swapped).all { it.weightKg == null && it.reps == null && it.durationSec == null && it.rpe == null })
+        assertEquals(templateRows, store.exercisesForTemplate(template), "the template is never written")
+        assertFalse(session.discardIfUntouched(workoutId), "a swap is his: Back keeps it")
+
+        session.completeSet(workoutId, rowsOf(swapped)[1], 60.0, 10, n, now = 1_060_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        val next = session.startFromTemplate(template, now = 2_000_000)
+        assertEquals(listOf("squat", "curl"), store.exercisesForWorkout(next).map { it.exerciseId }, "next time the main again")
+        assertEquals(listOf("squat", "row", "fly"), store.exercisesForWorkout(next).first().choices)
+    }
+
+    @Test
+    fun `a swap is refused after a tick on the slot, once the workout has closed, or to no other choice in the picker`() {
+        val template = store.addTemplate("Legs", "squat" to 2, "curl" to 2)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(alternatives = listOf("row", "fly"))
+        store.exercises["fly"] = store.exercises.getValue("fly").copy(hidden = true)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (squat, curl) = store.exercisesForWorkout(workoutId)
+
+        assertFalse(session.swapExercise(workoutId, squat.id, "bench"), "not one of its choices")
+        assertFalse(session.swapExercise(workoutId, squat.id, "fly"), "hidden: he removed it")
+        assertFalse(session.swapExercise(workoutId, squat.id, "squat"), "already doing it")
+        assertFalse(session.swapExercise(workoutId, curl.id, "row"), "the curl has no choices")
+        session.completeSet(workoutId, rowsOf(curl).first(), 20.0, 10, n, now = 1_060_000)
+        assertTrue(session.swapExercise(workoutId, squat.id, "row"), "a tick on another exercise doesn't matter")
+        session.completeSet(workoutId, rowsOf(squat).first(), 60.0, 10, n, now = 1_120_000)
+        assertFalse(session.swapExercise(workoutId, squat.id, "squat"), "a set of it is ticked: it stays that lift")
+        assertEquals("row", store.exercisesForWorkout(workoutId).first().exerciseId)
+
+        val closed = session.startFromTemplate(template, now = 2_000_000)
+        val slot = store.exercisesForWorkout(closed).first()
+        store.workouts[closed] = store.workoutById(closed)!!.copy(endedAt = 2_100_000)
+        assertFalse(session.swapExercise(closed, slot.id, "row"), "closed")
+        assertEquals("squat", store.exercisesForWorkout(closed).first().exerciseId)
+    }
+
+    @Test
+    fun `swapped back to the main, the workout is as it started again`() {
+        val template = store.addTemplate("Legs", "squat" to 2)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(alternatives = listOf("row"))
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val squat = store.exercisesForWorkout(workoutId).first()
+        assertTrue(session.swapExercise(workoutId, squat.id, "row"))
+        assertTrue(session.swapExercise(workoutId, squat.id, "squat"))
+        assertTrue(session.discardIfUntouched(workoutId), "nothing of his left in it")
+    }
+
+    @Test
+    fun `a swap to a lift the workout already has reads last session's next slot of it`() {
+        // Last session: a bench top set, then bench back-offs as a second slot.
+        store.addFinishedWorkout(
+            startedAt = 500_000,
+            "bench" to listOf(Triple(n, 100.0, 3)),
+            "bench" to listOf(Triple(n, 80.0, 8), Triple(n, 80.0, 8)),
+        )
+        val template = store.addTemplate("Push", "bench" to 1, "fly" to 2)
+        val (_, flyRow) = store.exercisesForTemplate(template)
+        store.templateExercises[flyRow.id] = flyRow.copy(alternatives = listOf("bench"))
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val fly = store.exercisesForWorkout(workoutId)[1]
+        assertTrue(session.swapExercise(workoutId, fly.id, "bench"))
+
+        // Slots match last time's by position order: the swapped slot is today's second bench.
+        val slots = store.exercisesForWorkout(workoutId)
+        val lastTime = previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
+        assertEquals(listOf(100.0), lastTime.getValue(slots[0].id).map { it.weightKg })
+        assertEquals(listOf(80.0, 80.0), lastTime.getValue(fly.id).map { it.weightKg })
+    }
+
+    @Test
     fun `version 2's columns ride along unchanged through a whole workout`() {
         // Set as the v2 features set them (supersets, RIR ranges, deload, alternatives); no write may drop them.
         // (An exercise's countsFor isn't here: a workout never writes exercises.)

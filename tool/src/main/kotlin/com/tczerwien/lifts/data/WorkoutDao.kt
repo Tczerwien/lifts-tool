@@ -146,6 +146,17 @@ interface WorkoutDao {
     @Query("UPDATE workouts SET deload = :deload WHERE id = :id")
     fun updateDeload(id: Long, deload: Boolean): Int
 
+    /** One slot's exercise, alone: a swap keeps its rows, targets, rests, superset and choices. */
+    @Query("UPDATE workout_exercises SET exerciseId = :exerciseId WHERE id = :id")
+    fun updateSlotExercise(id: Long, exerciseId: String): Int
+
+    /** Empties one slot's unticked rows (weight, reps, seconds, RIR); their types, and any ticked row, stay. */
+    @Query(
+        "UPDATE sets SET weightKg = NULL, reps = NULL, durationSec = NULL, rpe = NULL " +
+            "WHERE workoutExerciseId = :slotId AND completedAt IS NULL"
+    )
+    fun clearSetValues(slotId: Long): Int
+
     /** One slot's planned work sets, alone. */
     @Query("UPDATE workout_exercises SET targetSets = :targetSets WHERE id = :id")
     fun updateSlotTargetSets(id: Long, targetSets: Int?): Int

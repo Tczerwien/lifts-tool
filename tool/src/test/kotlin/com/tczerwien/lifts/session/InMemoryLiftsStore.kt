@@ -132,6 +132,18 @@ class InMemoryLiftsStore : LiftsStore {
         return true
     }
 
+    override fun updateSlotExercise(id: Long, exerciseId: String): Boolean {
+        val slot = slots[id] ?: return false
+        slots[id] = slot.copy(exerciseId = exerciseId)
+        return true
+    }
+
+    override fun clearSetValues(slotId: Long): Int {
+        val unticked = setsOf(slotId).filter { it.completedAt == null }
+        unticked.forEach { sets[it.id] = it.copy(weightKg = null, reps = null, durationSec = null, rpe = null) }
+        return unticked.size
+    }
+
     override fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
         slots.values.filter { it.workoutId == workoutId }.sortedBy { it.position }
 

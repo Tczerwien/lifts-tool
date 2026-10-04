@@ -355,6 +355,26 @@ class ActiveSession(
     }
 
     /**
+     * The swap icon (ALT-3): slot [slotId] of the open workout [workoutId] does [to], one of its other
+     * choices, for this workout only. Its rows stay as they are, warm-ups too (a slot can't tell whether its
+     * template left them to last session), emptied of the values they had (the other lift's: they then show
+     * [to]'s starting values); its targets, rests, superset, planned sets and choices stay, and its template
+     * is never written. PREVIOUS and records follow the exercise, so they are [to]'s. False, changing
+     * nothing, once the workout has closed, the slot is gone or has a ticked set, or [to] isn't another of
+     * its choices still in the picker.
+     */
+    fun swapExercise(workoutId: Long, slotId: Long, to: String): Boolean = repository.inTransaction {
+        val slot = openSlot(workoutId, slotId) ?: return@inTransaction false
+        if (to == slot.exerciseId || to !in slot.choices) return@inTransaction false
+        if (repository.exerciseById(to)?.takeIf { !it.hidden } == null) return@inTransaction false
+        if (repository.setsForWorkout(workoutId).any { it.workoutExerciseId == slotId && it.completedAt != null }) {
+            return@inTransaction false
+        }
+        repository.clearSetValues(slotId)
+        repository.updateSlotExercise(slotId, to)
+    }
+
+    /**
      * Workout Detail's "Deload" row (DL-6): marks finished workout [workoutId] as a deload, or not, when he
      * forgot the switch. Only the mark changes, no rows; PREVIOUS and starting values then skip it (or
      * read it again). False, changing nothing, while it is open (the "…" menu's switch is for that), gone,
