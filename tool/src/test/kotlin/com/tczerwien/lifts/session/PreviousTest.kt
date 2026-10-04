@@ -293,6 +293,15 @@ class PreviousTest {
     }
 
     @Test
+    fun `Start Again plans the exercise done, a swapped one too, with the slot's choices`() {
+        val slots = listOf(slot(1, "press", 0).copy(choices = listOf("squat", "press")), slot(2, "curl", 1))
+        val sets = listOf(set(11, slot = 1, completedAt = 1L), set(21, slot = 2, completedAt = 2L))
+        val plan = planFromWorkout(slots, sets)
+        assertEquals(listOf("press", "curl"), plan.map { it.exerciseId })
+        assertEquals(listOf(listOf("squat", "press"), emptyList()), plan.map { it.choices })
+    }
+
+    @Test
     fun `Start Again plans the source slot's work sets, else the work sets it copies`() {
         // A deload's slot: 4 planned, 2 done (and a warm-up); a slot with no plan (added by hand): 3 done.
         val slots = listOf(slot(1, "squat", 0).copy(targetSets = 4), slot(2, "curl", 1))

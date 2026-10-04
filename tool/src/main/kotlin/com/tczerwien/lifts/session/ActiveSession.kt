@@ -110,7 +110,8 @@ class ActiveSession(
         previousGroups(repository.previousPerformance(exerciseId), repository.previousSlotIds(exerciseId))
 
     /**
-     * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises, each with the set
+     * "Start again" from Workout Detail: a new workout with [sourceId]'s exercises (the ones done, a swapped
+     * one too, with the slot's choices), each with the set
      * pattern he ticked that day, its rests, its targets and its superset ([planFromWorkout]), and a
      * deload again when the source was one (its trimmed rows, its full plan: off restores it); the rows start empty,
      * as a template's do, and his notes stay with the old workout. Named as the old one was, unless
@@ -153,12 +154,17 @@ class ActiveSession(
     /**
      * What [planFromWorkout] makes of stored workout [workoutId], without the exercises he removed
      * (hidden, kept only for their history): removing one took it out of his templates, so neither a
-     * Start Again nor a Save as Template brings it back. A superset it leaves with one slot is none.
+     * Start Again nor a Save as Template brings it back, as an exercise or as a choice ([keptChoices];
+     * one gone from the log goes too). A superset it leaves with one slot is none.
      */
-    private fun planOf(workoutId: Long): List<PlannedSlot> =
-        planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
+    private fun planOf(workoutId: Long): List<PlannedSlot> {
+        val usable = HashMap<String, Boolean>()
+        fun usable(id: String) = usable.getOrPut(id) { repository.exerciseById(id)?.hidden == false }
+        return planFromWorkout(repository.exercisesForWorkout(workoutId), repository.setsForWorkout(workoutId))
             .filterNot { repository.exerciseById(it.exerciseId)?.hidden == true }
+            .map { it.copy(choices = keptChoices(it.choices, it.exerciseId, ::usable)) }
             .withNormalizedGroups()
+    }
 
     /**
      * What Start Again begins with from [source] ([planOf]); as a [deload], each exercise cut to the deload's
@@ -176,7 +182,8 @@ class ActiveSession(
 
     /**
      * "Save as template" from Workout Detail: a new template named [name] (tidied; blank takes the
-     * workout's name), last in the list, with one exercise per slot he ticked a work set in: that many
+     * workout's name), last in the list, with one exercise per slot he ticked a work set in: the exercise
+     * done (a swapped one too, its other choices as its alternatives), that many
      * work sets and warm-ups (none ticked leaves them to last session, as a new template exercise does),
      * the slot's rep range and RIR target (a range too), its superset, and its rests, stored as none where they equal
      * Settings' defaults so they follow them. Returns the template's id, or null
@@ -206,6 +213,7 @@ class ActiveSession(
                     repMax = planned.targetRepMax,
                     targetRir = planned.targetRir,
                     supersetGroup = planned.supersetGroup,
+                    alternatives = planned.choices.filter { it != planned.exerciseId },
                     targetRirMax = planned.targetRirMax,
                 ),
             )

@@ -42,3 +42,13 @@ fun swapTarget(choices: List<String>, current: String, rows: List<SetEntity>, us
     if (rows.any { it.completedAt != null }) return null
     return nextChoice(choices.filter { it == current || usable(it) }, current)
 }
+
+/**
+ * The choices a copy of a slot doing [current] keeps (Start Again, Save as Template; ALT-5): its [choices]
+ * that [usable] keeps (an exercise he removed comes back nowhere), and [current] itself, in their order;
+ * none when no other is left.
+ */
+fun keptChoices(choices: List<String>, current: String, usable: (String) -> Boolean): List<String> {
+    val kept = choices.filter { it == current || usable(it) }
+    return if (kept.none { it != current }) emptyList() else kept
+}

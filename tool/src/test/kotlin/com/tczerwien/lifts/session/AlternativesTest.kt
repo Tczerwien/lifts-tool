@@ -55,6 +55,18 @@ class AlternativesTest {
         assertEquals("press", swapTarget(listOf("squat", "press"), "squat", rows(ticked = 0), { true }), "values typed in but nothing ticked")
     }
 
+    // --- ALT-5: what a copy keeps ---
+
+    @Test
+    fun `a copy keeps the choices still in the picker and the exercise done, else none`() {
+        val choices = listOf("squat", "removed", "press", "gone")
+        val usable = { id: String -> id == "squat" || id == "press" }
+        assertEquals(listOf("squat", "press"), keptChoices(choices, "press", usable))
+        assertEquals(listOf("removed", "press"), keptChoices(listOf("removed", "press"), "removed", { it == "press" }), "the one done stays")
+        assertEquals(emptyList(), keptChoices(listOf("squat", "removed"), "squat", usable), "no other left")
+        assertEquals(emptyList(), keptChoices(emptyList(), "squat", usable))
+    }
+
     private fun rows(ticked: Int = 0): List<SetEntity> = List(3) { index ->
         SetEntity(
             id = index + 1L,

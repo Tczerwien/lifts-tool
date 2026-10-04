@@ -222,7 +222,8 @@ fun planTemplate(
 /**
  * The slots "Start again" begins with, from a finished workout's [slots] and [sets]: one per slot
  * with a ticked work set, in position order, each with its ticked sets' pattern (warm-ups kept, every
- * other type a plain work set), the slot's rests and targets, its planned work sets (the slot's, else
+ * other type a plain work set), the exercise done (a swapped one too) and the slot's choices, the slot's
+ * rests and targets, its planned work sets (the slot's, else
  * the work sets copied: a deload's copy keeps the full plan), and its superset among the slots kept
  * (a superset left with one slot is none). Unticked sets count nowhere, so an exercise skipped that
  * day, or left after its warm-ups, is left out; notes stay with the old workout. "Save as template"
@@ -245,6 +246,7 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
             supersetGroup = slot.supersetGroup,
             targetRirMax = slot.targetRirMax,
             targetSets = slot.targetSets ?: types.count { it != SET_TYPE_WARMUP },
+            choices = slot.choices,
         )
     }.withNormalizedGroups()
 }

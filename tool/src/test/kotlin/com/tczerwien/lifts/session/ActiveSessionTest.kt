@@ -1197,6 +1197,31 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Start Again keeps the exercise done and its choices, Save as Template makes it the main`() {
+        val template = store.addTemplate("Legs", "squat" to 2, "curl" to 2)
+        val (squatRow) = store.exercisesForTemplate(template)
+        store.templateExercises[squatRow.id] = squatRow.copy(alternatives = listOf("row", "fly", "pullup"))
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (squat, curl) = store.exercisesForWorkout(workoutId)
+        assertTrue(session.swapExercise(workoutId, squat.id, "row"))
+        session.completeSet(workoutId, rowsOf(squat).first(), 60.0, 10, n, now = 1_060_000)
+        session.completeSet(workoutId, rowsOf(curl).first(), 20.0, 10, n, now = 1_120_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        // He removes the pull-up since: it comes back nowhere, as a choice neither.
+        store.exercises["pullup"] = store.exercises.getValue("pullup").copy(hidden = true)
+
+        val again = assertNotNull(session.startFromWorkout(workoutId, now = 2_000_000))
+        val copy = store.exercisesForWorkout(again).first()
+        assertEquals("row" to listOf("squat", "row", "fly"), copy.exerciseId to copy.choices)
+        assertTrue(session.discardIfUntouched(again), "a copy as Start Again made it")
+
+        val saved = assertNotNull(session.saveAsTemplate(workoutId, "Legs 2"))
+        val main = store.exercisesForTemplate(saved).first()
+        assertEquals("row" to listOf("squat", "fly"), main.exerciseId to main.alternatives)
+        assertEquals(emptyList(), store.exercisesForTemplate(saved)[1].alternatives)
+    }
+
+    @Test
     fun `version 2's columns ride along unchanged through a whole workout`() {
         // Set as the v2 features set them (supersets, RIR ranges, deload, alternatives); no write may drop them.
         // (An exercise's countsFor isn't here: a workout never writes exercises.)
