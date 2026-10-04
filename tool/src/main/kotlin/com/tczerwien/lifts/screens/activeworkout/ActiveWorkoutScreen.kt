@@ -443,6 +443,7 @@ class ActiveWorkoutScreen(
                 is WorkoutMenuResult.ExerciseNote -> options.slotId?.let { viewModel.setSlotNotes(it, result.text) }
                 is WorkoutMenuResult.Rest -> options.slotId?.let { viewModel.setSlotRest(it, result.sec) }
                 is WorkoutMenuResult.SupersetWithNext -> options.slotId?.let { viewModel.setSupersetWithNext(it, result.on) }
+                is WorkoutMenuResult.Deload -> viewModel.setDeload(result.on)
             }
         }
     }

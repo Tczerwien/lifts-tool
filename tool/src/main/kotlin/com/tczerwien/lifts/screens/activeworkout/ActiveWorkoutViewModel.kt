@@ -12,6 +12,7 @@ import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.screens.WorkoutMenuContent
 import com.tczerwien.lifts.session.ActiveSession
 import com.tczerwien.lifts.session.ActiveSession.FinishOutcome
+import com.tczerwien.lifts.session.DEFAULT_DELOAD_RIR
 import com.tczerwien.lifts.session.DURATION_STEP_SEC
 import com.tczerwien.lifts.session.HistoryCache
 import com.tczerwien.lifts.session.LiftsIo
@@ -29,8 +30,8 @@ import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.linkWithNext
 import com.tczerwien.lifts.session.linkedWithNext
 import com.tczerwien.lifts.session.nextExerciseSlotId
-import com.tczerwien.lifts.session.nextRowOf
 import com.tczerwien.lifts.session.nextRir
+import com.tczerwien.lifts.session.nextRowOf
 import com.tczerwien.lifts.session.nextSetType
 import com.tczerwien.lifts.session.openingSlotId
 import com.tczerwien.lifts.session.parseTypedWeight
@@ -41,6 +42,7 @@ import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
+import com.tczerwien.lifts.session.shownRir
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
 import com.tczerwien.lifts.session.targetLine
 import com.tczerwien.lifts.settings.SettingsStore
@@ -98,6 +100,10 @@ class ActiveWorkoutViewModel(
         val perSide: Boolean = false,
         /** Done in turn with its neighbour ([inSuperset]): the target line says "SUPERSET". */
         val superset: Boolean = false,
+        /** The workout is a deload: the target line says "DELOAD" and shows [deloadRir]. */
+        val deload: Boolean = false,
+        /** The RIR a deload aims for (Settings), shown instead of the slot's own target. */
+        val deloadRir: RirTarget = DEFAULT_DELOAD_RIR,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
@@ -105,13 +111,17 @@ class ActiveWorkoutViewModel(
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
         val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking)
 
-        /** The RIR this slot aims for, one number or a range ([rirTarget]): the RIR cell's first tap is its top. */
-        val rir: RirTarget? = rirTarget(slot.targetRir, slot.targetRirMax)
+        /**
+         * The RIR this slot aims for, one number or a range ([rirTarget]); in a deload, the deload's
+         * ([shownRir]). The RIR cell's first tap is its top.
+         */
+        val rir: RirTarget? = shownRir(rirTarget(slot.targetRir, slot.targetRirMax), deload, deloadRir)
 
         /**
          * The template's target for this slot, "8–12 REPS · RIR 1–2", and "ADD LOAD" once every work set last
          * time reached the top of the range, until today's rows start heavier ([progressionHint]), then
-         * "SUPERSET" in a superset; null with none of these (a hold shows only "SUPERSET").
+         * "SUPERSET" in a superset; null with none of these (a hold shows only "SUPERSET"). In a deload,
+         * "8–12 REPS · RIR 4–5 · DELOAD", and no ADD LOAD.
          */
         val targetLine: String? = targetLine(
             // A hold is seconds: a rep range or RIR (set before its type changed) says nothing about it.
@@ -123,9 +133,11 @@ class ActiveWorkoutViewModel(
                 repMax = slot.targetRepMax,
                 lastTime = lastTime,
                 todayWeightsKg = seeds.filterIndexed { index, _ -> sets[index].type != SET_TYPE_WARMUP }.map { it.weightKg },
+                deload = deload,
             ),
             perSide = perSide,
             superset = superset,
+            deload = deload,
         )
     }
 
@@ -167,6 +179,8 @@ class ActiveWorkoutViewModel(
         val emptyTickHint: String? = null,
         /** The weight's number entry, while it is open. */
         val weightEntry: WeightEntry? = null,
+        /** The workout is a deload ("…" › Deload). */
+        val deload: Boolean = false,
     )
 
     /**
@@ -884,7 +898,7 @@ class ActiveWorkoutViewModel(
     }
 
     fun menuOptions(state: UiState): MenuOptions {
-        val workout = WorkoutMenuContent(workoutName = state.workoutName, workoutNote = state.workoutNotes)
+        val workout = WorkoutMenuContent(workoutName = state.workoutName, workoutNote = state.workoutNotes, deload = state.deload)
         val block = state.exercises.getOrNull(state.currentIndex) ?: return MenuOptions(workout)
         val activeIndex = block.sets.indexOfFirst { it.id == state.activeSetId }
         val activeSet = block.sets.getOrNull(activeIndex)
@@ -977,6 +991,28 @@ class ActiveWorkoutViewModel(
         }
         LiftsIo.write({ session.setSupersetWithNext(workoutId, slotId, on) }) { settleMeta(meta); refresh() }
     }
+
+    /**
+     * Menu: makes this workout a deload ([on]) or a normal one again ([ActiveSession.setDeload]): its rows
+     * are trimmed to the sets a deload keeps, or put back. DELOAD shows at once; the rows change as the
+     * save's reload lands, under his finger, so the rows ignore taps for a moment.
+     */
+    fun setDeload(on: Boolean) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        rowsMovedUnderFinger()
+        val meta = editMeta { withDeload(it, on) }
+        LiftsIo.write({ session.setDeload(workoutId, on) }) {
+            // The rows change when this reload lands, which a busy lane can put past the guard's second.
+            rowsMovedUnderFinger()
+            settleMeta(meta)
+            refresh()
+        }
+    }
+
+    /** [state] as a deload ([on]) or not: the flag and every exercise's target line. */
+    private fun withDeload(state: UiState, on: Boolean): UiState =
+        state.copy(deload = on, exercises = state.exercises.map { if (it.deload == on) it else it.copy(deload = on) })
 
     /** [state] with each exercise's superset group set from [groups] (in screen order), and its "SUPERSET" with it. */
     private fun withGroups(state: UiState, groups: List<Int?>): UiState = state.copy(
@@ -1208,6 +1244,8 @@ class ActiveWorkoutViewModel(
                     tracking = exercise?.tracking ?: Tracking.WEIGHT_REPS,
                     perSide = exercise?.perSide == true,
                     superset = inSuperset(groups, index),
+                    deload = workout.deload,
+                    deloadRir = settings.deloadRir,
                 )
             }
             val prIds = prSetIds(slots, sets, cached.prior, trackingOf(blocks))
@@ -1233,6 +1271,7 @@ class ActiveWorkoutViewModel(
                         workoutName = workout.name,
                         workoutNotes = workout.notes,
                         startedAt = workout.startedAt,
+                        deload = workout.deload,
                         exercises = blocks,
                         currentIndex = currentIndex,
                         activeSetId = activeSetId,

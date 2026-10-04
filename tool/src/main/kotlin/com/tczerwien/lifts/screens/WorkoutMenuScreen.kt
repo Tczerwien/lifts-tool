@@ -74,6 +74,9 @@ sealed interface WorkoutMenuResult {
 
     /** Join this exercise to the next one as a superset ([on]), or split them, for this workout only. */
     data class SupersetWithNext(val on: Boolean) : WorkoutMenuResult
+
+    /** Make this workout a deload ([on]: fewer sets, an easier RIR), or a normal one again. */
+    data class Deload(val on: Boolean) : WorkoutMenuResult
 }
 
 /**
@@ -100,6 +103,8 @@ data class WorkoutMenuContent(
     val removeExerciseLabel: String? = null,
     val workoutName: String = "",
     val workoutNote: String? = null,
+    /** The workout is a deload. */
+    val deload: Boolean = false,
 )
 
 class WorkoutMenuViewModel : LightViewModel<WorkoutMenuResult>() {
@@ -167,8 +172,8 @@ class WorkoutMenuViewModel : LightViewModel<WorkoutMenuResult>() {
  * The Active Workout "…" menu. For the exercise on screen: its note for this workout, its rest,
  * whether it is a superset with the next exercise (one tap flips it, for this workout only),
  * plates for the weight the active row shows, its details, renaming it, and removing a set or the
- * exercise while nothing in them is logged (a null label greys the row out). For the workout: the
- * exercise list, renaming it, its note, and discarding it (two taps). Notes, the name and the rest
+ * exercise while nothing in them is logged (a null label greys the row out). For the workout: whether
+ * it is a deload (one tap flips it), the exercise list, renaming it, its note, and discarding it (two taps). Notes, the name and the rest
  * are edited here; the result goes back to Active Workout, which carries it out. Back returns nothing.
  */
 class WorkoutMenuScreen(
@@ -264,6 +269,13 @@ class WorkoutMenuScreen(
                 }
 
                 SectionLabel("Workout")
+                // For this workout only: fewer sets at an easier effort, the template left as it is.
+                MenuRow(
+                    title = "Deload",
+                    detail = if (content.deload) "ON" else "OFF",
+                    onClick = { choose(WorkoutMenuResult.Deload(!content.deload)) },
+                )
+                RowDivider()
                 content.position?.let { position ->
                     MenuRow(title = "Go to exercise", detail = position, onClick = { choose(WorkoutMenuResult.Jump) })
                     RowDivider()
