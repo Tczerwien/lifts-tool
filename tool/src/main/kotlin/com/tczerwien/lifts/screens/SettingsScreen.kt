@@ -20,6 +20,10 @@ import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.MAX_DELOAD_KEEP_PCT
+import com.tczerwien.lifts.session.MIN_DELOAD_KEEP_PCT
+import com.tczerwien.lifts.session.stepDeloadKeep
+import com.tczerwien.lifts.session.stepRirTarget
 import com.tczerwien.lifts.settings.PlateList
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.settings.barAfterUnitSwitch
@@ -69,6 +73,9 @@ class SettingsViewModel(
 
         /** SDK text editor for the comma-separated plate list; [session] forces fresh editor state per open. */
         data class EditPlates(val prefill: String, val session: Int) : Mode
+
+        /** Two steppers: the share of sets a deload keeps, and its RIR. */
+        data object EditDeload : Mode
     }
 
     data class UiState(
@@ -156,6 +163,28 @@ class SettingsViewModel(
         _uiState.update { it.copy(mode = Mode.FieldList) }
     }
 
+    fun openDeloadEditor() {
+        _uiState.update { it.copy(mode = Mode.EditDeload) }
+    }
+
+    /** The share of each exercise's planned sets a deload keeps, ±10 % within 30–70 ([stepDeloadKeep]); saved per step. */
+    fun stepDeloadKeep(delta: Int) {
+        val settings = _uiState.value.settings ?: return
+        val next = stepDeloadKeep(settings.deloadKeepPct, delta)
+        if (next == settings.deloadKeepPct) return
+        _uiState.update { it.copy(settings = settings.copy(deloadKeepPct = next)) }
+        LiftsIo.write { settingsStore.setDeloadKeepPct(next) }
+    }
+
+    /** The RIR a deload aims for, along 0, 0–1, 1, … 4–5, 5 ([stepRirTarget]; never none); saved per step. */
+    fun stepDeloadRir(delta: Int) {
+        val settings = _uiState.value.settings ?: return
+        val next = stepRirTarget(settings.deloadRir, delta, allowNone = false) ?: return
+        if (next == settings.deloadRir) return
+        _uiState.update { it.copy(settings = settings.copy(deloadRir = next)) }
+        LiftsIo.write { settingsStore.setDeloadRir(next) }
+    }
+
     /** Applies a ±1 stepper delta as ±15 s to the rest field being edited; persists per step. */
     fun stepRest(delta: Int) {
         val state = _uiState.value
@@ -216,7 +245,7 @@ class SettingsViewModel(
 /**
  * Settings (design/screens/settings.html): field rows for Units (tap toggles LB/KG), Weight Step
  * (tap cycles the steppers' increment on offer in that unit), the two rest durations (tap opens a ±15 s stepper mode), Rest-over Beep (tap toggles
- * ON/OFF), Plate Inventory (tap opens the SDK text editor with a comma list in display
+ * ON/OFF), Deload (tap opens its two steppers: the share of sets kept and its RIR), Plate Inventory (tap opens the SDK text editor with a comma list in display
  * units), Bar Weights and Export (navigate), and a static About row.
  */
 class SettingsScreen(
@@ -245,6 +274,8 @@ class SettingsScreen(
                     field = mode.field,
                     settings = uiState.settings,
                 )
+
+                is SettingsViewModel.Mode.EditDeload -> DeloadEditor(uiState.settings)
 
                 is SettingsViewModel.Mode.EditPlates -> {
                     val textState = remember(mode.session) { TextFieldState(mode.prefill) }
@@ -313,6 +344,12 @@ class SettingsScreen(
                     label = "Rest-over Beep",
                     value = if (settings.restBeep) "ON" else "OFF",
                     onClick = { viewModel.toggleRestBeep() },
+                    chevron = true,
+                )
+                LiftsFieldRow(
+                    label = "Deload",
+                    value = "${settings.deloadKeepPct}% of sets · RIR ${settings.deloadRir.text}",
+                    onClick = { viewModel.openDeloadEditor() },
                     chevron = true,
                 )
                 LiftsFieldRow(
@@ -406,6 +443,66 @@ class SettingsScreen(
                         )
                     },
                 )
+            }
+        }
+    }
+
+    /**
+     * What a workout switched to deload ("…" › Deload) does: keep this share of each exercise's planned
+     * work sets, and aim for this RIR instead of the exercises' own targets. Each step is saved.
+     */
+    @Composable
+    private fun DeloadEditor(settings: SettingsStore.Settings?) {
+        settings ?: return
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(LightThemeTokens.colors.background),
+        ) {
+            LightTopBar(
+                leftButton = LightBarButton.LightIcon(
+                    icon = LightIcons.BACK,
+                    onClick = { viewModel.closeEditor() },
+                ),
+                center = LightTopBarCenter.Text("Deload"),
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Stepper(
+                        onStep = viewModel::stepDeloadKeep,
+                        label = "Sets Kept",
+                        decrementEnabled = settings.deloadKeepPct > MIN_DELOAD_KEEP_PCT,
+                        incrementEnabled = settings.deloadKeepPct < MAX_DELOAD_KEEP_PCT,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 4f.gridUnitsAsDp()),
+                    ) {
+                        LightText(text = "${settings.deloadKeepPct}%", variant = LightTextVariant.Subtitle, monospace = true, maxLines = 1)
+                    }
+                    Stepper(
+                        onStep = viewModel::stepDeloadRir,
+                        label = "RIR",
+                        decrementEnabled = stepRirTarget(settings.deloadRir, -1, allowNone = false) != settings.deloadRir,
+                        incrementEnabled = stepRirTarget(settings.deloadRir, +1, allowNone = false) != settings.deloadRir,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 4f.gridUnitsAsDp(), end = 4f.gridUnitsAsDp(), top = 2f.gridUnitsAsDp()),
+                    ) {
+                        LightText(text = settings.deloadRir.text, variant = LightTextVariant.Subtitle, monospace = true, maxLines = 1)
+                    }
+                    LightText(
+                        text = "IN A WORKOUT: … › DELOAD",
+                        variant = LightTextVariant.Superfine,
+                        lighten = true,
+                        maxLines = 1,
+                        modifier = Modifier.padding(top = 2f.gridUnitsAsDp()),
+                    )
+                }
             }
         }
     }
