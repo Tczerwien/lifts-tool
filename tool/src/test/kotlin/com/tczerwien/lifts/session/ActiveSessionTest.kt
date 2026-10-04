@@ -982,6 +982,28 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Workout Detail marks a finished workout as a deload without touching its rows`() {
+        val older = store.addFinishedWorkout(startedAt = 1_000_000, "squat" to listOf(Triple(n, 100.0, 5), Triple(n, 100.0, 5)))
+        val last = store.addFinishedWorkout(startedAt = 2_000_000, "squat" to listOf(Triple(n, 90.0, 5)))
+        val rows = store.setsForWorkout(last)
+        assertEquals(listOf(90.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().map { it.weightKg })
+
+        assertTrue(session.markDeload(last, on = true))
+        assertTrue(store.workoutById(last)!!.deload)
+        assertEquals(rows, store.setsForWorkout(last), "only the mark")
+        assertEquals(listOf(100.0, 100.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().map { it.weightKg })
+        assertFalse(session.markDeload(last, on = true), "already so")
+        assertTrue(session.markDeload(last, on = false))
+        assertEquals(listOf(90.0), session.previousGroupsByExercise(listOf("squat")).getValue("squat").single().map { it.weightKg })
+
+        val open = session.startEmpty(now = 3_000_000)
+        assertFalse(session.markDeload(open, on = true), "an open workout takes the menu's switch")
+        assertFalse(store.workoutById(open)!!.deload)
+        assertFalse(session.markDeload(9_999, on = true))
+        assertFalse(store.workoutById(older)!!.deload)
+    }
+
+    @Test
     fun `a superset keeps alternating over a deload's rows, trimmed and put back`() {
         val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
         store.exercisesForTemplate(template).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1, restSecWork = 90) }

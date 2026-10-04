@@ -322,6 +322,17 @@ class ActiveSession(
         repository.setWorkoutDeload(workoutId, on)
     }
 
+    /**
+     * Workout Detail's "Deload" row (DL-6): marks finished workout [workoutId] as a deload, or not, when he
+     * forgot the switch. Only the mark changes, no rows; PREVIOUS and starting values then skip it (or
+     * read it again). False, changing nothing, while it is open (the "…" menu's switch is for that), gone,
+     * or already so.
+     */
+    fun markDeload(workoutId: Long, on: Boolean): Boolean = repository.inTransaction {
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt != null } ?: return@inTransaction false
+        workout.deload != on && repository.setWorkoutDeload(workoutId, on)
+    }
+
     /** Keeps [workoutId]'s supersets whole after a removal ([normalizeGroups]). Call inside a transaction. */
     private fun regroup(workoutId: Long) {
         val slots = repository.exercisesForWorkout(workoutId)

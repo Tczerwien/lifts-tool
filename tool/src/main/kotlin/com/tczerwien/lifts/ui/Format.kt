@@ -155,6 +155,9 @@ object Format {
     /** "62 min" ([roundedMinutes]). */
     fun durationMin(durationMillis: Long): String = "${roundedMinutes(durationMillis)} min"
 
+    /** [line] with " · Deload" after it for a deload workout: how every workout line marks one. */
+    fun withDeload(line: String, deload: Boolean): String = if (deload) "$line · Deload" else line
+
     /** Seconds -> "1h 23m" (or "43m" under an hour). */
     fun durationHm(totalSec: Int): String {
         val sec = totalSec.coerceAtLeast(0)

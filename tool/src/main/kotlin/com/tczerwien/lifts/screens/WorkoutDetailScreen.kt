@@ -35,6 +35,7 @@ import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.screens.activeworkout.ActiveWorkoutScreen
 import com.tczerwien.lifts.session.ActiveSession
+import com.tczerwien.lifts.session.BounceGuard
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.ReloadFloor
 import com.tczerwien.lifts.settings.SettingsStore
@@ -111,6 +112,10 @@ class WorkoutDetailViewModel(
         val notesEditSession: Int = 0,
         /** A moment's note above the bottom bar: why Start again didn't start. */
         val hint: String? = null,
+        /** It was a deload (the "Deload" row marks it, and the subtitle says so). */
+        val deload: Boolean = false,
+        /** It has finished: only then can the "Deload" row mark it. */
+        val finished: Boolean = false,
     )
 
     private val _uiState = MutableStateFlow(UiState())
@@ -312,8 +317,34 @@ class WorkoutDetailViewModel(
      */
     private val notesFloor = ReloadFloor()
 
+    /** The same for the deload mark, which shows at once ([tapDeload]). */
+    private val deloadFloor = ReloadFloor()
+
+    /** "Deload" taps: a bounce or a double tap would flip it straight back. */
+    private val deloadTaps = BounceGuard()
+
+    /**
+     * The "Deload" row (DL-6): marks this finished workout as a deload, or not, at once on screen and then
+     * on the write lane ([ActiveSession.markDeload]); only the mark changes. The exports show it, and an
+     * open workout (this screen is reachable from inside one) re-reads its PREVIOUS ([LiftsShare.deloadMarked]).
+     */
+    fun tapDeload() {
+        val state = _uiState.value
+        if (deleting || starting || !state.loaded || !state.finished || !deloadTaps.take()) return
+        deleteArm.disarm()
+        val next = !state.deload
+        deloadFloor.saveQueued()
+        _uiState.update { it.copy(deload = next) }
+        LiftsIo.write({ session.markDeload(workoutId, next) }) { changed ->
+            if (changed) share.deloadMarked()
+            deloadFloor.saveLanded()
+            refresh()
+        }
+    }
+
     private fun refresh() {
         val reload = notesFloor.reloadStarted()
+        val deloadReload = deloadFloor.reloadStarted()
         val workout = repository.workoutById(workoutId)
         if (workout == null) {
             // Deleted from another Workout Detail stacked above this one (via Exercise Detail's
@@ -362,6 +393,8 @@ class WorkoutDetailViewModel(
                 subtitle = Format.dateWithYear(workout.startedAt) +
                     (duration?.let { " · $it" } ?: ""),
                 notes = if (notesFloor.keepsShown(reload)) state.notes else workout.notes,
+                deload = if (deloadFloor.keepsShown(deloadReload)) state.deload else workout.deload,
+                finished = workout.endedAt != null,
                 blocks = blocks,
                 bodyweightText = bodyweight?.let {
                     "${Format.bodyweight(it.weightKg, unit)} ${unit.suffix}" +
@@ -390,7 +423,8 @@ class WorkoutDetailViewModel(
  * session — notes, per-exercise compact set-notation lines with inline PR stars and his note on
  * each exercise, and the bodyweight line. The top-bar pencil edits the workout NOTES only (SDK editor as a
  * screen mode, weather idiom); full past-workout editing is deliberately out of scope.
- * The bottom-bar trash deletes the whole workout after a second tap.
+ * The bottom-bar trash deletes the whole workout after a second tap. A "Deload" row marks a finished
+ * workout as a deload, or not (only the mark changes).
  */
 class WorkoutDetailScreen(
     private val sealedActivity: SealedLightActivity,
@@ -474,7 +508,7 @@ class WorkoutDetailScreen(
                             ),
                             center = LightTopBarCenter.TwoLineDetail(
                                 line1 = uiState.name,
-                                line2 = uiState.subtitle,
+                                line2 = Format.withDeload(uiState.subtitle, uiState.deload),
                             ),
                             rightButton = LightBarButton.LightIcon(
                                 icon = LightIcons.PENCIL,
@@ -586,6 +620,22 @@ class WorkoutDetailScreen(
                                     right = { LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f) },
                                     left = { RowName("Save as Template") },
                                 )
+                                if (uiState.finished) {
+                                    // Forgot the switch: marks this one, so next week's PREVIOUS skips it. No rows change.
+                                    RowDivider()
+                                    LiftsListRow(
+                                        onClick = viewModel::tapDeload,
+                                        left = { RowName("Deload") },
+                                        right = {
+                                            LightText(
+                                                text = if (uiState.deload) "ON" else "OFF",
+                                                variant = LightTextVariant.Detail,
+                                                lighten = true,
+                                                maxLines = 1,
+                                            )
+                                        },
+                                    )
+                                }
                             }
                         }
 
