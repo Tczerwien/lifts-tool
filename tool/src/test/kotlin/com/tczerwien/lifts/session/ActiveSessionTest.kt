@@ -559,7 +559,7 @@ class ActiveSessionTest {
         val again = assertNotNull(session.startFromWorkout(source, now = 5 * 24 * 3_600_000L))
         store.onCommit = null
         // A kill right after the commit still leaves the source: never a saved copy Home can't tell is untouched.
-        assertEquals(listOf<String?>("$again:$source"), atCommit)
+        assertEquals(listOf<String?>("$again:$source:0"), atCommit)
     }
 
     @Test
@@ -972,9 +972,12 @@ class ActiveSessionTest {
         val slot = store.exercisesForWorkout(again).single()
         assertEquals(listOf(n, n), rowsOf(slot).map { it.type }, "the two done that day")
         assertEquals(4, slot.targetSets, "the full plan")
+        // The source unmarked from inside the copy (Workout Detail) changes nothing about how the copy started.
+        assertTrue(session.markDeload(source, on = false))
         // Backed out at once: nothing done, so nothing is kept.
         assertTrue(session.discardIfUntouched(again))
         assertNull(store.workoutById(again))
+        assertTrue(session.markDeload(source, on = true))
         // Switched off, the copy has the full four.
         val third = assertNotNull(session.startFromWorkout(source, now = 6_000_000))
         assertTrue(session.setDeload(third, on = false))

@@ -129,18 +129,24 @@ class ActiveSession(
                 WorkoutEntity(name = startAgainName(source, now, zone), startedAt = now, deload = source.deload),
             )
             addPlannedSlots(workoutId, planOf(source.id))
-            runBlocking { dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId" } }
+            runBlocking { dataStore.edit { prefs -> prefs[STARTED_FROM] = "$workoutId:$sourceId:${if (source.deload) 1 else 0}" } }
             workoutId
         } ?: return null
         runBlocking { clearRest() }
         return workoutId
     }
 
-    /** The workout [workoutId] was started again from ([startFromWorkout]), or null. Blocking read. */
-    private fun startedFromSnapshot(workoutId: Long): Long? = runBlocking {
+    /**
+     * What [startFromWorkout] saved for a copy: the workout it copied, and whether the copy started as a
+     * deload ([deload]: null when saved before B14, which didn't record it).
+     */
+    private data class StartedFrom(val sourceId: Long, val deload: Boolean?)
+
+    /** What workout [workoutId] was started again from ([startFromWorkout]), or null. Blocking read. */
+    private fun startedFromSnapshot(workoutId: Long): StartedFrom? = runBlocking {
         val saved = dataStore.data.first()[STARTED_FROM]?.split(':') ?: return@runBlocking null
-        if (saved.size != 2 || saved[0].toLongOrNull() != workoutId) return@runBlocking null
-        saved[1].toLongOrNull()
+        if (saved.size !in 2..3 || saved[0].toLongOrNull() != workoutId) return@runBlocking null
+        StartedFrom(saved[1].toLongOrNull() ?: return@runBlocking null, saved.getOrNull(2)?.let { it == "1" })
     }
 
     /**
@@ -560,7 +566,8 @@ class ActiveSession(
      * same as at the start; if it somehow isn't, the workout counts as touched and is kept.
      */
     private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean {
-        val source = startedFromSnapshot(workout.id)?.takeIf { workout.templateId == null }?.let { repository.workoutById(it) }
+        val startedFrom = startedFromSnapshot(workout.id)?.takeIf { workout.templateId == null }
+        val source = startedFrom?.let { repository.workoutById(it.sourceId) }
         return isUntouched(
             workout = workout,
             slots = repository.exercisesForWorkout(workout.id),
@@ -575,8 +582,9 @@ class ActiveSession(
             startName = workout.templateId?.let { repository.templateById(it)?.name }
                 ?: source?.let { startAgainName(it, workout.startedAt, zone) }
                 ?: defaultWorkoutName(workout.startedAt, zone),
-            // So is a deload switched on; a copy of a deload is one from the start.
-            startDeload = source?.deload == true,
+            // So is a deload switched on; a copy of a deload is one from the start. As the start saved it: the
+            // source's mark can change meanwhile (Workout Detail, reached from inside this workout).
+            startDeload = startedFrom?.deload ?: (source?.deload == true),
         )
     }
 
@@ -683,7 +691,10 @@ class ActiveSession(
         /** "workoutId:slotId" of the exercise last on screen; tied to its workout, so a stale one is ignored. */
         private val CURRENT_SLOT = stringPreferencesKey("lifts_current_slot")
 
-        /** "workoutId:sourceId": the workout Start Again copied into that one; tied to it, so a stale one is ignored. */
+        /**
+         * "workoutId:sourceId:deload": the workout Start Again copied into that one, and whether the copy started
+         * as a deload (1) or not (0; before B14 there was no third part); tied to it, so a stale one is ignored.
+         */
         private val STARTED_FROM = stringPreferencesKey("lifts_started_from")
     }
 }
