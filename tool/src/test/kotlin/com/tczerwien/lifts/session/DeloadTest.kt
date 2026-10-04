@@ -51,8 +51,10 @@ class DeloadTest {
     fun `a ticked set is never deleted, mid-workout`() {
         // Three done of four, keep two: only the fourth goes.
         assertEquals(DeloadChange(deleteIds = listOf(4)), deloadRows(rows("N", "N", "N", n), targetSets = 4, keep = 2, on = true))
-        // The first skipped, the second done: the kept count is by place, so sets 3 and 4 go.
+        // The first skipped, the second done: the done one and the first left to do make two, so 3 and 4 go.
         assertEquals(DeloadChange(deleteIds = listOf(3, 4)), deloadRows(rows(n, "N", n, n), targetSets = 4, keep = 2, on = true))
+        // Two done after a skipped first: that is the deload's two, so the skipped one goes too (review R1-2).
+        assertEquals(DeloadChange(deleteIds = listOf(1, 4)), deloadRows(rows(n, "N", "N", n), targetSets = 4, keep = 2, on = true))
         assertEquals(DeloadChange(), deloadRows(rows("N", "N", "N"), targetSets = 3, keep = 2, on = true), "all done: nothing to take")
     }
 

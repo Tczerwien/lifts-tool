@@ -46,9 +46,10 @@ data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: In
 /**
  * What switching a deload [on] or off does to one slot's [rows] (in position order) (DL-2).
  *
- * On: the unticked work sets after the first [keep] are deleted, each with the unticked drops after it.
- * A ticked row is never deleted, warm-ups stay, and a drop never counts as a kept work set: it goes with
- * the work set before it. Values typed into a deleted row go with it.
+ * On: the slot keeps [keep] work sets, the ticked ones first: a ticked row is never deleted and counts
+ * toward the number, then the unticked ones stay in order until it is reached, and the rest are deleted,
+ * each with the unticked drops after it. Warm-ups stay, and a drop never counts as a kept work set: it goes
+ * with the work set before it. Values typed into a deleted row go with it.
  *
  * Off: plain work rows are added until the slot has its [targetSets] work sets again (drops not counted);
  * nothing when it already has them.
@@ -56,13 +57,15 @@ data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: In
 fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): DeloadChange {
     if (!on) return DeloadChange(addRows = (targetSets - deloadWorkSets(rows)).coerceAtLeast(0))
     val delete = ArrayList<Long>()
-    var workSets = 0
+    // The unticked work sets that may stay: what the ticked ones leave of the kept number.
+    var untickedLeft = keep - rows.count { it.isWorkSet() && it.completedAt != null }
     var parentDeleted = false
     for (row in rows) {
         when {
             row.isWorkSet() -> {
-                workSets++
-                parentDeleted = workSets > keep && row.completedAt == null
+                val ticked = row.completedAt != null
+                parentDeleted = !ticked && untickedLeft <= 0
+                if (!ticked) untickedLeft--
                 if (parentDeleted) delete += row.id
             }
             row.type == SET_TYPE_DROP -> if (parentDeleted && row.completedAt == null) delete += row.id
