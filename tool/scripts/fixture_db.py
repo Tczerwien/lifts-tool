@@ -23,6 +23,9 @@ America/Chicago):
     as a superset (90 s rest after the round, on the rows), then leg press; done on the last two
     Saturdays at 10:00, the pair's sets ticked in turn (flyes 1, rows 1, flyes 2, ...). In a v1 file
     the pair is two plain slots (v1 has no column for it).
+  - Lower A's targets (schema 2 and later): squat 3–5 reps at RIR 1–2, Romanian deadlift 6–8 at RIR 1–2
+    (both reached the top every set last time: ADD LOAD), leg press 8–10 at RIR 2 (one set short: none).
+    A v1 file has no column for a range, so it gets none of them.
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
@@ -274,6 +277,15 @@ def gym(conn, now):
     full_body_t = w.template("Full Body", 2, [(LATERAL, 2, 60), (FLYES, 3, None, 1), (CABLE_ROW, 3, 90, 1), (LEG_PRESS, 2, None)])
     for week in (6, 7):
         full_body(w, first_monday + dt.timedelta(weeks=week, days=5), week, full_body_t, rng)
+
+    # Added in B14: Lower A's targets, two of them RIR ranges, so a deload has targets to stand in for and
+    # ADD LOAD a top to reach. Only where the schema has the range's column; nothing random.
+    if "targetRirMax" in {row[1] for row in conn.execute("PRAGMA table_info(template_exercises)")}:
+        for exercise_id, rep_min, rep_max, rir, rir_max in ((SQUAT, 3, 5, 1, 2), (RDL, 6, 8, 1, 2), (LEG_PRESS, 8, 10, 2, None)):
+            conn.execute(
+                "UPDATE template_exercises SET repMin = ?, repMax = ?, targetRir = ?, targetRirMax = ? WHERE templateId = ? AND exerciseId = ?",
+                (rep_min, rep_max, rir, rir_max, lower_t, exercise_id),
+            )
 
 
 # --- Scenario "long": years of four workouts a week ---
