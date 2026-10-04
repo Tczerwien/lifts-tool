@@ -293,8 +293,9 @@ def gym(conn, now):
                 "UPDATE template_exercises SET repMin = ?, repMax = ?, targetRir = ?, targetRirMax = ? WHERE templateId = ? AND exerciseId = ?",
                 (rep_min, rep_max, rir, rir_max, lower_t, exercise_id),
             )
-    # Also B14: the fifth week (index 4, four weeks before this one) as a deload week, as the switch leaves a workout: marked, each exercise cut to half its
-    # work sets (rounded up), loads as they were, and its planned sets recorded. Nothing random.
+    # Also B14: the fifth week (index 4, four weeks before this one) as a deload week, as the switch leaves a
+    # workout: marked, each exercise cut to half its work sets (rounded up), loads as they were, and its planned
+    # sets recorded. Nothing random.
     if w.deloads:
         start, end = first_monday + dt.timedelta(weeks=4), first_monday + dt.timedelta(weeks=5)
         week4 = [row[0] for row in conn.execute(
