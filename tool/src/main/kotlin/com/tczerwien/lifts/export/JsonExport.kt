@@ -36,6 +36,11 @@ import kotlinx.serialization.json.Json
  * 2.4 (B13) added superset_id (Hevy's name) on workout and template exercises: the exercises sharing a
  * number were done (or are planned) as a superset, one set of each in turn with the rest after the
  * round. Numbered 1, 2, … within each workout or template; absent outside one.
+ *
+ * 2.5 (B14) added target_rir_max on workout and template exercises (an RIR range, "1–2": target_rir 1,
+ * target_rir_max 2; absent for one number) and workouts[].deload (true for a deload: fewer work sets at
+ * an easier effort, the deload's RIR from Settings applying instead of the targets; absent otherwise).
+ * A deload's exercises keep their template's target_rir and target_rir_max.
  */
 object JsonExport {
 
@@ -84,6 +89,7 @@ object JsonExport {
                             restSeconds = it.restSecWork,
                             warmupRestSeconds = it.restSecWarmup,
                             supersetId = it.supersetId,
+                            targetRirMax = it.targetRirMax,
                         )
                     },
                 )
@@ -97,6 +103,7 @@ object JsonExport {
                     bodyweightKg = workout.bodyweight?.weightKg,
                     bodyweightDate = workout.bodyweight?.dateIso,
                     notes = workout.notes,
+                    deload = workout.deload.takeIf { it },
                     exercises = workout.exercises.map { exercise ->
                         JsonWorkoutExercise(
                             exerciseId = exercise.exerciseId,
@@ -105,6 +112,7 @@ object JsonExport {
                             repMin = exercise.targetRepMin,
                             repMax = exercise.targetRepMax,
                             targetRir = exercise.targetRir,
+                            targetRirMax = exercise.targetRirMax,
                             supersetId = exercise.supersetId,
                             sets = exercise.sets.map { set ->
                                 JsonSet(
@@ -249,6 +257,8 @@ data class JsonTemplateExercise(
     @SerialName("warmup_rest_seconds") val warmupRestSeconds: Int? = null,
     /** The template's exercises sharing it are a superset; absent outside one. */
     @SerialName("superset_id") val supersetId: Int? = null,
+    /** The top of an RIR range ("1–2"); absent for one number. */
+    @SerialName("target_rir_max") val targetRirMax: Int? = null,
 )
 
 @Serializable
@@ -261,6 +271,8 @@ data class JsonWorkout(
     /** The day of that weigh-in: the workout's, or up to 3 days before. */
     @SerialName("bodyweight_date") val bodyweightDate: String? = null,
     val notes: String? = null,
+    /** Only written (true) for a deload: fewer work sets at an easier effort than its exercises' targets. */
+    val deload: Boolean? = null,
     val exercises: List<JsonWorkoutExercise>,
 )
 
@@ -273,6 +285,7 @@ data class JsonWorkoutExercise(
     @SerialName("rep_min") val repMin: Int? = null,
     @SerialName("rep_max") val repMax: Int? = null,
     @SerialName("target_rir") val targetRir: Int? = null,
+    @SerialName("target_rir_max") val targetRirMax: Int? = null,
     /** The workout's exercises sharing it were done as a superset; absent outside one. */
     @SerialName("superset_id") val supersetId: Int? = null,
     val sets: List<JsonSet>,

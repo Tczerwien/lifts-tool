@@ -16,6 +16,7 @@ import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.supersetNumbers
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.UNKNOWN_EXERCISE
@@ -34,8 +35,8 @@ import java.util.Locale
  * its day. Tests pass a fixed zone.
  */
 
-/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.4: B13). */
-const val EXPORT_SCHEMA_VERSION = "2.4"
+/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.5: B14). */
+const val EXPORT_SCHEMA_VERSION = "2.5"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -130,6 +131,8 @@ data class SnapshotTemplateExercise(
     val restSecWarmup: Int?,
     /** Its superset in the template, numbered 1, 2, … ([supersetNumbers]); null outside one. */
     val supersetId: Int? = null,
+    /** The top of an RIR range ("1–2": [targetRir] 1, this 2); null for one number. */
+    val targetRirMax: Int? = null,
 )
 
 data class SnapshotWorkout(
@@ -148,6 +151,8 @@ data class SnapshotWorkout(
     val notes: String?,
     /** Ordered by position; only slots with at least one completed set. */
     val exercises: List<SnapshotWorkoutExercise>,
+    /** A deload: fewer work sets at an easier effort than its targets, which stay the template's. */
+    val deload: Boolean = false,
 )
 
 data class SnapshotWorkoutBodyweight(
@@ -166,10 +171,11 @@ data class SnapshotWorkoutExercise(
     val notes: String?,
     /** Its reps (or seconds) count one side ([SnapshotExercise.perSide]). */
     val perSide: Boolean = false,
-    /** The template's target copied onto this slot when the workout started: rep range and RIR. */
+    /** The template's target copied onto this slot when the workout started: rep range and RIR (or an RIR range). */
     val targetRepMin: Int? = null,
     val targetRepMax: Int? = null,
     val targetRir: Int? = null,
+    val targetRirMax: Int? = null,
     /**
      * Its superset that day among the workout's exercises done that day (a ticked work set), numbered 1, 2, …
      * ([supersetNumbers]); null outside one, and for a member whose partner wasn't done (unticked, warmed up
@@ -318,6 +324,8 @@ fun buildSnapshot(
                         targetRepMin = slot.targetRepMin?.takeIf { exercise?.tracking?.takesReps != false },
                         targetRepMax = slot.targetRepMax?.takeIf { exercise?.tracking?.takesReps != false },
                         targetRir = slot.targetRir?.takeIf { exercise?.tracking?.takesReps != false },
+                        // Only a real range's top: one at or below the number says nothing more ([rirTarget]).
+                        targetRirMax = rirTarget(slot.targetRir, slot.targetRirMax)?.max?.takeIf { exercise?.tracking?.takesReps != false },
                         supersetId = supersetIds[slot.id],
                         sets = orderedSets.mapIndexed { i, set ->
                             SnapshotSet(
@@ -347,6 +355,7 @@ fun buildSnapshot(
                 },
                 notes = workout.notes,
                 exercises = slots,
+                deload = workout.deload,
             )
         }
 
@@ -369,6 +378,7 @@ fun buildSnapshot(
                     restSecWork = it.restSecWork,
                     restSecWarmup = it.restSecWarmup,
                     supersetId = supersetIds[index],
+                    targetRirMax = rirTarget(it.targetRir, it.targetRirMax)?.max?.takeIf { _ -> tracking[it.exerciseId]?.takesReps != false },
                 )
             },
         )

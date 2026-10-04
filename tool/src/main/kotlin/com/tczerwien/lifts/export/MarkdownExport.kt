@@ -3,6 +3,7 @@ package com.tczerwien.lifts.export
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.session.repRangeText
+import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.ui.Format
 import com.tczerwien.lifts.ui.WeightUnit
 
@@ -67,7 +68,9 @@ object MarkdownExport {
         append(" On bodyweight exercises the weight is what was added to the body, and a negative weight is")
         append(" help (`-30x8` is an assisted pull-up with 30 ").append(unit).append(" of assistance).")
         append(" `x10/side` is 10 reps on each side, one side at a time (a split squat); a dumbbell weight is one dumbbell's.")
-        append(" `(target 6–12 reps, RIR 1)` after an exercise is what its template asked for that day.")
+        append(" `(target 6–12 reps, RIR 1–2)` after an exercise is what its template asked for that day.")
+        append(" `deload` in a workout's heading marks a deload: fewer work sets at an easier effort (more reps in")
+        append(" reserve) than the targets shown, which are its template's.")
         append(" `(superset 1)` marks the exercises done in turn that day as superset 1: one set of each, then the")
         append(" rest after the round.")
         append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
@@ -146,6 +149,7 @@ object MarkdownExport {
         for (workout in snapshot.workouts) {
             append("\n### ").append(workout.dateIso).append(" — ").append(workout.name)
             val parts = mutableListOf("${workout.durationMin}m")
+            if (workout.deload) parts.add(0, "deload")
             workout.bodyweight?.let { bodyweight ->
                 val weight = "BW ${Format.bodyweight(bodyweight.weightKg, snapshot.unit)} ${snapshot.unit.suffix}"
                 parts.add(if (bodyweight.sameDay) weight else "$weight from ${bodyweight.dateIso}")
@@ -180,11 +184,11 @@ object MarkdownExport {
     private fun quote(text: String, indent: String): String =
         text.lines().joinToString("") { line -> indent + (if (line.isBlank()) ">" else "> ${line.trimEnd()}") + "\n" }
 
-    /** "(target 6–12 reps, RIR 1)", "(target 10–12 reps/side)" from its template, or null without one. */
+    /** "(target 6–12 reps, RIR 1–2)", "(target 10–12 reps/side)" from its template, or null without one. */
     private fun targetTag(exercise: SnapshotWorkoutExercise): String? {
         val parts = listOfNotNull(
             repRangeText(exercise.targetRepMin, exercise.targetRepMax)?.let { "$it reps" + if (exercise.perSide) "/side" else "" },
-            exercise.targetRir?.let { "RIR $it" },
+            rirTarget(exercise.targetRir, exercise.targetRirMax)?.let { "RIR ${it.text}" },
         )
         return parts.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "(target ", postfix = ")")
     }

@@ -17,7 +17,7 @@ class MarkdownExportTest {
     @Test
     fun frontMatterIsFirstAndComplete() {
         assertTrue(markdown.startsWith("---\n"), "front matter must open the file")
-        assertContains(lines, "schema_version: \"2.4\"")
+        assertContains(lines, "schema_version: \"2.5\"")
         assertContains(lines, "exported_at: ${ExportFixtures.EXPORTED_AT}")
         assertContains(lines, "units:")
         assertContains(lines, "  weight: kg")
@@ -144,9 +144,23 @@ class MarkdownExportTest {
     }
 
     @Test
+    fun aDeloadSaysSoInItsHeadingAndAnRirRangeInItsTarget() {
+        val ranged = ExportFixtures.slots.map { if (it.id == 2L) it.copy(targetRepMin = 8, targetRepMax = 12, targetRir = 1, targetRirMax = 2) else it }
+        val log = MarkdownExport.render(
+            ExportFixtures.snapshot(workouts = listOf(ExportFixtures.workout1, ExportFixtures.workout2.copy(deload = true)), slots = ranged),
+        ).lines()
+        assertContains(log, "### 2026-07-13 — Push Day (deload, 98m, BW 80.5 kg)")
+        assertContains(log, "### 2026-07-06 — Push Day (44m, BW 81 kg)")
+        assertTrue(log.any { it.startsWith("- **Bench Press (Barbell)**") && it.endsWith("(target 8–12 reps, RIR 1–2)") }, log.joinToString("\n"))
+    }
+
+    @Test
     fun aLegendExplainsTheNotation() {
         val legend = lines.single { it.startsWith("How to read this:") }
-        for (term in listOf("`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)", "`(superset 1)`")) {
+        for (term in listOf(
+            "`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)", "`(superset 1)`",
+            "`deload`", "RIR 1–2",
+        )) {
             assertTrue(term in legend, "legend lacks $term: $legend")
         }
     }
