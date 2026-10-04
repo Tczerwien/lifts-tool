@@ -37,6 +37,9 @@ fun deloadKeep(targetSets: Int, pct: Int): Int = maxOf(1, (targetSets * pct + 99
 /** A work set in a deload's count: normal or to failure. Warm-ups stay as they are; a drop is part of its parent. */
 private fun SetEntity.isWorkSet(): Boolean = type == SET_TYPE_NORMAL || type == SET_TYPE_FAILURE
 
+/** The work sets among one slot's [rows] in a deload's count: normal or to failure, ticked or not. */
+fun deloadWorkSets(rows: List<SetEntity>): Int = rows.count { it.isWorkSet() }
+
 /** What switching a deload on or off does to one slot: its rows to delete, and how many plain work rows to add at its end. */
 data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: Int = 0)
 
@@ -51,7 +54,7 @@ data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: In
  * nothing when it already has them.
  */
 fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): DeloadChange {
-    if (!on) return DeloadChange(addRows = (targetSets - rows.count { it.isWorkSet() }).coerceAtLeast(0))
+    if (!on) return DeloadChange(addRows = (targetSets - deloadWorkSets(rows)).coerceAtLeast(0))
     val delete = ArrayList<Long>()
     var workSets = 0
     var parentDeleted = false

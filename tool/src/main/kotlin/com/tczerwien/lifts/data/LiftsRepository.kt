@@ -227,10 +227,24 @@ class LiftsRepository private constructor(
     override fun deleteSet(id: Long): Boolean = inTransaction {
         val set = db.workoutDao.setById(id) ?: return@inTransaction false
         db.workoutDao.deleteSet(id)
-        db.workoutDao.setsForWorkoutExercise(set.workoutExerciseId).forEachIndexed { position, remaining ->
+        renumberSets(set.workoutExerciseId)
+        true
+    }
+
+    /** Deletes these sets and renumbers the rest of each slot they were in 0..n-1, in one transaction. */
+    override fun deleteSets(ids: Collection<Long>): Int = inTransaction {
+        if (ids.isEmpty()) return@inTransaction 0
+        val slotIds = ids.mapNotNullTo(LinkedHashSet()) { db.workoutDao.setById(it)?.workoutExerciseId }
+        val deleted = db.workoutDao.deleteSetsByIds(ids.distinct())
+        slotIds.forEach(::renumberSets)
+        deleted
+    }
+
+    /** Gives slot [slotId]'s sets positions 0..n-1 in their order. Call inside a transaction. */
+    private fun renumberSets(slotId: Long) {
+        db.workoutDao.setsForWorkoutExercise(slotId).forEachIndexed { position, remaining ->
             if (remaining.position != position) db.workoutDao.updateSet(remaining.copy(position = position))
         }
-        true
     }
 
     /**
@@ -254,6 +268,10 @@ class LiftsRepository private constructor(
     override fun updateSlotRest(id: Long, restSecWork: Int?): Boolean = db.workoutDao.updateSlotRest(id, restSecWork) > 0
 
     override fun updateSlotGroup(id: Long, supersetGroup: Int?): Boolean = db.workoutDao.updateSlotGroup(id, supersetGroup) > 0
+
+    override fun setWorkoutDeload(id: Long, deload: Boolean): Boolean = db.workoutDao.updateDeload(id, deload) > 0
+
+    override fun updateSlotTargetSets(id: Long, targetSets: Int?): Boolean = db.workoutDao.updateSlotTargetSets(id, targetSets) > 0
 
     override fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity> =
         db.workoutDao.exercisesForWorkout(workoutId)

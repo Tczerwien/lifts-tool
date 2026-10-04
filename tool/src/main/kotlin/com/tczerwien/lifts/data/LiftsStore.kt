@@ -38,8 +38,17 @@ interface LiftsStore {
     /** Deletes one set and renumbers the rest of its slot 0..n-1. */
     fun deleteSet(id: Long): Boolean
 
+    /** Deletes these sets and renumbers the rest of each slot they were in 0..n-1; how many went. */
+    fun deleteSets(ids: Collection<Long>): Int
+
     /** Deletes one slot with its sets and renumbers the workout's remaining slots 0..n-1. */
     fun deleteSlot(id: Long): Boolean
+
+    /** Marks a workout as a deload, or not; nothing else of it is written. */
+    fun setWorkoutDeload(id: Long, deload: Boolean): Boolean
+
+    /** Writes one slot's planned work sets (null: no plan). */
+    fun updateSlotTargetSets(id: Long, targetSets: Int?): Boolean
 
     /** Writes one slot's note (null clears it). */
     fun updateSlotNotes(id: Long, notes: String?): Boolean

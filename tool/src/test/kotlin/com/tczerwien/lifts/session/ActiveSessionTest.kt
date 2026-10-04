@@ -884,6 +884,104 @@ class ActiveSessionTest {
         assertEquals(listOf(w, n, n, n), store.setsForWorkout(workoutId).map { it.type })
     }
 
+    /** Each slot's rows of [workoutId] as types, in slot order. */
+    private fun typesBySlot(workoutId: Long): List<List<String>> =
+        store.exercisesForWorkout(workoutId).map { slot -> rowsOf(slot).map { it.type } }
+
+    @Test
+    fun `deload on trims each exercise to half its planned work sets, off puts them back, the template untouched`() {
+        val template = store.addTemplate("Lower A", "squat" to 4, "curl" to 3, "row" to 1)
+        val squatRow = store.exercisesForTemplate(template).first()
+        store.templateExercises[squatRow.id] = squatRow.copy(warmupSets = 2)
+        val templateRows = store.exercisesForTemplate(template)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        assertEquals(listOf(listOf(w, w, n, n, n, n), listOf(n, n, n), listOf(n)), typesBySlot(workoutId))
+
+        assertTrue(session.setDeload(workoutId, on = true))
+        assertTrue(store.workoutById(workoutId)!!.deload)
+        assertEquals(listOf(listOf(w, w, n, n), listOf(n, n), listOf(n)), typesBySlot(workoutId), "4 -> 2, 3 -> 2, 1 -> 1; warm-ups stay")
+        assertEquals(listOf(4, 3, 1), store.exercisesForWorkout(workoutId).map { it.targetSets }, "the plan is kept")
+        store.exercisesForWorkout(workoutId).forEach { slot ->
+            assertEquals(rowsOf(slot).indices.toList(), rowsOf(slot).map { it.position }, "positions close up")
+        }
+        assertFalse(session.setDeload(workoutId, on = true), "already on: nothing to do")
+
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertFalse(store.workoutById(workoutId)!!.deload)
+        assertEquals(listOf(listOf(w, w, n, n, n, n), listOf(n, n, n), listOf(n)), typesBySlot(workoutId))
+        assertEquals(templateRows, store.exercisesForTemplate(template), "a deload never writes the template")
+        // On and off again with nothing else done is the workout as it started.
+        assertTrue(session.discardIfUntouched(workoutId))
+    }
+
+    @Test
+    fun `a deload switched on mid-workout never removes a ticked set, and is kept on Back`() {
+        val template = store.addTemplate("Lower A", "squat" to 4)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val squat = store.exercisesForWorkout(workoutId).single()
+        rowsOf(squat).take(3).forEachIndexed { index, row ->
+            session.completeSet(workoutId, row, 100.0, 5, n, now = 1_100_000L + index * 60_000)
+        }
+        assertTrue(session.setDeload(workoutId, on = true))
+        val left = rowsOf(squat)
+        assertEquals(3, left.size, "the fourth went; the three done stay")
+        assertTrue(left.all { it.completedAt != null })
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertEquals(4, rowsOf(squat).size)
+        assertNull(rowsOf(squat).last().completedAt)
+        // Switched on before a tick: his, so Back keeps it for Resume.
+        val other = store.addTemplate("Upper A", "bench" to 3)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_400_000))
+        val next = session.startFromTemplate(other, now = 2_000_000)
+        assertTrue(session.setDeload(next, on = true))
+        assertFalse(session.discardIfUntouched(next))
+    }
+
+    @Test
+    fun `an exercise with no plan keeps its own sets as the plan, and a closed workout is refused`() {
+        val workoutId = session.startEmpty(now = 1_000_000)
+        val curl = session.addExercise(workoutId, "curl")!!
+        assertNull(store.exercisesForWorkout(workoutId).single().targetSets)
+        assertTrue(session.setDeload(workoutId, on = true))
+        assertEquals(3, store.exercisesForWorkout(workoutId).single().targetSets, "its three rows, recorded")
+        assertEquals(2, store.setsForWorkout(workoutId).count { it.workoutExerciseId == curl })
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertEquals(3, store.setsForWorkout(workoutId).count { it.workoutExerciseId == curl })
+
+        session.completeSet(workoutId, store.setsForWorkout(workoutId).first(), 12.0, 10, n, now = 1_100_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
+        val before = store.setsForWorkout(workoutId)
+        assertFalse(session.setDeload(workoutId, on = true), "finished: the menu's switch can't change it")
+        assertFalse(store.workoutById(workoutId)!!.deload)
+        assertEquals(before, store.setsForWorkout(workoutId))
+    }
+
+    @Test
+    fun `a superset keeps alternating over a deload's rows, trimmed and put back`() {
+        val template = store.addTemplate("Arms", "fly" to 3, "curl" to 3)
+        store.exercisesForTemplate(template).forEach { store.templateExercises[it.id] = it.copy(supersetGroup = 1, restSecWork = 90) }
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val (fly, curl) = store.exercisesForWorkout(workoutId)
+        assertTrue(session.setDeload(workoutId, on = true))
+        assertEquals(listOf(listOf(n, n), listOf(n, n)), typesBySlot(workoutId), "two rounds, not three")
+        var clock = 1_100_000L
+        fun tick(slot: WorkoutExerciseEntity): AfterTick {
+            val row = rowsOf(slot).first { it.completedAt == null }
+            clock += 30_000
+            assertNotNull(session.completeSet(workoutId, row, 10.0, 10, n, now = clock))
+            return afterTick(store.exercisesForWorkout(workoutId), store.setsForWorkout(workoutId), slot.id, n)
+        }
+        assertEquals(AfterTick(startsRest = false, moveTo = curl.id), tick(fly))
+        assertEquals(AfterTick(startsRest = true, moveTo = fly.id), tick(curl))
+        assertEquals(AfterTick(startsRest = false, moveTo = curl.id), tick(fly))
+        assertEquals(AfterTick(startsRest = true, moveTo = null), tick(curl), "the last round: nothing after the pair")
+        // Off again: the third round is back, and the turn goes on from the first member.
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertEquals(listOf(3, 3), store.exercisesForWorkout(workoutId).map { rowsOf(it).size })
+        assertEquals(AfterTick(startsRest = false, moveTo = curl.id), tick(fly))
+        assertEquals(AfterTick(startsRest = true, moveTo = null), tick(curl))
+    }
+
     // --- Version 2's columns ---
 
     @Test

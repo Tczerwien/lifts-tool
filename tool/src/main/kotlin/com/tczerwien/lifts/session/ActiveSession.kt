@@ -292,6 +292,33 @@ class ActiveSession(
         writeGroups(slots, linkWithNext(groups, index, on))
     }
 
+    /**
+     * "…" › Deload for the open workout [workoutId], for this workout only (DL-2): [on] trims each exercise
+     * to the work sets a deload keeps ([deloadKeep] of its planned work sets, at Settings' share), off adds
+     * plain rows back up to the plan ([deloadRows]). An exercise with no plan (added by hand, or started
+     * before B14) first records its work sets as its plan, so switching off gives them back. Ticked rows
+     * are never removed, warm-ups stay, and the template is never written. A superset keeps alternating
+     * over the rows left. False, changing nothing, once the workout has closed or when it already is so.
+     */
+    fun setDeload(workoutId: Long, on: Boolean): Boolean = repository.inTransaction {
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return@inTransaction false
+        if (workout.deload == on) return@inTransaction false
+        val keepPct = settings.snapshot().deloadKeepPct
+        val rowsBySlot = repository.setsForWorkout(workoutId).groupBy { it.workoutExerciseId }
+        for (slot in repository.exercisesForWorkout(workoutId)) {
+            val rows = rowsBySlot[slot.id].orEmpty().sortedBy { it.position }
+            val planned = slot.targetSets
+                ?: if (on) deloadWorkSets(rows).also { repository.updateSlotTargetSets(slot.id, it) } else continue
+            val change = deloadRows(rows, planned, deloadKeep(planned, keepPct), on)
+            repository.deleteSets(change.deleteIds)
+            val next = (rows.maxOfOrNull { it.position } ?: -1) + 1
+            repeat(change.addRows) { index ->
+                repository.addSet(SetEntity(workoutExerciseId = slot.id, position = next + index, type = SET_TYPE_NORMAL))
+            }
+        }
+        repository.setWorkoutDeload(workoutId, on)
+    }
+
     /** Keeps [workoutId]'s supersets whole after a removal ([normalizeGroups]). Call inside a transaction. */
     private fun regroup(workoutId: Long) {
         val slots = repository.exercisesForWorkout(workoutId)

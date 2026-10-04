@@ -82,6 +82,29 @@ class InMemoryLiftsStore : LiftsStore {
         return true
     }
 
+    override fun deleteSets(ids: Collection<Long>): Int {
+        val slotIds = ids.mapNotNullTo(LinkedHashSet()) { sets[it]?.workoutExerciseId }
+        val deleted = ids.distinct().count { sets.remove(it) != null }
+        for (slotId in slotIds) {
+            sets.values.filter { it.workoutExerciseId == slotId }
+                .sortedWith(compareBy({ it.position }, { it.id }))
+                .forEachIndexed { position, remaining -> sets[remaining.id] = remaining.copy(position = position) }
+        }
+        return deleted
+    }
+
+    override fun setWorkoutDeload(id: Long, deload: Boolean): Boolean {
+        val workout = workouts[id] ?: return false
+        workouts[id] = workout.copy(deload = deload)
+        return true
+    }
+
+    override fun updateSlotTargetSets(id: Long, targetSets: Int?): Boolean {
+        val slot = slots[id] ?: return false
+        slots[id] = slot.copy(targetSets = targetSets)
+        return true
+    }
+
     override fun deleteSlot(id: Long): Boolean {
         val slot = slots.remove(id) ?: return false
         sets.values.removeAll { it.workoutExerciseId == id }

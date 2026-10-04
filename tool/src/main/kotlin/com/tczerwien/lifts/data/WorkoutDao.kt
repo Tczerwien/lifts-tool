@@ -139,6 +139,17 @@ interface WorkoutDao {
     @Query("DELETE FROM sets WHERE workoutExerciseId = :workoutExerciseId")
     fun deleteSetsForWorkoutExercise(workoutExerciseId: Long): Int
 
+    @Query("DELETE FROM sets WHERE id IN (:ids)")
+    fun deleteSetsByIds(ids: List<Long>): Int
+
+    /** A workout's deload mark, alone: nothing else of the workout is written. */
+    @Query("UPDATE workouts SET deload = :deload WHERE id = :id")
+    fun updateDeload(id: Long, deload: Boolean): Int
+
+    /** One slot's planned work sets, alone. */
+    @Query("UPDATE workout_exercises SET targetSets = :targetSets WHERE id = :id")
+    fun updateSlotTargetSets(id: Long, targetSets: Int?): Int
+
     @Query("DELETE FROM workout_exercises WHERE id = :id")
     fun deleteWorkoutExercise(id: Long): Int
 
