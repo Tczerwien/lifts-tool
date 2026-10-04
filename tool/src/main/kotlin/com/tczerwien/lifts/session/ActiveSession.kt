@@ -230,23 +230,24 @@ class ActiveSession(
      * [DEFAULT_NEW_EXERCISE_SETS] work sets. The slot and its sets are written in one transaction.
      * Returns null, writing nothing, when the workout is no longer open: the picker can come back
      * after the workout was closed or deleted as stale underneath it, and a slot for a deleted
-     * workout would break its foreign key (a crash) or add rows to a finished one.
+     * workout would break its foreign key (a crash) or add rows to a finished one. Added to a deload, it
+     * starts as switching the deload on would have left it: its sets are its plan, cut to the deload's number.
      */
     fun addExercise(workoutId: Long, exerciseId: String): Long? = repository.inTransaction {
-        if (repository.workoutById(workoutId)?.takeIf { it.endedAt == null } == null) return@inTransaction null
+        val workout = repository.workoutById(workoutId)?.takeIf { it.endedAt == null } ?: return@inTransaction null
         // Picked from a list read before he deleted or removed it: a slot for it would name an
         // exercise that isn't there (or one he took out), and a backup of that log is refused.
         if (repository.exerciseById(exerciseId)?.takeIf { !it.hidden } == null) return@inTransaction null
         val slots = repository.exercisesForWorkout(workoutId)
         val position = slots.maxOfOrNull { it.position + 1 } ?: 0
         val occurrence = slots.count { it.exerciseId == exerciseId }
-        val slotId = repository.addWorkoutExercise(
-            WorkoutExerciseEntity(workoutId = workoutId, exerciseId = exerciseId, position = position),
-        )
+        val slot = WorkoutExerciseEntity(workoutId = workoutId, exerciseId = exerciseId, position = position)
+        val slotId = repository.addWorkoutExercise(slot)
         val lastTime = previousGroupsOf(exerciseId).getOrElse(occurrence) { emptyList() }
-        prefillTypes(lastTime).forEachIndexed { index, type ->
-            repository.addSet(SetEntity(workoutExerciseId = slotId, position = index, type = type))
+        val rows = prefillTypes(lastTime).mapIndexed { index, type ->
+            SetEntity(workoutExerciseId = slotId, position = index, type = type).let { it.copy(id = repository.addSet(it)) }
         }
+        if (workout.deload) switchSlot(slot.copy(id = slotId), rows, on = true, keepPct = settings.snapshot().deloadKeepPct)
         slotId
     }
 
@@ -327,17 +328,27 @@ class ActiveSession(
         val keepPct = settings.snapshot().deloadKeepPct
         val rowsBySlot = repository.setsForWorkout(workoutId).groupBy { it.workoutExerciseId }
         for (slot in repository.exercisesForWorkout(workoutId)) {
-            val rows = rowsBySlot[slot.id].orEmpty().sortedBy { it.position }
-            val planned = slot.targetSets
-                ?: if (on) deloadWorkSets(rows).also { repository.updateSlotTargetSets(slot.id, it) } else continue
-            val change = deloadRows(rows, planned, deloadKeep(planned, keepPct), on)
-            repository.deleteSets(change.deleteIds)
-            val next = (rows.maxOfOrNull { it.position } ?: -1) + 1
-            repeat(change.addRows) { index ->
-                repository.addSet(SetEntity(workoutExerciseId = slot.id, position = next + index, type = SET_TYPE_NORMAL))
-            }
+            switchSlot(slot, rowsBySlot[slot.id].orEmpty().sortedBy { it.position }, on, keepPct)
         }
         repository.setWorkoutDeload(workoutId, on)
+    }
+
+    /**
+     * One exercise of an open workout switched to a deload ([on]) or back ([deloadRows]), its [rows] in
+     * order: trimmed to [deloadKeep] of its plan at [keepPct], or given plain rows back up to it. With no
+     * plan, switching on first records its work sets as the plan (none recorded without any: nothing to
+     * trim or give back), and switching off leaves it. Call inside a transaction.
+     */
+    private fun switchSlot(slot: WorkoutExerciseEntity, rows: List<SetEntity>, on: Boolean, keepPct: Int) {
+        val planned = slot.targetSets
+            ?: (if (on) deloadWorkSets(rows).takeIf { it > 0 }?.also { repository.updateSlotTargetSets(slot.id, it) } else null)
+            ?: return
+        val change = deloadRows(rows, planned, deloadKeep(planned, keepPct), on)
+        repository.deleteSets(change.deleteIds)
+        val next = (rows.maxOfOrNull { it.position } ?: -1) + 1
+        repeat(change.addRows) { index ->
+            repository.addSet(SetEntity(workoutExerciseId = slot.id, position = next + index, type = SET_TYPE_NORMAL))
+        }
     }
 
     /**

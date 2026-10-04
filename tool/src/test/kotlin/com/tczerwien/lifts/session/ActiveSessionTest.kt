@@ -948,6 +948,20 @@ class ActiveSessionTest {
         assertTrue(session.setDeload(workoutId, on = false))
         assertEquals(3, store.setsForWorkout(workoutId).count { it.workoutExerciseId == curl })
 
+        // Added while the deload is on: its sets become its plan and it starts at the deload's number.
+        assertTrue(session.setDeload(workoutId, on = true))
+        val row = session.addExercise(workoutId, "row")!!
+        assertEquals(3, store.exercisesForWorkout(workoutId).single { it.id == row }.targetSets)
+        assertEquals(2, store.setsForWorkout(workoutId).count { it.workoutExerciseId == row })
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertEquals(3, store.setsForWorkout(workoutId).count { it.workoutExerciseId == row }, "off: its three")
+        // A slot left with warm-ups only records no plan of nought.
+        val plank = session.addExercise(workoutId, "plank")!!
+        store.setsForWorkout(workoutId).filter { it.workoutExerciseId == plank }.forEach { store.sets[it.id] = it.copy(type = w) }
+        assertTrue(session.setDeload(workoutId, on = true))
+        assertNull(store.exercisesForWorkout(workoutId).single { it.id == plank }.targetSets)
+        assertTrue(session.setDeload(workoutId, on = false))
+
         session.completeSet(workoutId, store.setsForWorkout(workoutId).first(), 12.0, 10, n, now = 1_100_000)
         assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 1_200_000))
         val before = store.setsForWorkout(workoutId)
