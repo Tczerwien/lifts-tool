@@ -248,8 +248,8 @@ interface WorkoutDao {
  * The finished workouts in brief: how many, the newest one's id, the sum of their ends; how many sets
  * they hold ticked, the sum of those ticks' times, and every ticked set's values (weight in grams,
  * reps, seconds, RIR, type) folded into one whole number, weighted by the set's id so two edits can't
- * cancel out; and which are deloads, as the sum of their ids, so marking one and unmarking another
- * can't cancel out either (DL-8). Whole numbers only: the same sum in any row order, so a backup and the log it copied
+ * cancel out; and which are deloads, as the sum of their ids, so one mark and one unmark can't cancel
+ * out either (DL-8; several between two backups can, and the daily backup catches those). Whole numbers only: the same sum in any row order, so a backup and the log it copied
  * agree exactly. Different after any Finish since: a new workout, or a RESUME and Finish again (a
  * later end, more sets ticked, a value corrected, even when the end stays put: the clock set back),
  * a stale close, a delete, a restore, a deload marked in Workout Detail. Read the same way from a backup file

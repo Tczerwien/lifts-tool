@@ -585,8 +585,9 @@ class ActiveSession(
     /**
      * [isUntouched] for a stored workout, against what its template would start with now
      * ([planTemplate]), or the workout it was started again from ([startFromWorkout] remembers it,
-     * [planFromWorkout]). Other workouts can't finish while this one is open, so last session is the
-     * same as at the start; if it somehow isn't, the workout counts as touched and is kept.
+     * [planAgain]). Other workouts can't finish while this one is open, but a deload mark in Workout
+     * Detail can change which session is last; if last session isn't what it was at the start, the
+     * workout counts as touched and is kept.
      */
     private fun untouched(workout: WorkoutEntity, sets: List<SetEntity>): Boolean {
         val startedFrom = startedFromSnapshot(workout.id)?.takeIf { workout.templateId == null }

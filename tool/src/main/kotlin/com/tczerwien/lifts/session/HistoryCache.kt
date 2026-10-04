@@ -6,8 +6,8 @@ import com.tczerwien.lifts.data.SetEntity
 /**
  * Other workouts' history for the exercises of the open workout, as Active Workout needs it: read
  * once per exercise for the life of the screen, since other workouts don't change while one is open,
- * except by a delete (Workout Detail, reached through Exercise Detail) or a restore, which move
- * [HistoryVersion]. Then it reads again for every exercise and swaps the new history in whole: until
+ * except by a delete or a deload mark (Workout Detail, reached through Exercise Detail) or a restore, which
+ * move [HistoryVersion]. Then it reads again for every exercise and swaps the new history in whole: until
  * then the old stays, so nothing works from an empty cache (PREVIOUS blank, every set a record). A
  * change that lands while it reads makes it read again, [TRIES] times at most; after that the old
  * history stands until the next [ensure]. [read] runs on the caller's thread (IO); [snapshot] may be
