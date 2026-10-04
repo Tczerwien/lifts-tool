@@ -1053,6 +1053,16 @@ class ActiveSessionTest {
         // As 0.14.0 would have saved it: "copy:source", no third part (review R2-7).
         runBlocking<Unit> { dataStore.edit { prefs -> prefs[stringPreferencesKey("lifts_started_from")] = "$again:$source" } }
         assertTrue(session.discardIfUntouched(again), "the source is a deload, so the copy started as one")
+        // A source marked after its Finish: the copy starts trimmed, and the plan the check compares with is trimmed too.
+        val full = store.addTemplate("Lower B", "row" to 4)
+        val marked = session.startFromTemplate(full, now = 6_000_000)
+        rowsOf(store.exercisesForWorkout(marked).single()).forEach { session.completeSet(marked, it, 60.0, 10, n, now = 6_100_000) }
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(marked, now = 6_300_000))
+        assertTrue(session.markDeload(marked, on = true))
+        val copy = assertNotNull(session.startFromWorkout(marked, now = 7_000_000))
+        assertEquals(2, rowsOf(store.exercisesForWorkout(copy).single()).size)
+        runBlocking<Unit> { dataStore.edit { prefs -> prefs[stringPreferencesKey("lifts_started_from")] = "$copy:$marked" } }
+        assertTrue(session.discardIfUntouched(copy), "both fallbacks: the copy's mark and its trimmed plan (closing check C1-2)")
     }
 
     @Test
