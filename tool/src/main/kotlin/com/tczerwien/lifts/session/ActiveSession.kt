@@ -157,8 +157,7 @@ class ActiveSession(
      * Start Again nor a Save as Template brings it back, as an exercise or as a choice ([keptChoices];
      * one gone from the log goes too). A slot whose lift he removed (its main, or one swapped in) starts on its
      * first other choice still in the picker, as removing it from a template promotes the first alternative;
-     * with none, it goes. A
-     * superset a slot leaves with one slot is none.
+     * with none, it goes. A superset a slot leaves with one slot is none.
      */
     private fun planOf(workoutId: Long): List<PlannedSlot> {
         val usable = HashMap<String, Boolean>()

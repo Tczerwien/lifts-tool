@@ -96,6 +96,8 @@ class CustomExerciseTest {
         )
         val out = withoutExercise(rows, "y-raise") { it != "gone" }
         assertEquals(listOf(row(1, templateId = 1, "press", 0).copy(alternatives = listOf("gone", "fly"))), out.updates)
+        val twice = withoutExercise(listOf(rows[0].copy(alternatives = listOf("press", "press", "fly"))), "y-raise")
+        assertEquals(listOf("fly"), twice.updates.single().alternatives, "the promoted one leaves its alternatives, listed twice too")
         assertEquals(listOf(2L), out.deleteIds, "no usable alternative: it goes, never an Unknown exercise as its main")
     }
 

@@ -1362,6 +1362,15 @@ class ActiveSessionTest {
         val lastTime = previousForSlots(slots, session.previousGroupsByExercise(slots.map { it.exerciseId }))
         assertEquals(listOf(40.0), lastTime.getValue(copySwapped.id).map { it.weightKg }, "the swapped slot's own, not crossed")
         assertEquals(listOf(62.5), lastTime.getValue(copyOwn.id).map { it.weightKg })
+        // Done as copied, then the template as planned: the row slot reads the copy's row slot.
+        session.completeSet(copy, rowsOf(copySwapped).first(), 42.5, 10, n, now = 2_060_000)
+        session.completeSet(copy, rowsOf(copyOwn).first(), 65.0, 10, n, now = 2_120_000)
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(copy, now = 2_200_000))
+        val next = session.startFromTemplate(template, now = 3_000_000)
+        val nextSlots = store.exercisesForWorkout(next)
+        val nextLast = previousForSlots(nextSlots, session.previousGroupsByExercise(nextSlots.map { it.exerciseId }))
+        assertEquals(emptyList(), nextLast.getValue(nextSlots[0].id), "the squat wasn't done")
+        assertEquals(listOf(65.0), nextLast.getValue(nextSlots[1].id).map { it.weightKg })
     }
 
     @Test

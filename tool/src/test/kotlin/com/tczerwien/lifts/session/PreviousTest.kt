@@ -84,7 +84,7 @@ class PreviousTest {
     }
 
     @Test
-    fun `two slots swapped across last time, each lift reads its sets from the other slot`() {
+    fun `two slots swapped across last time, bench reads its sets from the other slot`() {
         // Last week slot 10, planned as bench, did the fly; slot 11, planned as the row, did bench.
         val lastWeek = listOf(slot(10, "fly", 0).copy(choices = listOf("bench", "fly")), slot(11, "bench", 1).copy(choices = listOf("row", "bench")))
         val groups = mapOf(
@@ -93,8 +93,18 @@ class PreviousTest {
         )
         val today = listOf(slot(20, "bench", 0).copy(choices = listOf("bench", "fly")), slot(21, "row", 1).copy(choices = listOf("row", "bench")))
         assertEquals(listOf(1L), previousForSlots(today, groups).getValue(20).map { it.id }, "bench, done last week in the row's slot")
-        // A slot only skipped last time stays empty: the swapped-in sets are a swap's, not a skip's.
-        val skipped = mapOf("bench" to previousGroups(emptyList(), listOf(slot(10, "bench", 0)), "bench"))
+        // Only sets done as an alternative: never another slot's own (the back-offs, with no second slot today).
+        val awayAndBackOffs = mapOf(
+            "bench" to previousGroups(
+                listOf(set(3, slot = 11, weightKg = 80.0)),
+                listOf(slot(10, "fly", 0).copy(choices = listOf("bench", "fly")), slot(11, "bench", 1)),
+                "bench",
+            ),
+        )
+        assertEquals(emptyList(), previousForSlots(listOf(slot(20, "bench", 0)), awayAndBackOffs).getValue(20))
+        // A slot only skipped last time stays empty, even with bench done in another slot as an alternative.
+        val skippedWeek = listOf(slot(10, "bench", 0), slot(11, "bench", 1).copy(choices = listOf("row", "bench")))
+        val skipped = mapOf("bench" to previousGroups(listOf(set(4, slot = 11, weightKg = 80.0)), skippedWeek, "bench"))
         assertEquals(emptyList(), previousForSlots(listOf(slot(20, "bench", 0)), skipped).getValue(20))
     }
 
