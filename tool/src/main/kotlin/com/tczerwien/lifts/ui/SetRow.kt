@@ -40,7 +40,7 @@ import com.thelightphone.sdk.ui.lightClickable
  * contract). PREVIOUS gave 1gu of its 8 to the RIR column; "102.5 × 10" still fits in 7.
  */
 data class SetRowState(
-    /** "1".."n" for work sets, "W" for warm-up sets. */
+    /** "1".."n" for work sets, "W" for warm-up sets, a drop its work set's number ([com.tczerwien.lifts.session.setMarkers]). */
     val marker: String,
     /** Previous performance, e.g. "135 × 8" (setNotation); null renders blank. */
     val previous: String?,

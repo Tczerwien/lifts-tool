@@ -43,6 +43,7 @@ import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
+import com.tczerwien.lifts.session.setMarkers
 import com.tczerwien.lifts.session.shownRir
 import com.tczerwien.lifts.session.swapTarget
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
@@ -951,7 +952,7 @@ class ActiveWorkoutViewModel(
                 },
                 position = "${state.currentIndex + 1} OF ${state.exercises.size}",
                 removeSetLabel = removableSet?.let {
-                    if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${buildMarkers(block.sets)[activeIndex]}"
+                    if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${setMarkers(block.sets)[activeIndex]}"
                 },
                 removeExerciseLabel = block.name.takeIf { exerciseRemovable },
             ),

@@ -4,8 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,7 +23,6 @@ import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.session.RowValues
-import com.tczerwien.lifts.session.SET_TYPE_WARMUP
 import com.tczerwien.lifts.session.restOver
 import com.tczerwien.lifts.session.restOverSec
 import com.tczerwien.lifts.session.restRemainingSec
@@ -39,14 +38,6 @@ import com.thelightphone.sdk.ui.LightTextVariant
 import com.thelightphone.sdk.ui.LightThemeTokens
 import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
-
-/** "1".."n" for work sets in order, "W" for warm-ups (design set-row numbering). */
-internal fun buildMarkers(sets: List<SetEntity>): List<String> {
-    var workIndex = 0
-    return sets.map { set ->
-        if (set.type == SET_TYPE_WARMUP) "W" else (++workIndex).toString()
-    }
-}
 
 /**
  * "135 × 8" from a previous-performance set ([setNotation]); "× 8" for a pull-up, "-30 × 8" with

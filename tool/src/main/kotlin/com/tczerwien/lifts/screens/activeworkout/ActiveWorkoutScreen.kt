@@ -38,6 +38,7 @@ import com.tczerwien.lifts.session.pendingSetCount
 import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.session.rirOf
+import com.tczerwien.lifts.session.setMarkers
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
@@ -235,7 +236,7 @@ class ActiveWorkoutScreen(
                                 listState = listState,
                                 uniformItemHeightGridUnits = SET_LIST_ROW_UNITS,
                             ) {
-                                val markers = buildMarkers(current.sets)
+                                val markers = setMarkers(current.sets)
                                 itemsIndexed(current.sets, key = { _, set -> set.id }) { index, set ->
                                     val previous = current.previous.getOrNull(index)
                                     // What a tick logs: the row's own values, else its starting values (dimmed).
