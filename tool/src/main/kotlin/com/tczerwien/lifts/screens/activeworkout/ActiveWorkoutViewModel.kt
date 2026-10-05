@@ -378,13 +378,14 @@ class ActiveWorkoutViewModel(
 
     /**
      * Whether a tap on the rows at [now] was aimed at rows that have since moved under his finger, or that a
-     * deload switch or a swap still on its way may yet delete or empty ([rowsChanging]).
+     * deload switch, a swap, a Drop Set or a Remove set still on its way may yet delete, empty or move ([rowsChanging]).
      */
     private fun rowsJustMoved(now: Long): Boolean =
         tapTooSoonAfterMove(movedOnAt, now) || rowsShiftedAt?.let { isDoubleTap(it, now) } == true || rowsChanging.get() > 0
 
     /**
-     * Deload switches ([setDeload]) and swaps ([swapExercise]) waiting on the lane or for their reload: until one
+     * Deload switches ([setDeload]), swaps ([swapExercise]), Drop Sets ([addDrop]) and set removals ([removeSet])
+     * waiting on the lane or for their reload: until one
      * lands, a tick on a row a switch deletes would show, then vanish with no rest, and a value stepped onto a
      * row would go with it, or be the other lift's on a row a swap empties (the lane can be held for seconds by
      * a backup).
@@ -393,7 +394,7 @@ class ActiveWorkoutViewModel(
 
     /**
      * [beginAction] for the steppers and the weight's keyboard, which change the active row: not while a deload
-     * switch or swap is on its way ([rowsChanging]), as for a tap on the rows.
+     * switch, swap, Drop Set or set removal is on its way ([rowsChanging]), as for a tap on the rows.
      */
     private fun beginStep(): Boolean = rowsChanging.get() == 0 && beginAction()
 
@@ -1120,11 +1121,12 @@ class ActiveWorkoutViewModel(
 
     /**
      * Menu: "Drop Set" on exercise [slotId] (DR-3): a drop row under its latest tick ([ActiveSession.addDrop]),
-     * showing where a drop starts (last time's drop, else 20 % lighter), with the steppers on it, so its tick
-     * is the next tap. The running rest ends with the save, so no beep comes mid-drop, and a pending move on is
-     * cancelled ([beginAction]): the drop comes first. The rows shift as the save's reload lands, under his
-     * finger, so the rows and steppers ignore taps until then, and the rows for a moment after, as after a
-     * deload switch or a swap.
+     * or the drop already waiting there, with the steppers on it, so its tick is the next tap. It shows where a
+     * drop starts ([com.tczerwien.lifts.session.dropStart]: last time's drop while lighter, else 20 % lighter;
+     * on a weight × reps lift with nothing lighter, no weight, and the tick asks for one). The running rest ends
+     * with the save, so no beep comes mid-drop, and a pending move on is cancelled ([beginAction]): the drop comes
+     * first. A new row shifts the rows below as the save's reload lands, under his finger, so the rows and
+     * steppers ignore taps until then, and the rows for a moment after, as after a deload switch or a swap.
      */
     fun addDrop(slotId: Long) {
         if (!beginAction()) return

@@ -88,7 +88,7 @@ sealed interface WorkoutMenuResult {
  */
 data class WorkoutMenuContent(
     val exerciseName: String? = null,
-    /** Where a drop would go, "AFTER SET 3"; null when none can (nothing but a warm-up ticked last, or no weight): no row. */
+    /** Where a drop would go, "AFTER SET 3"; null when none can (nothing ticked, a warm-up ticked last, or no weight): no row. */
     val dropSetAfter: String? = null,
     val exerciseNote: String? = null,
     /** This exercise's work rest as it stands (its own, else Settings' default). */
