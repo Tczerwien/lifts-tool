@@ -21,6 +21,16 @@ val EXTRA_MUSCLES: List<String> = listOf("front delts", "side delts", "rear delt
 val MUSCLES: List<String> = (CATALOG_MUSCLES + EXTRA_MUSCLES).sortedBy(::muscleLabel)
 
 /**
+ * A muscle as it is stored and counted: trimmed, single spaces, lower case ("Side  Delts " → "side delts");
+ * empty for a blank one. A name from a hand-made file (a starter backup) then meets the same muscle Lifts
+ * writes, rather than becoming a second row beside it.
+ */
+fun muscleKey(muscle: String): String = muscle.trim().split(Regex("\\s+")).joinToString(" ").lowercase()
+
+/** [muscles] as [muscleKey]s: each once, in their order, blanks dropped. */
+fun muscleKeys(muscles: List<String>): List<String> = muscles.map(::muscleKey).filter { it.isNotEmpty() }.distinct()
+
+/**
  * A muscle as the screens show it: each word capitalised ("side delts" → "Side Delts"). A key Lifts
  * doesn't know (a newer catalog's, or a backup's) shows the same way rather than not at all.
  */

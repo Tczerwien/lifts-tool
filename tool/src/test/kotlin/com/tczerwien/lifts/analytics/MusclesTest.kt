@@ -39,6 +39,13 @@ class MusclesTest {
     }
 
     @Test
+    fun `a muscle from a file is stored as Lifts writes it`() {
+        assertEquals("side delts", muscleKey(" Side  Delts "))
+        assertEquals("", muscleKey("   "))
+        assertEquals(listOf("chest", "lats"), muscleKeys(listOf("Chest", "chest ", " ", "LATS")))
+    }
+
+    @Test
     fun `a tap adds or takes a muscle, in label order, and the catalog row empties the list`() {
         // From the catalog's muscles (an empty list), the first tap is the whole list.
         assertEquals(listOf("triceps"), toggledCountsFor(emptyList(), "triceps"))

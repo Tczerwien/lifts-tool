@@ -109,6 +109,8 @@ class RestoreSettingsTest {
             "0, past 40, a fraction, a string and a blank name are no targets",
         )
         assertEquals(emptyMap(), SettingsStore.parseTargets("{}"))
+        // A hand-made file's spelling is the muscle Lifts writes; two spellings of one are one, the later winning.
+        assertEquals(mapOf("side delts" to 5), SettingsStore.parseTargets("{\"Side Delts \":4,\"side delts\":5,\"  \":3}"))
         for (bad in listOf("", "[1]", "{oops", "12", "null")) assertNull(SettingsStore.parseTargets(bad), bad)
     }
 

@@ -32,6 +32,7 @@ import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.compactNotation
 import com.tczerwien.lifts.analytics.countsForText
 import com.tczerwien.lifts.analytics.exerciseRecords
+import com.tczerwien.lifts.analytics.muscleKeys
 import com.tczerwien.lifts.analytics.muscleLabel
 import com.tczerwien.lifts.analytics.recordLoadKg
 import com.tczerwien.lifts.analytics.setNotation
@@ -479,7 +480,8 @@ class ExerciseDetailViewModel(
                     .joinToString(" · ") { titleCaseLabel(it) }
                     .ifEmpty { "—" },
                 hidden = if (keepAbout) state.hidden else exercise?.hidden == true,
-                countsFor = if (keepAbout) state.countsFor else exercise?.countsFor.orEmpty(),
+                // As counted ([muscleKeys]): a hand-made file's "Side Delts" is the list's side delts, and a tap writes it so.
+                countsFor = if (keepAbout) state.countsFor else muscleKeys(exercise?.countsFor.orEmpty()),
                 primaryMuscles = exercise?.primaryMuscles.orEmpty(),
             )
         }

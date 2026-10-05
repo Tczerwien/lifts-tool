@@ -5,6 +5,7 @@ import com.tczerwien.lifts.analytics.bodyweightTrend
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.computePrs
 import com.tczerwien.lifts.analytics.e1RmTrend
+import com.tczerwien.lifts.analytics.muscleKeys
 import com.tczerwien.lifts.analytics.restGapsSec
 import com.tczerwien.lifts.analytics.trendBlockStarts
 import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
@@ -419,7 +420,7 @@ fun buildSnapshot(
     val usedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.flatMap { listOfNotNull(it.exerciseId, it.planned?.exerciseId) } } +
         rows.templateExercises.flatMap { listOf(it.exerciseId) + it.alternatives }
     val snapshotExercises = exercises
-        .filter { it.id in usedIds || it.isCustom || it.pinnedNote != null || it.countsFor.isNotEmpty() }
+        .filter { it.id in usedIds || it.isCustom || it.pinnedNote != null || muscleKeys(it.countsFor).isNotEmpty() }
         .map {
             SnapshotExercise(
                 id = it.id,
@@ -432,7 +433,8 @@ fun buildSnapshot(
                 hidden = it.hidden,
                 pinnedNote = it.pinnedNote,
                 perSide = it.perSide,
-                countsFor = it.countsFor,
+                // As the weekly counts read it.
+                countsFor = muscleKeys(it.countsFor),
             )
         }
         .sortedWith(compareBy({ it.name }, { it.id }))

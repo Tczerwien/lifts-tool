@@ -42,8 +42,9 @@ data class CountedSlot(
 /** The muscles a set of [exercise] counts 1 for: its Counts For, else the catalog's primary muscles. */
 fun countsFor(exercise: ExerciseEntity): List<String> = countsFor(exercise.countsFor, exercise.primaryMuscles)
 
-/** [countsFor] from the two columns: [countsFor] when he chose any, else [primaryMuscles]; each once. */
-fun countsFor(countsFor: List<String>, primaryMuscles: List<String>): List<String> = countsFor.ifEmpty { primaryMuscles }.distinct()
+/** [countsFor] from the two columns: [countsFor] when he chose any, else [primaryMuscles]; each once, as [muscleKeys]. */
+fun countsFor(countsFor: List<String>, primaryMuscles: List<String>): List<String> =
+    muscleKeys(countsFor).ifEmpty { muscleKeys(primaryMuscles) }
 
 /** The hard sets among one exercise's ticked rows ([tickedTypes], in position order): its work sets, not warm-ups or drops. */
 fun hardSets(tickedTypes: List<String>): Int = rowKinds(tickedTypes).count { it == RowKind.WORK }

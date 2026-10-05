@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.tczerwien.lifts.analytics.MAX_SET_TARGET
+import com.tczerwien.lifts.analytics.muscleKey
 import com.tczerwien.lifts.session.DEFAULT_DELOAD_KEEP_PCT
 import com.tczerwien.lifts.session.DEFAULT_DELOAD_RIR
 import com.tczerwien.lifts.session.DELOAD_KEEP_STEP_PCT
@@ -156,11 +157,12 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
      * True when the targets changed (the exports, which show them, are then rewritten).
      */
     suspend fun setMuscleTarget(muscle: String, sets: Int): Boolean {
-        if (sets !in 0..MAX_SET_TARGET || muscle.isBlank()) return false
+        val key = muscleKey(muscle)
+        if (sets !in 0..MAX_SET_TARGET || key.isEmpty()) return false
         var changed = false
         dataStore.edit { prefs ->
             val current = prefs[MUSCLE_TARGETS]?.let(::parseTargets).orEmpty()
-            val next = if (sets == 0) current - muscle else current + (muscle to sets)
+            val next = if (sets == 0) current - key else current + (key to sets)
             changed = next != current
             if (!changed) return@edit
             if (next.isEmpty()) prefs.remove(MUSCLE_TARGETS) else prefs[MUSCLE_TARGETS] = encodeTargets(next)
@@ -258,9 +260,14 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             return validTargets(entries.mapNotNull { (muscle, value) -> (value as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull?.let { muscle to it } }.toMap())
         }
 
-        /** The entries of [targets] that are targets: a named muscle and 1 to [MAX_SET_TARGET] sets. */
+        /**
+         * The entries of [targets] that are targets, by [muscleKey]: a named muscle and 1 to [MAX_SET_TARGET]
+         * sets. Two names for one muscle ("Side Delts", "side delts") are one; the later entry wins.
+         */
         fun validTargets(targets: Map<String, Int>): Map<String, Int> =
-            targets.filter { (muscle, sets) -> muscle.isNotBlank() && sets in 1..MAX_SET_TARGET }
+            targets.entries
+                .mapNotNull { (muscle, sets) -> muscleKey(muscle).takeIf { it.isNotEmpty() && sets in 1..MAX_SET_TARGET }?.let { it to sets } }
+                .toMap()
 
         private val json = Json
         private val PLATES_SERIALIZER = ListSerializer(Double.serializer())

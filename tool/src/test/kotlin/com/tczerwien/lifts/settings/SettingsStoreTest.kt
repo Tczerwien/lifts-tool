@@ -101,6 +101,8 @@ class SettingsStoreTest {
         }
         assertEquals(emptyMap(), store.snapshot().muscleTargets)
         assertTrue(runBlocking { data.data.first() }.asMap().isEmpty(), "the last one taken away removes the key")
+        runBlocking { store.setMuscleTarget(" Front  Delts", 3) }
+        assertEquals(mapOf("front delts" to 3), store.snapshot().muscleTargets, "stored as Lifts writes the muscle")
     }
 
     @Test

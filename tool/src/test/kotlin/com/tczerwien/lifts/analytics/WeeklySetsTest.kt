@@ -78,6 +78,9 @@ class WeeklySetsTest {
         assertEquals(listOf("front delts"), countsFor(frontRaise), "the shoulders it was in the catalog are not counted")
         assertEquals(listOf("chest", "triceps"), countsFor(pushUp))
         assertEquals(listOf("triceps"), countsFor(dips))
+        // A hand-made file's spelling is the same muscle; a blank one is none, so the primary counts.
+        assertEquals(listOf("side delts"), countsFor(listOf("Side Delts ", "side delts", " "), listOf("shoulders")))
+        assertEquals(listOf("shoulders"), countsFor(listOf(" "), listOf("shoulders")))
     }
 
     @Test
