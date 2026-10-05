@@ -378,6 +378,26 @@ class PreviousTest {
         assertEquals(RowValues(62.5, 6), steppedSeeds[2])
     }
 
+    @Test
+    fun `a drop under a swapped slot starts from the lift done`() {
+        // Today the slot planned as the cable raise does the dumbbell raise, which last time had a drop.
+        val lastWeek = mapOf(
+            "db" to previousGroups(
+                listOf(
+                    set(1, slot = 10, weightKg = 10.0, reps = 12, completedAt = 1L),
+                    set(2, slot = 10, position = 1, type = d, weightKg = 6.0, reps = 10, completedAt = 2L),
+                ),
+                listOf(slot(10, "db", 0)),
+                "db",
+            ),
+        )
+        val today = listOf(slot(20, "db", 0).copy(choices = listOf("cable", "db")))
+        val rows = listOf(set(21, slot = 20, weightKg = 10.0, reps = 12, completedAt = 3L), set(22, slot = 20, position = 1, type = d))
+        val aligned = alignPrevious(rows, previousForSlots(today, lastWeek).getValue(20))
+        assertEquals(2L, aligned[1]?.id, "the dumbbell raise's drop")
+        assertEquals(RowValues(6.0, 10), seedRows(rows, aligned, WeightUnit.KG)[1])
+    }
+
     // --- New slots ---
 
     @Test
