@@ -42,8 +42,9 @@ With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalo
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
 schema version fills a fixture of either), and the things he types himself are added, so every export
 field has data: the incline dumbbell press renamed "Low Incline DB Press", a pinned cue on the squat,
-and a custom exercise "Cable Y-Raise" (with a cue) in the Upper A template. Without it the catalog is
-left empty, as before.
+and a custom exercise "Cable Y-Raise" (with a cue) in the Upper A template. In schema 2 and later two
+lifts also count for muscles of his choosing (Counts For): the bench press for chest, front delts and
+triceps, and pull-ups for lats and biceps. Without it the catalog is left empty, as before.
 
 Scenario "long" (--scenario long, needs --catalog-from; --years N, default 3), for measuring speed with
 years of history: four templates (Upper A Mon, Lower A Tue, Upper B Thu, Lower B Fri, 17:30-19:00
@@ -52,7 +53,8 @@ the template says so, work sets with RIR on most of them, now and then a failure
 skipped exercise or a note. Loads climb in 6-week blocks with a deload week after each. Four custom
 exercises: Cable Y-Raise (weight x reps), Hanging Knee Raise (reps only), Machine-Assisted Pull-Up
 (assisted, help stored negative) and Old Cable Row (hidden, only in the first year's workouts); the
-one-arm dumbbell row is per side, the squat has a cue, the incline press is renamed. A weigh-in every
+one-arm dumbbell row is per side, the squat has a cue, the incline press is renamed, and the bench press and
+pull-ups have the gym scenario's Counts For (schema 2 and later). A weigh-in every
 day. No workout is left open. In schema 2 and later each deload week's workouts are marked deload (their
 sets stay as built: the same work sets, lighter), and Lower A's standing calf raise offers the seated one
 (Lower B's, with as long a history) as an alternative.
@@ -561,9 +563,21 @@ def copy_catalog(conn, seeded):
     conn.execute("DETACH DATABASE seeded")
 
 
+# Added in B17: what two generic lifts count for in weekly sets, as Exercise Detail › Counts For stores them.
+COUNTS_FOR = [(BENCH, ["chest", "front delts", "triceps"]), (PULLUP, ["biceps", "lats"])]
+
+
+def counts_for(conn):
+    """Sets COUNTS_FOR where the schema has the column (2 and later)."""
+    if has_column(conn, "exercises", "countsFor"):
+        for exercise_id, muscles in COUNTS_FOR:
+            conn.execute("UPDATE exercises SET countsFor = ? WHERE id = ?", (json.dumps(muscles, separators=(",", ":")), exercise_id))
+
+
 def long_own_data(conn, seeded):
-    """The catalog and bars from [seeded], then his own: custom exercises, a rename, a cue, a per-side lift."""
+    """The catalog and bars from [seeded], then his own: custom exercises, a rename, a cue, a per-side lift, Counts For."""
     copy_catalog(conn, seeded)
+    counts_for(conn)
     conn.execute("UPDATE exercises SET name = ? WHERE id = ?", (RENAMED_INCLINE, INCLINE))
     conn.execute("UPDATE exercises SET pinnedNote = ? WHERE id = ?", (SQUAT_CUE, SQUAT))
     conn.execute("UPDATE exercises SET perSide = 1 WHERE id = ?", (ROW,))
@@ -585,8 +599,9 @@ CUSTOM_ID = "custom-fixture-cable-y-raise"
 
 
 def own_data(conn, seeded):
-    """Copies the seeded catalog and bars, then adds a rename, cues and a custom exercise."""
+    """Copies the seeded catalog and bars, then adds a rename, cues, a custom exercise and Counts For."""
     copy_catalog(conn, seeded)
+    counts_for(conn)
     conn.execute("UPDATE exercises SET name = ? WHERE id = ?", (RENAMED_INCLINE, INCLINE))
     conn.execute("UPDATE exercises SET pinnedNote = ? WHERE id = ?", (SQUAT_CUE, SQUAT))
     conn.execute(
