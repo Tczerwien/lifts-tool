@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.export
 
 import com.tczerwien.lifts.analytics.NotationStyle
+import com.tczerwien.lifts.analytics.muscleOrder
 import com.tczerwien.lifts.analytics.setNotation
 import com.tczerwien.lifts.session.repRangeText
 import com.tczerwien.lifts.session.rirTarget
@@ -130,9 +131,17 @@ object MarkdownExport {
                 append(chosen.joinToString("; ") { "${it.name} → ${it.countsFor.joinToString(", ")}" })
                 append(".\n\n")
             }
-            for ((muscle, values) in snapshot.weeklySetsPerMuscle) {
+            val targets = snapshot.weeklySetTargets
+            if (targets.isNotEmpty()) {
+                append("Targets (his, as set now, the same each week): `9/12` is 9 sets against a target of 12. Muscles with")
+                append(" a target come first.\n\n")
+            }
+            // As Sets per Muscle lists them: targets first, then the rest.
+            for (muscle in muscleOrder(snapshot.weeklySetsPerMuscle.keys, targets)) {
+                val values = snapshot.weeklySetsPerMuscle[muscle] ?: continue
+                val target = targets[muscle]
                 append("- ").append(muscle).append(": ")
-                append(values.joinToString(", "))
+                append(values.joinToString(", ") { if (target != null) "$it/$target" else "$it" })
                 append('\n')
             }
         }

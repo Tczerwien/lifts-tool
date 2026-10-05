@@ -13,14 +13,15 @@ import java.time.ZoneId
  * generators own all formatting.
  */
 suspend fun renderExports(repository: LiftsRepository, settings: SettingsStore): Map<String, String> {
-    val (rows, unit) = LiftsIo.inLane { repository.readForExport() to settings.snapshot().units }
+    val (rows, prefs) = LiftsIo.inLane { repository.readForExport() to settings.snapshot() }
     val snapshot = buildSnapshot(
         rows = rows,
         exportedAtMillis = System.currentTimeMillis(),
         zone = ZoneId.systemDefault(),
-        unit = unit,
+        unit = prefs.units,
         goals = null,
         injuries = emptyList(),
+        muscleTargets = prefs.muscleTargets,
     )
     return mapOf(
         ExportWriter.TRAINING_LOG to MarkdownExport.render(snapshot),

@@ -141,6 +141,7 @@ object ExportFixtures {
         exercises: List<ExerciseEntity> = listOf(bench, squat),
         templates: List<TemplateEntity> = emptyList(),
         templateExercises: List<TemplateExerciseEntity> = emptyList(),
+        muscleTargets: Map<String, Int> = emptyMap(),
     ): ExportSnapshot = buildSnapshot(
         rows = LiftsRows(
             exercises = exercises,
@@ -157,6 +158,7 @@ object ExportFixtures {
         unit = unit,
         goals = GOALS,
         injuries = listOf("left knee"),
+        muscleTargets = muscleTargets,
     )
 
     fun millis(iso: String): Long = Instant.parse(iso).toEpochMilli()

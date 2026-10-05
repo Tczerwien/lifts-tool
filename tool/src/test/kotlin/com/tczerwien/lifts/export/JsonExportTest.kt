@@ -63,7 +63,7 @@ class JsonExportTest {
 
     /**
      * Every optional field filled somewhere: a timed set, a template, a hidden custom exercise with a cue, a
-     * superset, an RIR range, a deload, an alternative and a swap, and a lift's Counts For (3.0).
+     * superset, an RIR range, a deload, an alternative and a swap, and a lift's Counts For and weekly targets (3.0).
      */
     private val full = JsonExport.render(
         ExportFixtures.snapshot(
@@ -71,6 +71,7 @@ class JsonExportTest {
             exercises = listOf(ExportFixtures.bench.copy(countsFor = listOf("chest", "front delts")), ExportFixtures.squat, customRow),
             templates = listOf(template),
             templateExercises = templateSlots,
+            muscleTargets = mapOf("chest" to 13, "abdominals" to 6),
             slots = pairedSlots,
             sets = ExportFixtures.sets + SetEntity(
                 id = 7, workoutExerciseId = 2, position = 3, type = "drop", weightKg = 60.0, durationSec = 40,
@@ -103,7 +104,7 @@ class JsonExportTest {
             "summary.prs", "summary.prs[].best_e1rm_date", "summary.prs[].best_e1rm_kg", "summary.prs[].best_set_reps",
             "summary.prs[].best_set_weight_kg", "summary.prs[].exercise_id", "summary.prs[].max_weight_date",
             "summary.prs[].max_weight_kg", "summary.prs[].name",
-            "summary.week_starts", "summary.weekly_sets_per_muscle",
+            "summary.week_starts", "summary.weekly_set_targets", "summary.weekly_sets_per_muscle",
             "templates", "templates[].exercises", "templates[].exercises[].alternatives",
             "templates[].exercises[].alternatives[].exercise_id", "templates[].exercises[].alternatives[].name",
             "templates[].exercises[].exercise_id", "templates[].exercises[].name",
@@ -127,11 +128,11 @@ class JsonExportTest {
         assertEquals(expected.sorted(), keyPaths(Json.parseToJsonElement(full)).sorted())
     }
 
-    /** Every object key as a dotted path, arrays as "[]"; the muscle map's keys are data, not schema. */
+    /** Every object key as a dotted path, arrays as "[]"; the muscle maps' keys are data, not schema. */
     private fun keyPaths(element: JsonElement, prefix: String = ""): Set<String> = when (element) {
         is JsonObject -> element.flatMapTo(HashSet()) { (key, value) ->
             val path = if (prefix.isEmpty()) key else "$prefix.$key"
-            if (path == "summary.weekly_sets_per_muscle") setOf(path) else setOf(path) + keyPaths(value, path)
+            if (path in MUSCLE_MAPS) setOf(path) else setOf(path) + keyPaths(value, path)
         }
         is JsonArray -> element.flatMapTo(HashSet()) { keyPaths(it, "$prefix[]") }
         else -> emptySet()
@@ -202,6 +203,15 @@ class JsonExportTest {
         assertEquals(listOf(listOf("chest", "front delts"), listOf("quadriceps", "adductors")), document.exercises.map { it.countsFor })
         val zeros = List(6) { 0 }
         assertEquals(mapOf("chest" to zeros + listOf(2, 2), "front delts" to zeros + listOf(2, 2)), document.summary.weeklySetsPerMuscle)
+    }
+
+    @Test
+    fun weeklyTargetsAreWrittenAndATargetMuscleShowsAtZero() {
+        assertNull(decoded.summary.weeklySetTargets, "absent without any")
+        val document = Json.decodeFromString(JsonExportDocument.serializer(), full)
+        assertEquals(mapOf("abdominals" to 6, "chest" to 13), document.summary.weeklySetTargets)
+        assertEquals(List(8) { 0 }, document.summary.weeklySetsPerMuscle.getValue("abdominals"), "aimed at, not trained")
+        assertEquals(listOf("abdominals", "chest", "front delts", "quadriceps"), document.summary.weeklySetsPerMuscle.keys.toList())
     }
 
     @Test
@@ -398,5 +408,10 @@ class JsonExportTest {
         val without = JsonExport.render(ExportFixtures.snapshot(bodyweight = emptyList()))
         assertTrue("\"current_kg\"" !in without, "no bodyweight data -> no summary.bodyweight")
         assertNull(Json.decodeFromString(JsonExportDocument.serializer(), without).summary.bodyweight)
+    }
+
+    private companion object {
+        /** Maps keyed by muscle: their keys are data, as the muscles in the log are. */
+        val MUSCLE_MAPS = setOf("summary.weekly_sets_per_muscle", "summary.weekly_set_targets")
     }
 }

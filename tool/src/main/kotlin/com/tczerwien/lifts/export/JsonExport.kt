@@ -52,7 +52,8 @@ import kotlinx.serialization.json.Json
  * secondary muscles nothing, and a drop set nothing (it is part of the set above it); whole numbers now. Before,
  * a set added 1 to each primary muscle and 0.5 to each secondary one, a drop as much as any set. Added
  * exercises[].counts_for (the muscles he chose; absent while the primary muscles count), and an exercise with it
- * is in exercises[] even if unused.
+ * is in exercises[] even if unused; summary.weekly_set_targets (his targets now, hard sets a week by muscle; absent
+ * without any), and a muscle with a target is in weekly_sets_per_muscle even at 0.
  */
 object JsonExport {
 
@@ -167,6 +168,7 @@ object JsonExport {
                 ),
                 weekStarts = snapshot.weekStarts,
                 weeklySetsPerMuscle = snapshot.weeklySetsPerMuscle,
+                weeklySetTargets = snapshot.weeklySetTargets.takeIf { it.isNotEmpty() },
                 bodyweight = snapshot.bodyweightTrend?.let {
                     JsonBodyweightSummary(
                         currentKg = it.currentKg,
@@ -354,6 +356,8 @@ data class JsonSummary(
      * exercise counts for (counts_for, else its primary muscles); warm-ups, drop sets and secondary muscles add nothing.
      */
     @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Int>>,
+    /** His weekly targets as they are now, hard sets by muscle; a muscle without one isn't here. Absent without any. */
+    @SerialName("weekly_set_targets") val weeklySetTargets: Map<String, Int>? = null,
     val bodyweight: JsonBodyweightSummary? = null,
 )
 

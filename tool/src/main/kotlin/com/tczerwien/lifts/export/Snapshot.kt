@@ -78,8 +78,13 @@ data class ExportSnapshot(
     val e1RmTrend: SnapshotE1RmTrend,
     /** The Mondays (yyyy-MM-dd) of the [WEEKLY_SUMMARY_WEEKS] summary weeks, oldest first; the last is this week. */
     val weekStarts: List<String>,
-    /** Muscle -> per-week hard sets ([weeklySetsPerMuscle]'s rule), one per [weekStarts] entry, newest week last. */
+    /**
+     * Muscle -> per-week hard sets ([weeklySetsPerMuscle]'s rule), one per [weekStarts] entry, newest week last:
+     * every muscle with a set in those weeks, and every muscle with a target (at 0 without one). A to Z.
+     */
     val weeklySetsPerMuscle: Map<String, List<Int>>,
+    /** His weekly targets, hard sets by muscle (Sets per Muscle), as they are now; empty without any. A to Z. */
+    val weeklySetTargets: Map<String, Int> = emptyMap(),
 )
 
 data class BodyweightPoint(val dateIso: String, val weightKg: Double)
@@ -260,6 +265,7 @@ data class SnapshotPr(
  * @param unit the display unit (Settings), for the files people read
  * @param goals optional free-text athlete goals for the front matter / profile
  * @param injuries current injuries/limitations, possibly empty
+ * @param muscleTargets his weekly targets (Settings), hard sets by muscle
  */
 fun buildSnapshot(
     rows: LiftsRows,
@@ -268,6 +274,7 @@ fun buildSnapshot(
     unit: WeightUnit,
     goals: String?,
     injuries: List<String>,
+    muscleTargets: Map<String, Int> = emptyMap(),
 ): ExportSnapshot {
     val exercises = rows.exercises
     // Only finished workouts, as History shows them: an open one (or one left open and never closed)
@@ -447,7 +454,11 @@ fun buildSnapshot(
         weeks = WEEKLY_SUMMARY_WEEKS,
         todayEpochMillis = exportedAtMillis,
         zone = zone,
-    )
+    ).let { counted ->
+        // A muscle he aims at shows at 0 too: that it has no sets is the point.
+        val targetsOnly = muscleTargets.keys.filter { it !in counted }.associateWith { List(WEEKLY_SUMMARY_WEEKS) { 0 } }
+        (counted + targetsOnly).toSortedMap()
+    }
 
     val bodyweightLog = bodyweight
         .sortedBy { it.epochDay }
@@ -499,6 +510,7 @@ fun buildSnapshot(
         ),
         weekStarts = weekStarts,
         weeklySetsPerMuscle = weekly,
+        weeklySetTargets = muscleTargets.toSortedMap(),
     )
 }
 

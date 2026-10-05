@@ -63,6 +63,19 @@ class MarkdownExportTest {
     }
 
     @Test
+    fun targetsReadAsSetsOverTargetAndComeFirst() {
+        val withTargets = MarkdownExport.render(ExportFixtures.snapshot(muscleTargets = mapOf("chest" to 13, "abdominals" to 6))).split("\n")
+        val first = withTargets.indexOfFirst { it.startsWith("- abdominals:") }
+        assertEquals("- abdominals: 0/6, 0/6, 0/6, 0/6, 0/6, 0/6, 0/6, 0/6", withTargets[first])
+        assertEquals("- chest: 0/13, 0/13, 0/13, 0/13, 0/13, 0/13, 2/13, 2/13", withTargets[first + 1])
+        assertTrue(withTargets.any { it.startsWith("Targets (his, as set now, the same each week): `9/12` is 9 sets") })
+        assertTrue(lines.none { it.startsWith("Targets (") }, "no targets, no line")
+        // A layoff with a target still lists it: no sets is the news.
+        val layoff = MarkdownExport.render(ExportFixtures.snapshot(workouts = emptyList(), muscleTargets = mapOf("calves" to 6))).split("\n")
+        assertContains(layoff, "- calves: 0/6, 0/6, 0/6, 0/6, 0/6, 0/6, 0/6, 0/6")
+    }
+
+    @Test
     fun theLiftsHeChoseMusclesForAreNamedWithThem() {
         val bench = ExportFixtures.bench.copy(countsFor = listOf("chest", "front delts"))
         val chosen = MarkdownExport.render(ExportFixtures.snapshot(exercises = listOf(bench, ExportFixtures.squat))).split("\n")
