@@ -406,7 +406,7 @@ class PreviousTest {
 
     @Test
     fun `a drop with nothing lighter keeps its set's reps for the weight he sets`() {
-        // 5 lb dumbbells on a 5 lb step: no weight to start from, the reps kept; he types 3 lb (review R2-1).
+        // 5 kg dumbbells on a 5 kg step: no weight to start from, the reps kept; he types 3 kg (review R2-1).
         val today = listOf(set(11, position = 0, weightKg = 5.0, reps = 15, completedAt = 1L), set(12, position = 1, type = d))
         assertEquals(RowValues(null, 15), seedRows(today, alignPrevious(today, emptyList()), WeightUnit.KG, weightStep = 5.0)[1])
         val typed = listOf(today[0], today[1].copy(weightKg = 3.0))

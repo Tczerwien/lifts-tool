@@ -519,7 +519,7 @@ class ActiveWorkoutViewModel(
 
     /**
      * Checkbox toggle. Completing logs exactly what the row shows: its starting value ([seedRows])
-     * wherever it has none of its own. A row with nothing to log shows a hint instead. Completing
+     * wherever it has none of its own. A row with nothing to log, or a weight × reps drop with no weight, shows a hint instead ([tickHint]). Completing
      * moves the steppers to the next unticked row ([activeRowAfterTick]) and starts rest per the
      * completion result. Uncompleting keeps the logged values. A tap right after the one that ticked
      * or unticked the same set ([isDoubleTap]) is a double tap or a bounce: it is ignored before
@@ -582,7 +582,7 @@ class ActiveWorkoutViewModel(
         }
     }
 
-    /** [hint] ([tickHint]: "SET WEIGHT OR REPS FIRST", "SET WEIGHT FIRST", …) for a couple of seconds, instead of a tick that would log nothing. */
+    /** [hint] ([tickHint]: "SET WEIGHT OR REPS FIRST", "SET WEIGHT FIRST", …) for a couple of seconds, instead of the tick. */
     private fun showTickHint(hint: String) {
         emptyTickHintJob?.cancel()
         _uiState.update { it.copy(emptyTickHint = hint) }
@@ -1121,7 +1121,7 @@ class ActiveWorkoutViewModel(
 
     /**
      * Menu: "Drop Set" on exercise [slotId] (DR-3): a drop row under its latest tick ([ActiveSession.addDrop]),
-     * or the drop already waiting there, with the steppers on it, so its tick is the next tap. It shows where a
+     * or the drop already waiting there, with the steppers on it, so its tick is the next tap. A new one shows where a
      * drop starts ([com.tczerwien.lifts.session.dropStart]: last time's drop while lighter, else 20 % lighter;
      * on a weight × reps lift with nothing lighter, no weight, and the tick asks for one). The running rest ends
      * with the save, so no beep comes mid-drop, and a pending move on is cancelled ([beginAction]): the drop comes

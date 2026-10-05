@@ -290,7 +290,7 @@ class ActiveSession(
      * "…" › Drop Set (DR-3): a drop row in slot [slotId] of the open workout [workoutId] under the exercise's
      * latest tick ([dropPlace]: a work set, or a drop of a chain), after the drops already done under it, the
      * rows below moving down one place; or, when a drop still to do already waits there, that one, with no new
-     * row. It starts empty, so it shows where a drop starts ([dropStart]: last time's drop while lighter, else 20 %
+     * row. A new one starts empty, so it shows where a drop starts ([dropStart]: last time's drop while lighter, else 20 %
      * lighter than the row above; on a weight × reps lift with nothing lighter, no weight), as any row shows its
      * starting values. The running rest is cleared, so no beep comes
      * mid-drop; the drop's tick starts the work rest. Returns the drop's id; null, changing nothing, once the

@@ -113,7 +113,7 @@ class DropSetsTest {
         assertEquals(false, dropFollows(listOf(other) + slot.reversed(), 4))
         assertEquals(true, dropFollows(listOf(other) + slot.reversed(), 1))
         assertEquals(false, dropFollows(slot, 404), "not there")
-        // Another slot's drop at the position after set 3 is not set 3's next row: set 4 is.
+        // Another slot's drop at the position after row 3 (set 2) is not its next row: row 4 (set 3) is.
         assertEquals(false, dropFollows(listOf(SetEntity(id = 0, workoutExerciseId = 2, position = 3, type = d)) + slot, 3))
     }
 
