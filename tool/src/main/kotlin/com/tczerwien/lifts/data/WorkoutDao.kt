@@ -180,18 +180,21 @@ interface WorkoutDao {
     @Query("SELECT * FROM workout_exercises WHERE workoutId = :workoutId ORDER BY position")
     fun exercisesForWorkout(workoutId: Long): List<WorkoutExerciseEntity>
 
-    /** All sets of a workout, ordered by exercise position then set position. */
+    /**
+     * All sets of a workout, ordered by exercise position then set position, then id (as renumbering orders a slot),
+     * so rows that share a position (a hand-made backup) come in one order everywhere: a drop's set is the row above it.
+     */
     @Query(
         "SELECT sets.* FROM sets " +
             "JOIN workout_exercises ON sets.workoutExerciseId = workout_exercises.id " +
             "WHERE workout_exercises.workoutId = :workoutId " +
-            "ORDER BY workout_exercises.position, sets.position"
+            "ORDER BY workout_exercises.position, sets.position, sets.id"
     )
     fun setsForWorkout(workoutId: Long): List<SetEntity>
 
     /**
      * Completed sets of the most recent FINISHED workout (endedAt not null) in which [exerciseId]
-     * had at least one completed set, ordered by slot position then set position. A workout
+     * had at least one completed set, ordered by slot position then set position (then id, as [setsForWorkout]). A workout
      * where the exercise was added but skipped doesn't count. Empty if it was never performed. A
      * deload counts only when no other workout has the exercise (DL-5): its light sets are no "last time".
      */
@@ -207,7 +210,7 @@ interface WorkoutDao {
             "AND EXISTS (SELECT 1 FROM sets s WHERE s.workoutExerciseId = we.id AND s.completedAt IS NOT NULL) " +
             "ORDER BY w.deload, w.startedAt DESC, w.id DESC LIMIT 1" +
             ") " +
-            "ORDER BY workout_exercises.position, sets.position"
+            "ORDER BY workout_exercises.position, sets.position, sets.id"
     )
     fun previousPerformance(exerciseId: String): List<SetEntity>
 

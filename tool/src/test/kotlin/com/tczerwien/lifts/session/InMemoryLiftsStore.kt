@@ -205,7 +205,7 @@ class InMemoryLiftsStore : LiftsStore {
         templateExercises.values.filter { it.templateId == templateId }.sortedBy { it.position }
 
     private fun setsOf(slotId: Long): List<SetEntity> =
-        sets.values.filter { it.workoutExerciseId == slotId }.sortedBy { it.position }
+        sets.values.filter { it.workoutExerciseId == slotId }.sortedWith(compareBy({ it.position }, { it.id }))
 
     // --- Test helpers ---
 
