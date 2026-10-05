@@ -1,6 +1,9 @@
 package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -51,5 +54,55 @@ class DropSetsTest {
         assertEquals(listOf("1", "1", "1", "2"), setMarkers(rows(n, d, d, n)), "a chain")
         assertEquals(listOf("1", "2", "2"), setMarkers(rows(d, n, d)), "a drop on the first row is set 1")
         assertEquals(listOf("W", "1", "2", "2"), setMarkers(rows("W", "N", "N", "D")), "ticked or not")
+    }
+
+    // --- DR-2: where a drop starts ---
+
+    private val lb = WeightUnit.LB
+
+    /** [kg] as the lb column shows it. */
+    private fun shownLb(kg: Double?): Double? = kg?.let { Format.roundWeight(Format.kgToDisplay(it, lb), lb) }
+
+    private fun above(lbs: Double?, reps: Int? = 10) = RowValues(lbs?.let(Format::lbToKg), reps)
+
+    @Test
+    fun `20 percent lighter, snapped down to the step, with the set's reps`() {
+        val start = dropStart(Tracking.WEIGHT_REPS, above(100.0), lastDrop = null, lb, step = 5.0)
+        assertEquals(80.0, shownLb(start.weightKg))
+        assertEquals(10, start.reps)
+        assertEquals(10.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(15.0), null, lb, 5.0).weightKg), "12 snaps down to 10")
+        assertEquals(7.5, shownLb(dropStart(Tracking.WEIGHT_REPS, above(10.0), null, lb, 2.5).weightKg), "on a 2.5 lb step")
+        assertEquals(80.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(102.5), null, lb, 5.0).weightKg), "off the grid above")
+        assertEquals(0.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(5.0), null, lb, 5.0).weightKg), "one step: down to none")
+        // In kg: 60 → 48 → 47.5 on a 2.5 kg step.
+        assertEquals(47.5, dropStart(Tracking.WEIGHT_REPS, RowValues(60.0, 8), null, WeightUnit.KG, 2.5).weightKg)
+    }
+
+    @Test
+    fun `last time's drop wins, number by number`() {
+        val lastDrop = SetEntity(id = 9, workoutExerciseId = 2, position = 3, type = d, weightKg = Format.lbToKg(70.0), reps = 6, completedAt = 1L)
+        val start = dropStart(Tracking.WEIGHT_REPS, above(100.0), lastDrop, lb, 5.0)
+        assertEquals(70.0 to 6, shownLb(start.weightKg) to start.reps)
+        // Only its weight logged last time: the reps come from the set above.
+        assertEquals(10, dropStart(Tracking.WEIGHT_REPS, above(100.0), lastDrop.copy(reps = null), lb, 5.0).reps)
+        assertEquals(80.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(100.0), lastDrop.copy(weightKg = null), lb, 5.0).weightKg))
+    }
+
+    @Test
+    fun `bodyweight lifts drop to no load added, assisted ones get more help`() {
+        assertEquals(20.0, shownLb(dropStart(Tracking.WEIGHTED_BODYWEIGHT, above(25.0), null, lb, 5.0).weightKg))
+        assertEquals(0.0, shownLb(dropStart(Tracking.WEIGHTED_BODYWEIGHT, above(null), null, lb, 5.0).weightKg), "bodyweight alone stays")
+        // Help is stored negative: 40 lb of help → 50.
+        assertEquals(-50.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(-40.0), null, lb, 5.0).weightKg))
+        assertEquals(-5.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(null), null, lb, 5.0).weightKg), "none: one step")
+        // A help logged before the type was set (a plain +40) still means 40 of help.
+        assertEquals(-50.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(40.0), null, lb, 5.0).weightKg))
+    }
+
+    @Test
+    fun `nothing to drop from, or nothing the lift records`() {
+        assertNull(dropStart(Tracking.WEIGHT_REPS, above(null), null, lb, 5.0).weightKg)
+        val reps = dropStart(Tracking.REPS_ONLY, above(100.0), null, lb, 5.0)
+        assertEquals(RowValues(null, 10), reps)
     }
 }

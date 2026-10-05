@@ -1,6 +1,12 @@
 package com.tczerwien.lifts.session
 
 import com.tczerwien.lifts.data.SetEntity
+import com.tczerwien.lifts.data.Tracking
+import com.tczerwien.lifts.ui.Format
+import com.tczerwien.lifts.ui.WeightUnit
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.roundToLong
 
 /**
  * Drop sets: a lighter set done straight after a work set, as part of it. No column says which set a drop
@@ -63,4 +69,49 @@ fun setMarkers(rows: List<SetEntity>): List<String> {
             RowKind.DROP -> number.toString()
         }
     }
+}
+
+/**
+ * A drop's load as a share of the row above it: about 20 % lighter, the figure Renaissance Periodization gives
+ * for a drop (Bell et al. 2025 review drops of 10–25 %).
+ */
+const val DROP_LOAD_FRACTION = 0.8
+
+/**
+ * Where a drop starts (DR-2), each number on its own: last time's matching drop ([lastDrop], the drop's
+ * PREVIOUS) when there is one; else from [above], the row above it as it stands (the set it belongs to, or the
+ * drop before it in a chain): its reps or seconds, and [DROP_LOAD_FRACTION] of its load, snapped down to the
+ * weight [step] (in [unit], as the steppers move), never below none. Snapped down, it is always at least one
+ * step lighter. On a weighted bodyweight lift that is the load added, down to none (bodyweight alone); on an
+ * assisted one the help grows instead (less load): divided by the share, snapped up, at least one step more.
+ * Weights are stored kg (help negative, [Tracking.storedWeight]). Only what [tracking] records.
+ */
+fun dropStart(tracking: Tracking, above: RowValues, lastDrop: SetEntity?, unit: WeightUnit, step: Double): RowValues =
+    RowValues(
+        weightKg = (lastDrop?.weightKg ?: lighterKg(tracking, above.weightKg, unit, step))
+            ?.takeIf { tracking.takesWeight }?.let(tracking::asLogged),
+        reps = (lastDrop?.reps ?: above.reps)?.takeIf { tracking.takesReps },
+        durationSec = (lastDrop?.durationSec ?: above.durationSec)?.takeIf { tracking.takesDuration },
+    )
+
+/** [dropStart]'s load from [aboveKg]; null for a lift that takes none, or a plain lift with none to drop from. */
+private fun lighterKg(tracking: Tracking, aboveKg: Double?, unit: WeightUnit, step: Double): Double? {
+    if (!tracking.takesWeight) return null
+    // Bodyweight with nothing added (or no help) starts from 0; a barbell lift with no weight has nothing to drop from.
+    val shownKg = tracking.shownWeight(aboveKg) ?: if (tracking == Tracking.WEIGHT_REPS) return null else 0.0
+    val shown = Format.roundWeight(Format.kgToDisplay(shownKg, unit), unit)
+    val next = if (tracking == Tracking.ASSISTED_BODYWEIGHT) {
+        maxOf(snap(shown / DROP_LOAD_FRACTION, step, up = true), Format.stepWeight(shown, 1, step))
+    } else {
+        snap(shown * DROP_LOAD_FRACTION, step, up = false)
+    }
+    return tracking.storedWeight(Format.displayToKg(Format.roundWeight(next, unit), unit))
+}
+
+/** [display] snapped to the grid of [step] (both in display units), [up] or down, never below 0. */
+private fun snap(display: Double, step: Double, up: Boolean): Double {
+    val onGrid = display / step
+    // In grid steps: 150 / 0.2 is 749.999…, which is on the grid.
+    val units = if (up) ceil(onGrid - 1e-6) else floor(onGrid + 1e-6)
+    return ((units * step * 1000).roundToLong() / 1000.0).coerceAtLeast(0.0)
 }
