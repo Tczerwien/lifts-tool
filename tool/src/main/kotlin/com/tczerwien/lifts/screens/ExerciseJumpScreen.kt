@@ -34,8 +34,9 @@ import com.thelightphone.sdk.ui.gridUnitsAsDp
 import com.thelightphone.sdk.ui.lightClickable
 
 /**
- * One exercise of the workout as the list shows it: its name, how many of its sets are ticked, and
- * where it sits in a superset ([bar]).
+ * One exercise of the workout as the list shows it: its name, how many of its work sets are ticked
+ * (warm-ups and drops left out: [com.tczerwien.lifts.session.workSetProgress]), whether every row of it is
+ * ticked ([finished]: a drop still to do keeps it open), and where it sits in a superset ([bar]).
  */
 data class JumpEntry(
     val slotId: Long,
@@ -43,6 +44,7 @@ data class JumpEntry(
     val doneCount: Int,
     val setCount: Int,
     val bar: SupersetBar = SupersetBar.NONE,
+    val finished: Boolean = setCount > 0 && doneCount == setCount,
 )
 
 class ExerciseJumpViewModel : LightViewModel<Long>()
@@ -105,11 +107,11 @@ class ExerciseJumpScreen(
     }
 }
 
-/** 3gu row: number (inverted for the exercise on screen), name, "2/3" sets ticked. Clear of the scrollbar's 2gu. */
+/** 3gu row: number (inverted for the exercise on screen), name, "2/3" work sets ticked. Clear of the scrollbar's 2gu. */
 @Composable
 private fun JumpRow(number: Int, entry: JumpEntry, current: Boolean, onClick: () -> Unit) {
     val colors = LightThemeTokens.colors
-    val finished = entry.setCount > 0 && entry.doneCount == entry.setCount
+    val finished = entry.finished
     Row(
         modifier = Modifier
             .fillMaxWidth()

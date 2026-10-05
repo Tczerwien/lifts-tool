@@ -56,6 +56,16 @@ class DropSetsTest {
         assertEquals(listOf("W", "1", "2", "2"), setMarkers(rows("W", "N", "N", "D")), "ticked or not")
     }
 
+    // --- DR-4: done/total ---
+
+    @Test
+    fun `done of total counts work sets only`() {
+        assertEquals(3 to 3, workSetProgress(rows("W", "N", "N", "N", "D")), "a drop after the last set leaves it 3/3")
+        assertEquals(1 to 3, workSetProgress(rows(w, "N", d, n, n)), "warm-ups and an unticked drop out")
+        assertEquals(1 to 2, workSetProgress(rows("D", n)), "a drop with no set above it is one")
+        assertEquals(0 to 0, workSetProgress(emptyList()))
+    }
+
     // --- DR-2: where a drop starts ---
 
     private val lb = WeightUnit.LB

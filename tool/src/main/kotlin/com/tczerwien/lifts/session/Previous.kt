@@ -320,12 +320,16 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
     }.withNormalizedGroups()
 }
 
-/** "Set 2 of 3", counting work sets only, or "Warm-up 1 of 2" for a warm-up row of [rows]. */
+/**
+ * "Set 2 of 3", counting work sets only, "Warm-up 1 of 2" for a warm-up row of [rows], or "Set 3 drop" for a
+ * drop, named by its set ([rowKinds]): a drop under set 3 doesn't make set 4 "Set 5 of 5" (DR-4).
+ */
 fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
-    val warmup = rows[index].isWarmup()
-    val number = rows.take(index + 1).count { it.isWarmup() == warmup }
-    val count = rows.count { it.isWarmup() == warmup }
-    return if (warmup) "Warm-up $number of $count" else "Set $number of $count"
+    val kinds = rowKinds(rows)
+    if (kinds[index] == RowKind.DROP) return "Set ${setMarkers(rows)[index]} drop"
+    val number = kinds.take(index + 1).count { it == kinds[index] }
+    val count = kinds.count { it == kinds[index] }
+    return if (kinds[index] == RowKind.WARMUP) "Warm-up $number of $count" else "Set $number of $count"
 }
 
 /**

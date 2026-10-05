@@ -72,6 +72,16 @@ fun setMarkers(rows: List<SetEntity>): List<String> {
 }
 
 /**
+ * An exercise's progress as the NEXT row and the exercise list show it, "done/total": its work sets ticked,
+ * of its work sets ([rowKinds]), as the Rest Timer's "Set 2 of 3" counts. Warm-ups and drops are left out, so
+ * a drop added after the last set doesn't make a finished exercise read "3/4" (DR-4).
+ */
+fun workSetProgress(rows: List<SetEntity>): Pair<Int, Int> {
+    val work = rows.zip(rowKinds(rows)).filter { it.second == RowKind.WORK }.map { it.first }
+    return work.count { it.completedAt != null } to work.size
+}
+
+/**
  * A drop's load as a share of the row above it: about 20 % lighter, the figure Renaissance Periodization gives
  * for a drop (Bell et al. 2025 review drops of 10–25 %).
  */

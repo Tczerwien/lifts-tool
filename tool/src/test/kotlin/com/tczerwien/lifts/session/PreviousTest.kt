@@ -517,6 +517,15 @@ class PreviousTest {
     }
 
     @Test
+    fun `a drop doesn't count as a set in the labels, and is named by its set`() {
+        // The Rest Timer after a drop's tick says set 4 of 4, not 5 of 5 (DR-4).
+        val today = rows(n, n, n, d, n)
+        assertEquals("Set 4 of 4", nextSetLabel(today, 4))
+        assertEquals("Set 3 drop", nextSetLabel(today, 3))
+        assertEquals("Set 1 of 2", nextSetLabel(rows(w, d, n), 1), "a drop under a warm-up is a set of its own")
+    }
+
+    @Test
     fun `NEXT is the exercise on screen while it has sets left`() {
         val slots = listOf(slot(1, "squat", 0), slot(2, "press", 1))
         val sets = listOf(

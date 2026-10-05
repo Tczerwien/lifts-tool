@@ -286,7 +286,8 @@ private const val STRIP_LABEL_GAP_UNITS = 0.25f
 
 /**
  * Collapsed next-exercise row (2gu + 0.5gu top margin), "NEXT › Overhead Press · 0/3": the exercise
- * it moves to ([ActiveWorkoutViewModel.nextExercise], finished ones skipped) and its sets ticked of all.
+ * it moves to ([ActiveWorkoutViewModel.nextExercise], finished ones skipped) and its work sets ticked of all
+ * ([com.tczerwien.lifts.session.workSetProgress]: warm-ups and drops left out).
  */
 @Composable
 internal fun NextExerciseRow(name: String, doneCount: Int, setCount: Int, onClick: () -> Unit) {

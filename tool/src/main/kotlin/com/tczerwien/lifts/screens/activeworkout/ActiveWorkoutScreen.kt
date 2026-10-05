@@ -39,6 +39,7 @@ import com.tczerwien.lifts.session.restDurationSec
 import com.tczerwien.lifts.session.restRemainingSec
 import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.setMarkers
+import com.tczerwien.lifts.session.workSetProgress
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.liftsShare
 import com.tczerwien.lifts.ui.Format
@@ -287,10 +288,11 @@ class ActiveWorkoutScreen(
                         )
 
                         viewModel.nextExercise(uiState)?.let { next ->
+                            val (done, total) = workSetProgress(next.sets)
                             NextExerciseRow(
                                 name = next.name,
-                                doneCount = next.sets.count { it.completedAt != null },
-                                setCount = next.sets.size,
+                                doneCount = done,
+                                setCount = total,
                                 onClick = viewModel::goToNextExercise,
                             )
                         }
@@ -406,12 +408,14 @@ class ActiveWorkoutScreen(
         viewModel.holdPosition()
         val groups = uiState.exercises.map { it.slot.supersetGroup }
         val entries = uiState.exercises.mapIndexed { index, block ->
+            val (done, total) = workSetProgress(block.sets)
             JumpEntry(
                 slotId = block.slot.id,
                 name = block.name,
-                doneCount = block.sets.count { it.completedAt != null },
-                setCount = block.sets.size,
+                doneCount = done,
+                setCount = total,
                 bar = SupersetBar.at(groups, index),
+                finished = block.sets.isNotEmpty() && block.sets.all { it.completedAt != null },
             )
         }
         val currentSlotId = uiState.exercises.getOrNull(uiState.currentIndex)?.slot?.id
