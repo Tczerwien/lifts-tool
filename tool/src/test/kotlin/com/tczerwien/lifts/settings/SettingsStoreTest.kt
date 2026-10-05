@@ -82,14 +82,19 @@ class SettingsStoreTest {
         val data = FakeDataStore(emptyPreferences())
         val store = SettingsStore(data)
         assertEquals(emptyMap(), store.snapshot().muscleTargets, "none until he sets one")
-        runBlocking {
-            store.setMuscleTarget("chest", 13)
-            store.setMuscleTarget("front delts", 3)
-            store.setMuscleTarget("chest", 9)
-            store.setMuscleTarget("traps", 41)
-            store.setMuscleTarget(" ", 5)
+        val changes = runBlocking {
+            listOf(
+                store.setMuscleTarget("chest", 13),
+                store.setMuscleTarget("front delts", 3),
+                store.setMuscleTarget("chest", 9),
+                store.setMuscleTarget("chest", 9),
+                store.setMuscleTarget("traps", 41),
+                store.setMuscleTarget(" ", 5),
+                store.setMuscleTarget("lats", 0),
+            )
         }
         assertEquals(mapOf("chest" to 9, "front delts" to 3), store.snapshot().muscleTargets, "41 isn't on offer, a blank name no muscle")
+        assertEquals(listOf(true, true, true, false, false, false, false), changes, "the same number again, or 0 on none, changes nothing")
         runBlocking {
             store.setMuscleTarget("chest", 0)
             store.setMuscleTarget("front delts", 0)

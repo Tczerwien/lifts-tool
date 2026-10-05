@@ -153,14 +153,19 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
     /**
      * Sets [muscle]'s weekly target to [sets] (Sets per Muscle's SAVE); 0 takes it away, and a number past
      * [MAX_SET_TARGET] is ignored. Read and written in one edit, so two saves can't lose each other's muscle.
+     * True when the targets changed (the exports, which show them, are then rewritten).
      */
-    suspend fun setMuscleTarget(muscle: String, sets: Int) {
-        if (sets !in 0..MAX_SET_TARGET || muscle.isBlank()) return
+    suspend fun setMuscleTarget(muscle: String, sets: Int): Boolean {
+        if (sets !in 0..MAX_SET_TARGET || muscle.isBlank()) return false
+        var changed = false
         dataStore.edit { prefs ->
             val current = prefs[MUSCLE_TARGETS]?.let(::parseTargets).orEmpty()
             val next = if (sets == 0) current - muscle else current + (muscle to sets)
+            changed = next != current
+            if (!changed) return@edit
             if (next.isEmpty()) prefs.remove(MUSCLE_TARGETS) else prefs[MUSCLE_TARGETS] = encodeTargets(next)
         }
+        return changed
     }
 
     suspend fun setPlateInventoryKg(platesKg: List<Double>) {

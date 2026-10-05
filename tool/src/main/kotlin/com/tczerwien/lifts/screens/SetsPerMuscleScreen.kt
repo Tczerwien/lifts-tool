@@ -177,7 +177,7 @@ class SetsPerMuscleViewModel(
 
     /**
      * SAVE: the muscle's target is the stepper's (0 takes it away), on the list at once and in DataStore on
-     * the write lane; the exports, which show it, are rewritten.
+     * the write lane; the exports, which show it, are rewritten when it changed.
      */
     fun saveTarget() {
         val edit = _uiState.value.mode as? Mode.Edit ?: return
@@ -185,7 +185,7 @@ class SetsPerMuscleViewModel(
             val targets = if (edit.sets == 0) state.targets - edit.muscle else state.targets + (edit.muscle to edit.sets)
             state.copy(targets = targets, mode = Mode.List)
         }
-        LiftsIo.write({ settings.setMuscleTarget(edit.muscle, edit.sets) }) { share.logChanged() }
+        LiftsIo.write({ settings.setMuscleTarget(edit.muscle, edit.sets) }) { changed -> if (changed) share.logChanged() }
     }
 
     /** Back from the list of muscles or a target's stepper goes to the week's list, saving nothing. */
