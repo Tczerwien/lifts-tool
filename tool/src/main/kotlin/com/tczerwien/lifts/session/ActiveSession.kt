@@ -11,6 +11,7 @@ import com.tczerwien.lifts.data.LiftsStore
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.TemplateEntity
 import com.tczerwien.lifts.data.TemplateExerciseEntity
+import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.WorkoutExerciseEntity
 import com.tczerwien.lifts.data.tracking
@@ -297,7 +298,8 @@ class ActiveSession(
     fun addDrop(workoutId: Long, slotId: Long): Long? {
         val setId = repository.inTransaction {
             val slot = openSlot(workoutId, slotId) ?: return@inTransaction null
-            if (repository.exerciseById(slot.exerciseId)?.tracking?.takesWeight != true) return@inTransaction null
+            // One missing from the log (a restored backup) is weight × reps, as every screen shows it.
+            if (!(repository.exerciseById(slot.exerciseId)?.tracking ?: Tracking.WEIGHT_REPS).takesWeight) return@inTransaction null
             val rows = repository.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }.sortedBy { it.position }
             when (val place = dropPlace(rows)) {
                 null -> null

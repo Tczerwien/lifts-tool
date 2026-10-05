@@ -268,6 +268,11 @@ class ActiveSessionTest {
         assertNull(session.addDrop(workoutId, plank), "a hold takes no weight")
         session.completeSet(workoutId, flyRows()[1], 30.0, 12, n, now = 30_000)
         assertNull(session.addDrop(workoutId, 9_999), "not a slot of it")
+        // An exercise missing from the log is weight × reps, as the screen shows it (review R1-10, A11).
+        val gone = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "custom-gone", position = 2))
+        val goneSet = store.addSet(SetEntity(workoutExerciseId = gone, position = 0, type = n))
+        session.completeSet(workoutId, store.setById(goneSet)!!, 40.0, 10, n, now = 35_000)
+        assertNotNull(session.addDrop(workoutId, gone))
         assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 40_000))
         val before = store.setsForWorkout(workoutId)
         assertNull(session.addDrop(workoutId, fly), "closed")
