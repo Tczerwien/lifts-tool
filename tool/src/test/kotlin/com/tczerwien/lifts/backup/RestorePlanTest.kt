@@ -151,6 +151,22 @@ class RestorePlanTest {
     }
 
     @Test
+    fun `the rows naming the Lifts that wrote a backup change nothing a restore decides from its settings`() {
+        val bars = listOf(Seeder.defaultBar().copy(id = 1))
+        val made = MadeBy.rows(19, "0.19.0")
+        listOf(
+            mapOf("lifts_units" to "kg"),
+            mapOf("lifts_units" to "kg", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0", SettingsStore.KEY_DELOAD_KEEP_PCT to "50"),
+            mapOf("lifts_units" to "kg", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0", SettingsStore.KEY_MUSCLE_TARGETS to "{}"),
+        ).forEach { rows ->
+            assertEquals(RestorePlan.refitsTypes(rows), RestorePlan.refitsTypes(rows + made), "$rows")
+            assertEquals(RestorePlan.predatesTargets(rows), RestorePlan.predatesTargets(rows + made), "$rows")
+            assertEquals(RestorePlan.settingsLine(rows), RestorePlan.settingsLine(rows + made), "$rows")
+            assertEquals(RestorePlan.barsToFit(bars, rows, WeightUnit.KG), RestorePlan.barsToFit(bars, rows + made, WeightUnit.KG), "$rows")
+        }
+    }
+
+    @Test
     fun `a backup from before B9 restored in kg gets the 20 kg bar, as the upgrade gave the phone`() {
         val seeded = Seeder.defaultBar().copy(id = 1)
         val his = BarEntity(id = 2, name = "EZ Bar", weightKg = Format.lbToKg(25.0), position = 1)
