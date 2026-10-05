@@ -56,7 +56,8 @@ android {
         }
     }
 
-    // BuildConfig carries lighttool.toml's versionName, which Settings > About shows.
+    // BuildConfig carries lighttool.toml's versionName, which Settings > About shows, and versionCode: every backup
+    // records both, and a restore refuses a backup a newer Lifts made (backup/MadeBy.kt).
     buildFeatures {
         buildConfig = true
     }
