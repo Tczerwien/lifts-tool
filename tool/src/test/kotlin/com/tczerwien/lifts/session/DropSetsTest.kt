@@ -158,6 +158,18 @@ class DropSetsTest {
     }
 
     @Test
+    fun `last time's drop only while it is lighter than today's set`() {
+        // Last time's drop was 70 under a heavier set; today the set is 65, or 70: 20 % under it instead (review A2).
+        val lastDrop = SetEntity(id = 9, workoutExerciseId = 2, position = 3, type = d, weightKg = Format.lbToKg(70.0), reps = 6, completedAt = 1L)
+        assertEquals(50.0 to 6, dropStart(Tracking.WEIGHT_REPS, above(65.0), lastDrop, lb, 5.0).let { shownLb(it.weightKg) to it.reps })
+        assertEquals(55.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(70.0), lastDrop, lb, 5.0).weightKg), "as heavy: no drop either")
+        // Assisted: last time's help is used only while it is more help than today's set has.
+        val help = lastDrop.copy(weightKg = Format.lbToKg(-50.0))
+        assertEquals(-50.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(-40.0), help, lb, 5.0).weightKg))
+        assertEquals(-75.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(-60.0), help, lb, 5.0).weightKg), "60 ÷ 0.8")
+    }
+
+    @Test
     fun `bodyweight lifts drop to no load added, assisted ones get more help`() {
         assertEquals(20.0, shownLb(dropStart(Tracking.WEIGHTED_BODYWEIGHT, above(25.0), null, lb, 5.0).weightKg))
         assertEquals(0.0, shownLb(dropStart(Tracking.WEIGHTED_BODYWEIGHT, above(null), null, lb, 5.0).weightKg), "bodyweight alone stays")

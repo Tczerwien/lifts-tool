@@ -154,20 +154,34 @@ const val DROP_LOAD_FRACTION = 0.8
 
 /**
  * Where a drop starts (DR-2), each number on its own: last time's matching drop ([lastDrop], the drop's
- * PREVIOUS) when there is one; else from [above], the row above it as it stands (the set it belongs to, or the
- * drop before it in a chain): its reps or seconds, and [DROP_LOAD_FRACTION] of its load, snapped down to the
- * weight [step] (in [unit], as the steppers move), never below none. Snapped down, it is always at least one
- * step lighter. On a weighted bodyweight lift that is the load added, down to none (bodyweight alone); on an
- * assisted one the help grows instead (less load): divided by the share, snapped up, at least one step more.
- * Weights are stored kg (help negative, [Tracking.storedWeight]). Only what [tracking] records.
+ * PREVIOUS) when there is one, its load only while it is lighter than [above] (a lighter day today, or last
+ * time's drop under a heavier set, would make it no drop at all); else from [above], the row above it as it
+ * stands (the set it belongs to, or the drop before it in a chain): its reps or seconds, and
+ * [DROP_LOAD_FRACTION] of its load, snapped down to the weight [step] (in [unit], as the steppers move), never
+ * below none. Snapped down, it is always at least one step lighter. On a weighted bodyweight lift that is the load added,
+ * down to none (bodyweight alone); on an assisted one the help grows instead (less load): divided by the share,
+ * snapped up, at least one step more. Weights are stored kg (help negative, [Tracking.storedWeight]). Only
+ * what [tracking] records.
  */
-fun dropStart(tracking: Tracking, above: RowValues, lastDrop: SetEntity?, unit: WeightUnit, step: Double): RowValues =
-    RowValues(
-        weightKg = (lastDrop?.weightKg ?: lighterKg(tracking, above.weightKg, unit, step))
-            ?.takeIf { tracking.takesWeight }?.let(tracking::asLogged),
+fun dropStart(tracking: Tracking, above: RowValues, lastDrop: SetEntity?, unit: WeightUnit, step: Double): RowValues {
+    val weightKg = (lastDrop?.weightKg?.takeIf { lighter(tracking, it, above.weightKg, unit) } ?: lighterKg(tracking, above.weightKg, unit, step))
+        ?.takeIf { tracking.takesWeight }?.let(tracking::asLogged)
+    return RowValues(
+        weightKg = weightKg,
         reps = (lastDrop?.reps ?: above.reps)?.takeIf { tracking.takesReps },
         durationSec = (lastDrop?.durationSec ?: above.durationSec)?.takeIf { tracking.takesDuration },
     )
+}
+
+/**
+ * Whether [kg] is a lighter load than [aboveKg] as they show in [unit]: on an assisted lift, more help. True with
+ * nothing above to compare with.
+ */
+private fun lighter(tracking: Tracking, kg: Double, aboveKg: Double?, unit: WeightUnit): Boolean {
+    aboveKg ?: return true
+    fun shown(value: Double) = Format.roundWeight(Format.kgToDisplay(tracking.shownWeight(value)!!, unit), unit)
+    return if (tracking == Tracking.ASSISTED_BODYWEIGHT) shown(kg) > shown(aboveKg) else shown(kg) < shown(aboveKg)
+}
 
 /** [dropStart]'s load from [aboveKg]; null for a lift that takes none, or a plain lift with none to drop from. */
 private fun lighterKg(tracking: Tracking, aboveKg: Double?, unit: WeightUnit, step: Double): Double? {
