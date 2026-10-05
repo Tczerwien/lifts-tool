@@ -213,8 +213,9 @@ fun seedFor(
  * Set types a new slot starts with, from [lastTime] (the matching slot group from last session).
  * From a template ([targetWorkSets] given): [warmupSets] warm-ups, or last time's when the template
  * leaves them to last session (null), then that many work sets. Added by hand: last time's pattern,
- * warm-ups kept, every other type as a plain work set. With no history either way: [targetWorkSets],
- * or [DEFAULT_NEW_EXERCISE_SETS], work sets.
+ * warm-ups kept, every work set as a plain one, and no drops: a drop is never planned (DR-5), it is
+ * added after its set when wanted. With no history either way: [targetWorkSets], or
+ * [DEFAULT_NEW_EXERCISE_SETS], work sets.
  */
 fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null, warmupSets: Int? = null): List<String> {
     if (targetWorkSets != null) {
@@ -223,7 +224,16 @@ fun prefillTypes(lastTime: List<SetEntity>, targetWorkSets: Int? = null, warmupS
             List(targetWorkSets.coerceAtLeast(0)) { SET_TYPE_NORMAL }
     }
     if (lastTime.isEmpty()) return List(DEFAULT_NEW_EXERCISE_SETS) { SET_TYPE_NORMAL }
-    return lastTime.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
+    return plannedTypes(rowKinds(lastTime))
+}
+
+/** The rows a plan copies of rows of these [kinds]: warm-ups and plain work sets, no drops (DR-5). */
+private fun plannedTypes(kinds: List<RowKind>): List<String> = kinds.mapNotNull { kind ->
+    when (kind) {
+        RowKind.WARMUP -> SET_TYPE_WARMUP
+        RowKind.WORK -> SET_TYPE_NORMAL
+        RowKind.DROP -> null
+    }
 }
 
 /**
@@ -291,19 +301,21 @@ fun planTemplate(
 /**
  * The slots "Start again" begins with, from a finished workout's [slots] and [sets]: one per slot
  * with a ticked work set, in position order, each with its ticked sets' pattern (warm-ups kept, every
- * other type a plain work set), the exercise done (a swapped one too) and the slot's choices, the slot's
- * rests and targets, its planned work sets (the slot's, else
+ * work set a plain one, drops left out: a drop is never planned, DR-5), the exercise done (a swapped one
+ * too) and the slot's choices, the slot's rests and targets, its planned work sets (the slot's, else
  * the work sets copied: a deload's copy keeps the full plan), and its superset among the slots kept
  * (a superset left with one slot is none). Unticked sets count nowhere, so an exercise skipped that
  * day, or left after its warm-ups, is left out; notes stay with the old workout. "Save as template"
- * reads the same plan.
+ * reads the same plan, so a set with a drop is one set there too.
  */
 fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): List<PlannedSlot> {
-    val ticked = sets.filter { it.completedAt != null }.groupBy { it.workoutExerciseId }
+    val bySlot = sets.groupBy { it.workoutExerciseId }
     return slots.sortedBy { it.position }.mapNotNull { slot ->
-        val done = ticked[slot.id]?.sortedBy { it.position }?.takeIf { sets -> sets.any { !it.isWarmup() } }
-            ?: return@mapNotNull null
-        val types = done.map { if (it.isWarmup()) SET_TYPE_WARMUP else SET_TYPE_NORMAL }
+        // Kinds from all of the slot's rows: a drop belongs to the set above it, ticked or not.
+        val rows = bySlot[slot.id].orEmpty().sortedBy { it.position }
+        val done = rows.zip(rowKinds(rows)).filter { (set, _) -> set.completedAt != null }.map { it.second }
+            .takeIf { kinds -> RowKind.WORK in kinds } ?: return@mapNotNull null
+        val types = plannedTypes(done)
         PlannedSlot(
             exerciseId = slot.exerciseId,
             types = types,

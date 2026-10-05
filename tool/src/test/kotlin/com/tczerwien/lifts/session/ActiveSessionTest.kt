@@ -490,6 +490,25 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a drop is no extra set in a start again, a template, or a hand-added exercise`() {
+        // Four sets of flyes, the last with a drop under it (DR-5).
+        val d = SET_TYPE_DROP
+        val source = store.addFinishedWorkout(
+            startedAt = 1_000_000,
+            "fly" to listOf(Triple(n, 30.0, 12), Triple(n, 30.0, 12), Triple(n, 30.0, 12), Triple(n, 30.0, 10), Triple(d, 22.5, 8)),
+        )
+        val again = assertNotNull(session.startFromWorkout(source, now = 2_000_000))
+        assertEquals(listOf(n, n, n, n), store.setsForWorkout(again).map { it.type })
+        assertEquals(4, store.exercisesForWorkout(again).single().targetSets)
+        session.discardWorkout(again)
+        val template = assertNotNull(session.saveAsTemplate(source, "Chest"))
+        assertEquals(4, store.exercisesForTemplate(template).single().targetSets, "4, not 5")
+        val empty = session.startEmpty(now = 3_000_000)
+        val slot = assertNotNull(session.addExercise(empty, "fly"))
+        assertEquals(listOf(n, n, n, n), store.setsForWorkout(empty).filter { it.workoutExerciseId == slot }.map { it.type })
+    }
+
+    @Test
     fun `save as template keeps the counts within what the editor's steppers reach`() {
         val source = store.addFinishedWorkout(
             startedAt = 1_000_000,

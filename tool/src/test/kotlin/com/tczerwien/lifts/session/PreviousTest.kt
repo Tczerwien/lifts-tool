@@ -481,6 +481,24 @@ class PreviousTest {
     }
 
     @Test
+    fun `a drop is never a planned row`() {
+        // Last time 3 sets and a drop under the last: added by hand, 3 sets, not 4 (DR-5).
+        assertEquals(listOf(w, n, n, n), prefillTypes(listOf(prev(1, w), prev(2, n), prev(3, n), prev(4, n), prev(5, d))))
+        assertEquals(listOf(w, n), prefillTypes(listOf(prev(1, w), prev(2, d))), "one with no set above it was a set")
+        // Start Again: 4 sets, one with a drop, plan 4 sets.
+        val slots = listOf(WorkoutExerciseEntity(id = 1, workoutId = 1, exerciseId = "fly", position = 0))
+        val sets = listOf(
+            set(11, position = 0, completedAt = 1L), set(12, position = 1, completedAt = 2L), set(13, position = 2, completedAt = 3L),
+            set(14, position = 3, type = d, completedAt = 4L), set(15, position = 4, completedAt = 5L),
+        )
+        val plan = planFromWorkout(slots, sets).single()
+        assertEquals(listOf(n, n, n, n) to 4, plan.types to plan.targetSets)
+        // A ticked drop under an unticked set belongs to that set: it doesn't make the set before it two.
+        val skipped = listOf(set(21, position = 0, completedAt = 1L), set(22, position = 1), set(23, position = 2, type = d, completedAt = 2L))
+        assertEquals(listOf(n), planFromWorkout(slots, skipped.map { it.copy(workoutExerciseId = 1) }).single().types)
+    }
+
+    @Test
     fun `a template with Bench twice plans each slot from its own group`() {
         val template = listOf(
             TemplateExerciseEntity(id = 1, templateId = 7, exerciseId = "bench", position = 0, targetSets = 1),
