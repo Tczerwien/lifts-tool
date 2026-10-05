@@ -125,12 +125,17 @@ data class RowValues(val weightKg: Double?, val reps: Int?, val durationSec: Int
  * records (a reps-only row never logs a weight left from before its type changed, and an assisted
  * row logs help as negative even when last time's was stored before the type was set):
  * 1. the row's own value;
- * 2. the value of today's previous row of the same kind (warm-up or work), if you changed it from
- *    last time and last time the two rows matched (straight sets): 5 lb on set 1 carries to set 2,
- *    but a heavier top set doesn't drag its back-off sets up, nor warm-up 1 the rest of the ramp;
+ * 2. the value of today's previous row of the same kind (warm-up or work: drops are left out), if
+ *    you changed it from last time and last time the two rows matched (straight sets): 5 lb on set 1
+ *    carries to set 2, but a heavier top set doesn't drag its back-off sets up, nor warm-up 1 the
+ *    rest of the ramp, and a drop between two sets doesn't stop set 3 carrying to set 4;
  * 3. this row's PREVIOUS ([aligned], from [alignPrevious]);
- * 4. today's previous row of the same kind, which is how a new exercise carries set 1 forward;
+ * 4. today's previous row of the same kind, which is how a new exercise carries set 1 forward (set 4
+ *    from set 3, never from the drop under it);
  * 5. nothing.
+ * A drop ([rowKinds]) has its own rule (DR-2, [dropStart]): its own value, else last time's drop (its
+ * PREVIOUS), else from the row above it as worked out here (its set, or the drop before it), lighter by
+ * the weight step [weightStep] (in [unit]).
  * "Today's previous row" means its value as worked out here, so a change carries down the sets.
  * Weights compare as they show in [unit], so stepping up and back down again is no change.
  */
@@ -139,19 +144,26 @@ fun seedRows(
     aligned: List<SetEntity?>,
     unit: WeightUnit,
     tracking: Tracking = Tracking.WEIGHT_REPS,
+    weightStep: Double = unit.defaultWeightStep,
 ): List<RowValues> {
     val sameWeight = { a: Double?, b: Double? ->
         a != null && b != null &&
             Format.roundWeight(Format.kgToDisplay(a, unit), unit) == Format.roundWeight(Format.kgToDisplay(b, unit), unit)
     }
+    val kinds = rowKinds(rows)
     val result = ArrayList<RowValues>(rows.size)
-    var lastWarmup: Int? = null
-    var lastWork: Int? = null
+    val lastOfKind = HashMap<RowKind, Int>()
     rows.forEachIndexed { index, row ->
-        val earlierIndex = if (row.isWarmup()) lastWarmup else lastWork
+        val previous = aligned.getOrNull(index)
+        if (kinds[index] == RowKind.DROP) {
+            // A drop has a row above it, its set or the drop before it: the kinds say so.
+            val start = dropStart(tracking, above = result[index - 1], lastDrop = previous, unit, weightStep)
+            result += RowValues(row.weightKg ?: start.weightKg, row.reps ?: start.reps, row.durationSec ?: start.durationSec)
+            return@forEachIndexed
+        }
+        val earlierIndex = lastOfKind[kinds[index]]
         val earlier = earlierIndex?.let { result[it] }
         val earlierPrevious = earlierIndex?.let { aligned.getOrNull(it) }
-        val previous = aligned.getOrNull(index)
         val weight = row.weightKg
             ?: earlier?.weightKg?.takeIf {
                 carries(it, earlierPrevious?.weightKg, previous?.weightKg, sameWeight)
@@ -167,7 +179,7 @@ fun seedRows(
             ?: previous?.durationSec
             ?: earlier?.durationSec
         result += RowValues(weight, reps, durationSec)
-        if (row.isWarmup()) lastWarmup = index else lastWork = index
+        lastOfKind[kinds[index]] = index
     }
     return result.map { values ->
         RowValues(
@@ -194,7 +206,8 @@ fun seedFor(
     aligned: List<SetEntity?>,
     unit: WeightUnit,
     tracking: Tracking = Tracking.WEIGHT_REPS,
-): RowValues = seedRows(rows, aligned, unit, tracking)[index]
+    weightStep: Double = unit.defaultWeightStep,
+): RowValues = seedRows(rows, aligned, unit, tracking, weightStep)[index]
 
 /**
  * Set types a new slot starts with, from [lastTime] (the matching slot group from last session).

@@ -333,6 +333,51 @@ class PreviousTest {
         assertEquals(RowValues(-18.0, 8), seedFor(row, 0, alignPrevious(row, before), WeightUnit.KG, Tracking.ASSISTED_BODYWEIGHT))
     }
 
+    // --- Starting values with drops (DR-2, DR-4) ---
+
+    @Test
+    fun `set 4 starts from set 3, not from the drop under it`() {
+        // A new lift, no PREVIOUS: set 3 ticked at 100 × 8, a drop under it, then set 4.
+        val today = listOf(
+            set(11, position = 0, weightKg = 100.0, reps = 8, completedAt = 1L),
+            set(12, position = 1, type = d),
+            set(13, position = 2),
+        )
+        val seeds = seedRows(today, alignPrevious(today, emptyList()), WeightUnit.KG, weightStep = 2.5)
+        assertEquals(RowValues(80.0, 8), seeds[1], "the drop: 20 % lighter, with the set's reps")
+        assertEquals(RowValues(100.0, 8), seeds[2], "set 4 carries set 3, not the drop's 80")
+    }
+
+    @Test
+    fun `a heavier set still carries past a drop to the next set`() {
+        // Last time straight sets of 100 × 8; today set 1 raised to 105, with a drop under it.
+        val previous = List(2) { prev(it + 1L, n, weightKg = 100.0, reps = 8) }
+        val today = listOf(
+            set(11, position = 0, weightKg = 105.0, reps = 8, completedAt = 1L),
+            set(12, position = 1, type = d),
+            set(13, position = 2),
+        )
+        assertEquals(RowValues(105.0, 8), seedRows(today, alignPrevious(today, previous), WeightUnit.KG)[2])
+    }
+
+    @Test
+    fun `a drop starts at last time's drop, and each drop of a chain goes lighter again`() {
+        val previous = listOf(prev(1, n, weightKg = 100.0, reps = 8), prev(2, d, weightKg = 70.0, reps = 6))
+        val today = listOf(
+            set(11, position = 0, weightKg = 105.0, reps = 8, completedAt = 1L),
+            set(12, position = 1, type = d),
+            set(13, position = 2, type = d),
+        )
+        val seeds = seedRows(today, alignPrevious(today, previous), WeightUnit.KG, weightStep = 2.5)
+        assertEquals(RowValues(70.0, 6), seeds[1], "last time's drop, though set 1 is heavier")
+        assertEquals(RowValues(55.0, 6), seeds[2], "56 snaps down to 55, with the drop above's reps")
+        // Its own numbers win, and the next drop goes from them.
+        val stepped = today.toMutableList().also { it[1] = it[1].copy(weightKg = 80.0) }
+        val steppedSeeds = seedRows(stepped, alignPrevious(stepped, previous), WeightUnit.KG, weightStep = 2.5)
+        assertEquals(RowValues(80.0, 6), steppedSeeds[1])
+        assertEquals(RowValues(62.5, 6), steppedSeeds[2])
+    }
+
     // --- New slots ---
 
     @Test

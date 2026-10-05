@@ -110,12 +110,14 @@ class ActiveWorkoutViewModel(
         val deloadRir: RirTarget = DEFAULT_DELOAD_RIR,
         /** The slot's choices still in the picker, and the one it does: what the swap cycles through ([swapTarget]). */
         val choices: List<String> = emptyList(),
+        /** Settings' weight step in [unit]: a drop starts lighter by it ([seedRows]). */
+        val weightStep: Double = unit.defaultWeightStep,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */
         val previous: List<SetEntity?> = alignPrevious(sets, lastTime)
 
         /** What each row logs if ticked as it stands ([seedRows]), parallel to [sets]. */
-        val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking)
+        val seeds: List<RowValues> = seedRows(sets, previous, unit, tracking, weightStep)
 
         /** The exercise the swap icon changes it to ([swapTarget]); null, no icon, without one or once a row is ticked. */
         val swapTo: String? = swapTarget(choices, slot.exerciseId, sets) { true }
@@ -1304,6 +1306,7 @@ class ActiveWorkoutViewModel(
                     deload = workout.deload,
                     deloadRir = settings.deloadRir,
                     choices = slot.choices.filter { it == slot.exerciseId || catalog[it]?.hidden == false },
+                    weightStep = settings.weightStep,
                 )
             }
             val prIds = prSetIds(slots, sets, cached.prior, trackingOf(blocks))

@@ -197,8 +197,9 @@ class RestTimerViewModel(
         val exercise = repository.exerciseById(exerciseId)
         val lastTime = previousForSlots(slots, session.previousGroupsByExercise(listOf(exerciseId)))[next.slot.id].orEmpty()
         val aligned = alignPrevious(next.rows, lastTime)
-        val units = settingsStore.snapshot().units
-        val seed = seedFor(next.rows, next.index, aligned, units, exercise?.tracking ?: Tracking.WEIGHT_REPS)
+        val settings = settingsStore.snapshot()
+        val units = settings.units
+        val seed = seedFor(next.rows, next.index, aligned, units, exercise?.tracking ?: Tracking.WEIGHT_REPS, settings.weightStep)
         // Only the row's own RPE: a tick logs that, never last session's.
         val rpe = next.rows[next.index].rpe
         val summary = setNotation(
