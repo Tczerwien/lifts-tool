@@ -379,23 +379,29 @@ class PreviousTest {
     }
 
     @Test
-    fun `a drop under a swapped slot starts from the lift done`() {
-        // Today the slot planned as the cable raise does the dumbbell raise, which last time had a drop.
+    fun `a drop under a swapped slot starts from the lift done, lined up by kind`() {
+        // Today the slot planned as the cable raise does the dumbbell raise, which last time had a drop under set 1.
+        // Today the drop comes under set 2: set 2 reads last time's set 2 (the third row), the drop its drop (R1-13).
         val lastWeek = mapOf(
             "db" to previousGroups(
                 listOf(
                     set(1, slot = 10, weightKg = 10.0, reps = 12, completedAt = 1L),
                     set(2, slot = 10, position = 1, type = d, weightKg = 6.0, reps = 10, completedAt = 2L),
+                    set(3, slot = 10, position = 2, weightKg = 10.0, reps = 11, completedAt = 3L),
                 ),
                 listOf(slot(10, "db", 0)),
                 "db",
             ),
         )
         val today = listOf(slot(20, "db", 0).copy(choices = listOf("cable", "db")))
-        val rows = listOf(set(21, slot = 20, weightKg = 10.0, reps = 12, completedAt = 3L), set(22, slot = 20, position = 1, type = d))
+        val rows = listOf(
+            set(21, slot = 20, weightKg = 10.0, reps = 12, completedAt = 4L),
+            set(22, slot = 20, position = 1, weightKg = 10.0, reps = 11, completedAt = 5L),
+            set(23, slot = 20, position = 2, type = d),
+        )
         val aligned = alignPrevious(rows, previousForSlots(today, lastWeek).getValue(20))
-        assertEquals(2L, aligned[1]?.id, "the dumbbell raise's drop")
-        assertEquals(RowValues(6.0, 10), seedRows(rows, aligned, WeightUnit.KG)[1])
+        assertEquals(listOf(1L, 3L, 2L), aligned.map { it?.id }, "set 2 with set 2, the drop with the dumbbell raise's drop")
+        assertEquals(RowValues(6.0, 10), seedRows(rows, aligned, WeightUnit.KG)[2])
     }
 
     // --- New slots ---
