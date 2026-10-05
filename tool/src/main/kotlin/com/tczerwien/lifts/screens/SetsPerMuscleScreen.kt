@@ -231,6 +231,9 @@ internal fun weekLine(weeksBack: Int, monday: LocalDate, today: LocalDate, deloa
         "DELOAD".takeIf { deload },
     ).joinToString(" · ")
 
+/** The list of a week with no sets and no targets: "No sets this week", or "that week" for an earlier one. */
+internal fun emptyWeekText(weeksBack: Int): String = if (weeksBack == 0) "No sets this week" else "No sets that week"
+
 /** A row's count: "9 / 12" against a target, "2" without one. */
 internal fun setsText(row: MuscleRow): String = row.target?.let { "${row.sets} / $it" } ?: "${row.sets}"
 
@@ -314,7 +317,7 @@ class SetsPerMuscleScreen(
                 val rows = uiState.rows
                 if (rows.isEmpty()) {
                     LightText(
-                        text = "No sets this week",
+                        text = emptyWeekText(uiState.weeksBack),
                         variant = LightTextVariant.Copy,
                         lighten = true,
                         modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp(), vertical = 0.5f.gridUnitsAsDp()),

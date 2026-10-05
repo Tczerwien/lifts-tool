@@ -22,6 +22,12 @@ class SetsPerMuscleTest {
     }
 
     @Test
+    fun `an empty week says this week or that week`() {
+        assertEquals("No sets this week", emptyWeekText(0))
+        assertEquals("No sets that week", emptyWeekText(3))
+    }
+
+    @Test
     fun `a row reads sets against its target, or sets alone`() {
         assertEquals("9 / 12", setsText(MuscleRow("chest", 9, 12)))
         assertEquals("0 / 6", setsText(MuscleRow("calves", 0, 6)))
