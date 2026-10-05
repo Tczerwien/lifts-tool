@@ -56,6 +56,7 @@ class MarkdownExportTest {
         val counting = lines.indexOfFirst { it.startsWith("Counting: hard sets, as Lifts' Sets per Muscle screen counts them.") }
         assertTrue(counting > 0, "the counting rule (#126)")
         assertEquals("", lines[counting - 1], "its own paragraph, not run into the week line")
+        assertTrue("(a drop with no set before it counts as a set)" in lines[counting], "a drop adds 0 only after its set")
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
         // Direct counting: the bench's secondary muscles get no line.
         assertTrue(lines.none { it.startsWith("- triceps:") || it.startsWith("- shoulders:") })

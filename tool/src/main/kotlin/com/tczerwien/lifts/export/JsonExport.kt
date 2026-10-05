@@ -361,7 +361,8 @@ data class JsonSummary(
     @SerialName("week_starts") val weekStarts: List<String>,
     /**
      * One count per [weekStarts] week, oldest first: hard sets, 1 per ticked work set for each muscle its
-     * exercise counts for (counts_for, else its primary muscles); warm-ups, drop sets and secondary muscles add nothing.
+     * exercise counts for (counts_for, else its primary muscles); warm-ups, a dropset after its set (drop_of) and
+     * secondary muscles add nothing.
      */
     @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Int>>,
     /** His weekly targets as they are now, hard sets by muscle; a muscle without one isn't here. Absent without any. */

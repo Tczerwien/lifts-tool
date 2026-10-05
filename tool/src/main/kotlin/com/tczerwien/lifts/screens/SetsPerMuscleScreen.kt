@@ -335,8 +335,8 @@ class SetsPerMuscleScreen(
                 }
                 LightText(
                     text = "Ticked work sets of finished workouts, by the week each started. A set counts 1 for every " +
-                        "muscle its exercise counts for (Exercise › About › Counts For; else its catalog muscle). " +
-                        "Warm-ups and drops add 0; a deload's sets count.",
+                        "muscle its exercise counts for (Exercise › About › Counts For; else its primary muscle). " +
+                        "Warm-ups add 0, and so does a drop after its set; a deload's sets count.",
                     variant = LightTextVariant.Detail,
                     lighten = true,
                     modifier = Modifier.padding(horizontal = 1f.gridUnitsAsDp(), vertical = 1f.gridUnitsAsDp()),

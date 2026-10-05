@@ -122,8 +122,8 @@ object MarkdownExport {
             appendWeeks(snapshot)
             append("Counting: hard sets, as Lifts' Sets per Muscle screen counts them. Each ticked working set adds 1 to")
             append(" each muscle its exercise counts for: the muscles he chose for it (Counts For), else its primary muscles.")
-            append(" A warm-up adds 0, and so does a drop set (`D`), part of the set before it; secondary muscles add nothing,")
-            append(" and a deload's sets count. The muscles are free-exercise-db's 17 groups (shoulders = front, side and rear")
+            append(" A warm-up adds 0, and so does a drop set (`D`) after its set, as part of it (a drop with no set before it")
+            append(" counts as a set); secondary muscles add nothing, and a deload's sets count. The muscles are free-exercise-db's 17 groups (shoulders = front, side and rear")
             append(" delts; most rows count as middle back) plus front delts, side delts, rear delts and upper chest.\n\n")
             val chosen = snapshot.exercises.filter { it.countsFor.isNotEmpty() }
             if (chosen.isNotEmpty()) {
