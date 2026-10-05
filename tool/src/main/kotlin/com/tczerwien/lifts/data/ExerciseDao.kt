@@ -65,4 +65,8 @@ interface ExerciseDao {
 
     @Query("UPDATE exercises SET perSide = :perSide WHERE id = :id AND perSide != :perSide")
     fun setPerSide(id: String, perSide: Boolean): Int
+
+    /** Sets what [id] counts for, as stored ([Converters.fromStringList]: a JSON list, "[]" for none); 0 rows when it already does. */
+    @Query("UPDATE exercises SET countsFor = :countsFor WHERE id = :id AND countsFor != :countsFor")
+    fun setCountsFor(id: String, countsFor: String): Int
 }

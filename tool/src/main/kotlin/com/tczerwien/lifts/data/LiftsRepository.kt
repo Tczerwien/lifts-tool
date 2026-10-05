@@ -153,6 +153,14 @@ class LiftsRepository private constructor(
     /** Reps (or seconds) of [id] are per side from now on, or not; true when it changed. */
     fun setPerSide(id: String, perSide: Boolean): Boolean = db.exerciseDao.setPerSide(id, perSide) > 0
 
+    /**
+     * The muscles a set of [id] counts for in weekly sets ([com.tczerwien.lifts.analytics.countsFor]); empty
+     * for the catalog's primary muscles. Only that column is written, so nothing else of the exercise can
+     * go back to an older value. True when it changed.
+     */
+    fun setCountsFor(id: String, countsFor: List<String>): Boolean =
+        db.exerciseDao.setCountsFor(id, Converters().fromStringList(countsFor)) > 0
+
     /** Every exercise without its instructions, by name: the picker's catalog. */
     fun exerciseSummaries(): List<ExerciseSummary> = db.exerciseDao.listSummaries()
 

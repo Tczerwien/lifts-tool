@@ -23,15 +23,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import com.tczerwien.lifts.Perf
+import com.tczerwien.lifts.analytics.MUSCLES
 import com.tczerwien.lifts.analytics.NotationStyle
 import com.tczerwien.lifts.analytics.PER_SIDE
 import com.tczerwien.lifts.analytics.SetRun
 import com.tczerwien.lifts.analytics.SetToken
 import com.tczerwien.lifts.analytics.chronologicalPrSetIds
 import com.tczerwien.lifts.analytics.compactNotation
+import com.tczerwien.lifts.analytics.countsForText
 import com.tczerwien.lifts.analytics.exerciseRecords
+import com.tczerwien.lifts.analytics.muscleLabel
 import com.tczerwien.lifts.analytics.recordLoadKg
 import com.tczerwien.lifts.analytics.setNotation
+import com.tczerwien.lifts.analytics.toggledCountsFor
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.SetEntity
 import com.tczerwien.lifts.data.Tracking
@@ -147,6 +151,11 @@ class ExerciseDetailViewModel(
         val perSide: Boolean = false,
         /** Taken out of the picker ([com.tczerwien.lifts.library.Removal.HIDE]): About offers it back. */
         val hidden: Boolean = false,
+        /** What a set of it counts for in weekly sets (About's Counts For); empty: [primaryMuscles]. */
+        val countsFor: List<String> = emptyList(),
+        val primaryMuscles: List<String> = emptyList(),
+        /** The Counts For list is showing. */
+        val pickingCounts: Boolean = false,
     )
 
     enum class Editing { NOTE, NAME }
@@ -186,6 +195,10 @@ class ExerciseDetailViewModel(
     override fun onBackPressed(): Boolean {
         if (_uiState.value.pickingType) {
             _uiState.update { it.copy(pickingType = false) }
+            return true
+        }
+        if (_uiState.value.pickingCounts) {
+            closeCountsFor()
             return true
         }
         if (_uiState.value.editing == null) return false
@@ -271,7 +284,7 @@ class ExerciseDetailViewModel(
      */
     private val noteFloor = ReloadFloor()
 
-    /** [noteFloor] for About's Type, Per Side and Show: a reload that read before their save can't put them back. */
+    /** [noteFloor] for About's Type, Per Side, Counts For and Show: a reload that read before their save can't put them back. */
     private val aboutFloor = ReloadFloor()
 
     /**
@@ -360,6 +373,38 @@ class ExerciseDetailViewModel(
         }
     }
 
+    /** About's Counts For row: the list of muscles a set of it can count for. */
+    fun openCountsFor() {
+        if (!_uiState.value.loaded) return
+        _uiState.update { it.copy(pickingCounts = true) }
+    }
+
+    fun closeCountsFor() {
+        _uiState.update { it.copy(pickingCounts = false) }
+    }
+
+    /** A tap on a muscle is let through once per bounce, per row: two quick taps on two rows are two choices. */
+    private val countsForTaps = HashMap<String, BounceGuard>()
+
+    /**
+     * A tap in the Counts For list ([toggledCountsFor]; null is the catalog row): from now on its sets, past
+     * ones too, count for these muscles in Sets per Muscle and the exports. Shown at once and saved on the
+     * lane, each save the whole list as shown, so quick taps land in order.
+     */
+    fun toggleCountsFor(muscle: String?) {
+        val state = _uiState.value
+        if (!state.loaded || !countsForTaps.getOrPut(muscle.orEmpty()) { BounceGuard() }.take()) return
+        val next = toggledCountsFor(state.countsFor, muscle)
+        if (next == state.countsFor) return
+        aboutFloor.saveQueued()
+        _uiState.update { it.copy(countsFor = next) }
+        LiftsIo.write({ repository.setCountsFor(exerciseId, next) }) { changed ->
+            aboutFloor.saveLanded()
+            if (changed) share.logChanged()
+            refresh()
+        }
+    }
+
     /** How a rename on the lane went. */
     private sealed interface RenameResult {
         data object Saved : RenameResult
@@ -418,7 +463,7 @@ class ExerciseDetailViewModel(
         }
         // Merged into the state as it is now, so a tap made while this ran (opening an editor) stands.
         _uiState.update { state ->
-            // A Type, Per Side or Show tapped while this read stands until its save is read back.
+            // A Type, Per Side, Counts For or Show tapped while this read stands until its save is read back.
             val keepAbout = aboutFloor.keepsShown(aboutReload)
             state.copy(
                 name = exercise?.let(::displayName) ?: UNKNOWN_EXERCISE,
@@ -434,6 +479,8 @@ class ExerciseDetailViewModel(
                     .joinToString(" · ") { titleCaseLabel(it) }
                     .ifEmpty { "—" },
                 hidden = if (keepAbout) state.hidden else exercise?.hidden == true,
+                countsFor = if (keepAbout) state.countsFor else exercise?.countsFor.orEmpty(),
+                primaryMuscles = exercise?.primaryMuscles.orEmpty(),
             )
         }
     }
@@ -522,7 +569,8 @@ class ExerciseDetailViewModel(
  * History lists one row per workout (date + compact set notation with PR stars); Records
  * shows max weight, best e1RM, best volume set, and 1/5/8 rep maxes (or what the exercise's type
  * records: max reps, max added, least assistance, longest hold); About shows its name, its Type
- * (how it is measured, changeable), the pinned note and the catalog instructions. Top-bar pencil
+ * (how it is measured, changeable), what its sets count for in weekly sets (Counts For, changeable),
+ * the pinned note and the catalog instructions. Top-bar pencil
  * edits the pinned note; a tap on the name (top bar, or About's Name row) renames the exercise.
  * Opens on History — the common in-workout question is "what did I do last time".
  */
@@ -564,7 +612,7 @@ class ExerciseDetailScreen(
             if (uiState.leave) goBack()
         }
 
-        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.pickingType to uiState.editing) {
+        LiftsFrame(sealedActivity, lightContext, switchKey = Triple(uiState.pickingType, uiState.pickingCounts, uiState.editing)) {
             val editing = uiState.editing
             if (editing != null) {
                 val naming = editing == ExerciseDetailViewModel.Editing.NAME
@@ -593,6 +641,19 @@ class ExerciseDetailScreen(
                 )
             } else if (uiState.pickingType) {
                 TypePicker(uiState.tracking)
+            } else if (uiState.pickingCounts) {
+                // Multi-select; the first row is the catalog's muscles, which count while none is chosen.
+                OptionPicker(
+                    title = "Counts For",
+                    options = MUSCLES + (uiState.countsFor - MUSCLES.toSet()),
+                    isSelected = { muscle -> if (muscle == null) uiState.countsFor.isEmpty() else muscle in uiState.countsFor },
+                    onSelect = viewModel::toggleCountsFor,
+                    onBack = viewModel::closeCountsFor,
+                    multiSelect = true,
+                    includeNone = true,
+                    noneLabel = countsForText(emptyList(), uiState.primaryMuscles),
+                    label = ::muscleLabel,
+                )
             } else if (!renameOnly) {
                 DetailContent(uiState)
             } else {
@@ -651,6 +712,13 @@ class ExerciseDetailScreen(
                 label = "Per Side",
                 value = if (!uiState.perSide) "No" else if (uiState.tracking.takesDuration) "Yes · seconds each side" else "Yes · reps each side",
                 onClick = viewModel::togglePerSide,
+            )
+            // Sets per Muscle counts each work set 1 for each of these; the catalog's primary muscles until he picks.
+            LiftsFieldRow(
+                label = "Counts For",
+                value = countsForText(uiState.countsFor, uiState.primaryMuscles),
+                onClick = viewModel::openCountsFor,
+                chevron = true,
             )
             if (uiState.isCustom) {
                 // His own: muscles, equipment and category too, and the trash (hidden, as it has history).
