@@ -213,6 +213,11 @@ class LiftsRepository private constructor(
 
     override fun addSet(set: SetEntity): Long = db.workoutDao.insertSet(set)
 
+    override fun insertSetAt(slotId: Long, position: Int, set: SetEntity): Long = inTransaction {
+        db.workoutDao.moveSetsDown(slotId, position)
+        db.workoutDao.insertSet(set.copy(workoutExerciseId = slotId, position = position))
+    }
+
     override fun updateSetValues(set: SetEntity): Boolean = db.workoutDao.updateSetValues(
         id = set.id,
         type = set.type,

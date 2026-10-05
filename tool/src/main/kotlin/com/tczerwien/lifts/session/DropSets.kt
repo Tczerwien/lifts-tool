@@ -72,6 +72,17 @@ fun setMarkers(rows: List<SetEntity>): List<String> {
 }
 
 /**
+ * Where "…" › Drop Set puts a drop in one slot's [rows] (in position order), as an index of [rows]: directly
+ * under its latest tick (by when it was ticked), when that is a work set or a drop, so a chain grows under
+ * its set; null when nothing is ticked or the latest tick is a warm-up (DR-3). Whether the lift takes a
+ * weight is the caller's to check.
+ */
+fun dropUnder(rows: List<SetEntity>): Int? {
+    val latest = rows.filter { it.completedAt != null }.maxWithOrNull(compareBy({ it.completedAt }, { it.id })) ?: return null
+    return rows.indexOf(latest).takeIf { latest.type != SET_TYPE_WARMUP }
+}
+
+/**
  * Whether the row right after set [setId] in its slot ([sets]: the slot's rows, or any rows they are among) is
  * a drop still to do: then ticking [setId] starts no rest and stays on the exercise, for the drop straight
  * after it (DR-6, Hevy's rule: no timer before a drop).

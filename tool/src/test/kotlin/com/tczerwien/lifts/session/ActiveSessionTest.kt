@@ -226,6 +226,68 @@ class ActiveSessionTest {
         assertEquals(90 to 130_000L, dropped.restDurationSec to dropped.restEndMillis, "the work rest, after the drop")
     }
 
+    // --- Drop sets (DR-3) ---
+
+    @Test
+    fun `Drop Set puts an empty drop under the set just ticked, the rows below moving down, and ends the rest`() {
+        val template = store.addTemplate("Chest", "fly" to 4)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val fly = store.exercisesForWorkout(workoutId).single()
+        rowsOf(fly).take(3).forEachIndexed { index, row -> session.completeSet(workoutId, row, 30.0, 12, n, now = 1_100_000L + index * 60_000) }
+        assertNotNull(session.restStateSnapshot())
+        val set4 = rowsOf(fly)[3]
+
+        val dropId = assertNotNull(session.addDrop(workoutId, fly.id))
+        assertEquals(listOf(n, n, n, SET_TYPE_DROP, n), rowsOf(fly).map { it.type })
+        assertEquals(listOf(0, 1, 2, 3, 4), rowsOf(fly).map { it.position })
+        assertEquals(dropId to set4.id, rowsOf(fly)[3].id to rowsOf(fly)[4].id, "set 4 moved down, the same row")
+        val drop = store.setById(dropId)!!
+        assertEquals(listOf(null, null, null), listOf(drop.weightKg, drop.reps, drop.completedAt), "empty: it shows where a drop starts")
+        assertNull(session.restStateSnapshot(), "no beep mid-drop")
+        // Its tick starts the work rest; another drop goes under it, a chain under set 3.
+        assertNotNull(session.completeSet(workoutId, drop, 22.5, 8, SET_TYPE_DROP, now = 1_300_000)!!.restEndMillis)
+        val second = assertNotNull(session.addDrop(workoutId, fly.id))
+        assertEquals(listOf(n, n, n, SET_TYPE_DROP, SET_TYPE_DROP, n), rowsOf(fly).map { it.type })
+        assertEquals(4, rowsOf(fly).indexOfFirst { it.id == second })
+        assertEquals(listOf("1", "2", "3", "3", "3", "4"), setMarkers(rowsOf(fly)))
+    }
+
+    @Test
+    fun `Drop Set is refused without a work set or drop ticked last, on a lift without weight, or a closed workout`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val fly = assertNotNull(session.addExercise(workoutId, "fly"))
+        val flyRows = { store.setsForWorkout(workoutId).filter { it.workoutExerciseId == fly } }
+        assertNull(session.addDrop(workoutId, fly), "nothing ticked")
+        store.sets[flyRows()[0].id] = flyRows()[0].copy(type = w)
+        session.completeSet(workoutId, flyRows()[0], 10.0, 12, w, now = 10_000)
+        assertNull(session.addDrop(workoutId, fly), "only a warm-up ticked")
+        val plank = assertNotNull(session.addExercise(workoutId, "plank"))
+        store.exercises["plank"] = store.exercises.getValue("plank").copy(trackingType = com.tczerwien.lifts.data.Tracking.DURATION.stored)
+        val hold = store.setsForWorkout(workoutId).first { it.workoutExerciseId == plank }
+        session.completeSet(workoutId, hold, null, null, n, now = 20_000, durationSec = 60)
+        assertNull(session.addDrop(workoutId, plank), "a hold takes no weight")
+        session.completeSet(workoutId, flyRows()[1], 30.0, 12, n, now = 30_000)
+        assertNull(session.addDrop(workoutId, 9_999), "not a slot of it")
+        assertEquals(FinishOutcome.ENDED, session.finishOrDiscard(workoutId, now = 40_000))
+        val before = store.setsForWorkout(workoutId)
+        assertNull(session.addDrop(workoutId, fly), "closed")
+        assertEquals(before, store.setsForWorkout(workoutId))
+    }
+
+    @Test
+    fun `a deload keeps a drop with its set`() {
+        // Set 1 done with a drop, then the deload switched on: set 1 and its drop stay, with one more set.
+        val template = store.addTemplate("Chest", "fly" to 4)
+        val workoutId = session.startFromTemplate(template, now = 1_000_000)
+        val fly = store.exercisesForWorkout(workoutId).single()
+        session.completeSet(workoutId, rowsOf(fly)[0], 30.0, 12, n, now = 1_100_000)
+        assertNotNull(session.addDrop(workoutId, fly.id))
+        assertTrue(session.setDeload(workoutId, on = true))
+        assertEquals(listOf(n, SET_TYPE_DROP, n), rowsOf(fly).map { it.type }, "half of 4 work sets; the drop is no set")
+        assertTrue(session.setDeload(workoutId, on = false))
+        assertEquals(listOf(n, SET_TYPE_DROP, n, n, n), rowsOf(fly).map { it.type })
+    }
+
     @Test
     fun `a rest counts as seen as it is saved, so power pressed right after the tick still flashes later`() {
         val workoutId = session.startEmpty(now = 1_000)

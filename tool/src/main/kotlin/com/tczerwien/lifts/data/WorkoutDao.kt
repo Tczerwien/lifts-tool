@@ -150,6 +150,10 @@ interface WorkoutDao {
     @Query("UPDATE workout_exercises SET exerciseId = :exerciseId WHERE id = :id")
     fun updateSlotExercise(id: Long, exerciseId: String): Int
 
+    /** Moves slot [slotId]'s rows from [position] on one place down, making room for a row there. */
+    @Query("UPDATE sets SET position = position + 1 WHERE workoutExerciseId = :slotId AND position >= :position")
+    fun moveSetsDown(slotId: Long, position: Int): Int
+
     /** Empties one slot's unticked rows (weight, reps, seconds, RIR); their types, and any ticked row, stay. */
     @Query(
         "UPDATE sets SET weightKg = NULL, reps = NULL, durationSec = NULL, rpe = NULL " +

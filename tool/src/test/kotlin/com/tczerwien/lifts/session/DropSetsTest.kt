@@ -56,6 +56,20 @@ class DropSetsTest {
         assertEquals(listOf("W", "1", "2", "2"), setMarkers(rows("W", "N", "N", "D")), "ticked or not")
     }
 
+    // --- DR-3: where "… › Drop Set" puts it ---
+
+    @Test
+    fun `a drop goes under the latest tick, a work set or a drop`() {
+        val slot = rows(w, n, n, n)
+        fun ticked(vararg at: Pair<Int, Long>) = slot.mapIndexed { i, set -> at.firstOrNull { it.first == i }?.let { set.copy(completedAt = it.second) } ?: set }
+        assertEquals(3, dropUnder(ticked(1 to 10L, 2 to 20L, 3 to 30L)), "under set 3")
+        assertEquals(1, dropUnder(ticked(1 to 40L, 2 to 20L, 3 to 30L)), "set 1 ticked again last: under it")
+        assertEquals(3, dropUnder(rows("N", "N", "D", "D")), "a chain grows under its last drop")
+        assertNull(dropUnder(rows("W", n, n)), "only a warm-up ticked")
+        assertNull(dropUnder(ticked(0 to 50L, 1 to 10L)), "the latest tick a warm-up")
+        assertNull(dropUnder(slot), "nothing ticked")
+    }
+
     // --- DR-6: no rest before a drop ---
 
     @Test

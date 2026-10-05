@@ -30,6 +30,12 @@ interface LiftsStore {
 
     fun addSet(set: SetEntity): Long
 
+    /**
+     * Adds [set] to slot [slotId] at [position], the rows from there down moving one place down, in one
+     * transaction; its id.
+     */
+    fun insertSetAt(slotId: Long, position: Int, set: SetEntity): Long
+
     /** Writes [set]'s values (type, weight, reps, duration, RPE, tick); its slot and position are left alone. */
     fun updateSetValues(set: SetEntity): Boolean
 
