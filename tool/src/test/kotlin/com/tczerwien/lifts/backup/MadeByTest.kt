@@ -31,6 +31,7 @@ class MadeByTest {
     fun `a backup this Lifts or an older one made restores`() {
         assertNull(MadeBy.refusal(MadeBy.rows(19, "0.19.0"), 19, "0.19.0"), "made by this Lifts")
         assertNull(MadeBy.refusal(MadeBy.rows(18, "0.18.0"), 19, "0.19.0"), "made by an older one")
+        assertNull(MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to "-5"), 19, "0.19.0"), "a number below any Lifts")
     }
 
     @Test
@@ -44,6 +45,29 @@ class MadeByTest {
             MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to " 20 ", MadeBy.KEY_VERSION_NAME to " "), 19, "0.19.0"),
             "no name to show: its number",
         )
+        assertEquals(
+            "a newer Lifts made it (version 99999999999; this is 0.19.0); update Lifts first",
+            MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to "99999999999"), 19, "0.19.0"),
+            "a number past the Int range is still a number",
+        )
+    }
+
+    @Test
+    fun `the refusal names the newer Lifts in a few words`() {
+        fun named(name: String) =
+            MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to "20", MadeBy.KEY_VERSION_NAME to name), 19, "0.19.0")
+        assertEquals("a newer Lifts made it (0.20.0; this is 0.19.0); update Lifts first", named(" 0.20.0 "), "trimmed")
+        assertEquals(
+            "a newer Lifts made it (version 20; this is 0.19.0); update Lifts first",
+            named("0.19.0"),
+            "a build that kept this Lifts' name: its number",
+        )
+        assertEquals(
+            "a newer Lifts made it (version 20; this is 0.19.0); update Lifts first",
+            named("x".repeat(21)),
+            "a hand-made name too long for the screen: its number",
+        )
+        assertEquals("a newer Lifts made it (${"x".repeat(20)}; this is 0.19.0); update Lifts first", named("x".repeat(20)))
     }
 
     @Test
