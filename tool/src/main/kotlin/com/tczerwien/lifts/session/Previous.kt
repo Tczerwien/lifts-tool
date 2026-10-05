@@ -98,16 +98,19 @@ fun previousForSlots(
 
 /**
  * Pairs each of today's [rows] (one slot, in position order) with last session's set of the same
- * kind from [previous]: the k-th warm-up with last time's k-th warm-up, the k-th work set with last
- * time's k-th work set. Failure and drop sets are work. Null where last time had fewer. The result
- * is parallel to [rows].
+ * kind from [previous] ([rowKinds]): the k-th warm-up with last time's k-th warm-up, the k-th work set
+ * with last time's k-th work set, the k-th drop with last time's k-th drop. Failure sets are work; a
+ * drop is part of its set (DR-4), so a drop added today never shifts the work sets after it onto
+ * last time's. Null where last time had fewer. The result is parallel to [rows].
  */
 fun alignPrevious(rows: List<SetEntity>, previous: List<SetEntity>): List<SetEntity?> {
-    val warmups = previous.filter { it.isWarmup() }
-    val work = previous.filterNot { it.isWarmup() }
-    var warmupIndex = 0
-    var workIndex = 0
-    return rows.map { row -> if (row.isWarmup()) warmups.getOrNull(warmupIndex++) else work.getOrNull(workIndex++) }
+    val lastTime = previous.zip(rowKinds(previous)).groupBy({ it.second }, { it.first })
+    val used = HashMap<RowKind, Int>()
+    return rowKinds(rows).map { kind ->
+        val index = used.getOrDefault(kind, 0)
+        used[kind] = index + 1
+        lastTime[kind]?.getOrNull(index)
+    }
 }
 
 /** The weight and reps (or a hold's seconds) a row shows and logs. */

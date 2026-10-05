@@ -14,6 +14,7 @@ class PreviousTest {
     private val w = SET_TYPE_WARMUP
     private val n = SET_TYPE_NORMAL
     private val f = SET_TYPE_FAILURE
+    private val d = SET_TYPE_DROP
 
     // --- Slot matching ---
 
@@ -172,9 +173,33 @@ class PreviousTest {
     }
 
     @Test
-    fun `failure and drop sets count as work on both sides`() {
-        val previous = listOf(prev(1, w), prev(2, n), prev(3, f), prev(4, "drop"))
-        assertEquals(listOf(1L, 2L, 3L, 4L), alignPrevious(rows(w, f, n, n), previous).map { it?.id })
+    fun `failure sets count as work on both sides, and a drop lines up with last time's drop`() {
+        // B3 counted a drop as work too, so last time's drop was today's set 3's PREVIOUS. A drop is part of
+        // the set above it (B16, DR-4): set 3 has none, and today's drop gets last time's.
+        val previous = listOf(prev(1, w), prev(2, n), prev(3, f), prev(4, d))
+        assertEquals(listOf(1L, 2L, 3L, null), alignPrevious(rows(w, f, n, n), previous).map { it?.id })
+        assertEquals(listOf(1L, 2L, 3L, 4L), alignPrevious(rows(w, n, f, d), previous).map { it?.id })
+    }
+
+    @Test
+    fun `a drop added today doesn't shift the sets after it`() {
+        // Last time: 3 sets, no drop. Today a drop under set 2: set 3 still reads last time's set 3.
+        val previous = listOf(prev(1, n), prev(2, n), prev(3, n))
+        assertEquals(listOf(1L, 2L, null, 3L), alignPrevious(rows(n, n, d, n), previous).map { it?.id })
+        // Last time a drop under set 1, today none: set 2 reads set 2, not the drop.
+        val withDrop = listOf(prev(1, n), prev(2, d), prev(3, n))
+        assertEquals(listOf(1L, 3L), alignPrevious(rows(n, n), withDrop).map { it?.id })
+        // The k-th drop with last time's k-th drop, wherever it sits.
+        val twoDrops = listOf(prev(1, n), prev(2, d), prev(3, n), prev(4, d), prev(5, d))
+        assertEquals(listOf(1L, 3L, 2L, 4L), alignPrevious(rows(n, n, d, d), twoDrops).map { it?.id })
+    }
+
+    @Test
+    fun `a drop with no set above it lines up as a set of its own`() {
+        // Last time's first row was a drop (made with the marker): it was that day's set 1.
+        val previous = listOf(prev(1, d), prev(2, n))
+        assertEquals(listOf(1L, 2L), alignPrevious(rows(n, n), previous).map { it?.id })
+        assertEquals(listOf(null, 1L), alignPrevious(rows(w, d), previous).map { it?.id }, "under a warm-up today: work too")
     }
 
     @Test
