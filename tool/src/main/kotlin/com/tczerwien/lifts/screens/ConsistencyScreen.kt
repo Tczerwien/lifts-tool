@@ -30,6 +30,7 @@ import com.thelightphone.sdk.LightViewModel
 import com.thelightphone.sdk.SealedLightActivity
 import com.thelightphone.sdk.SimpleLightScreen
 import com.thelightphone.sdk.ui.LightBarButton
+import com.thelightphone.sdk.ui.LightIcon
 import com.thelightphone.sdk.ui.LightIcons
 import com.thelightphone.sdk.ui.LightText
 import com.thelightphone.sdk.ui.LightTextVariant
@@ -100,6 +101,7 @@ class ConsistencyViewModel(
  * [MAX_BAR_WORKOUTS]+), month labels on new-month weeks, and a summary: this week, the average of
  * the last [AVERAGE_WEEKS] complete weeks, and the longest streak of weeks with
  * [STREAK_THRESHOLD_WORKOUTS]+ workouts across the full history. Only workouts with a ticked set count.
+ * Its last row opens Sets per Muscle ([SetsPerMuscleScreen]).
  */
 class ConsistencyScreen(
     private val sealedActivity: SealedLightActivity,
@@ -185,6 +187,17 @@ class ConsistencyScreen(
                         },
                         right = {
                             MonoDigits(uiState.longestStreakText, LightTextVariant.Copy)
+                        },
+                    )
+                    RowDivider()
+                    // Weekly hard sets per muscle against his targets: a screen of its own.
+                    LiftsListRow(
+                        onClick = { navigateTo(::SetsPerMuscleScreen) },
+                        left = {
+                            LightText(text = "Sets per Muscle", variant = LightTextVariant.Detail)
+                        },
+                        right = {
+                            LightIcon(icon = LightIcons.ARROW_RIGHT, size = 1.6f)
                         },
                     )
                 }
