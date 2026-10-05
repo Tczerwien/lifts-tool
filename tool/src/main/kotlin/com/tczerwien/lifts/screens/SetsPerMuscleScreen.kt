@@ -243,7 +243,8 @@ class SetsPerMuscleScreen(
     override fun Content() {
         val uiState by viewModel.uiState.collectAsState()
 
-        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.mode) {
+        // Keyed on which mode, not its value: a stepper tap mustn't re-arm the guard and drop the next tap.
+        LiftsFrame(sealedActivity, lightContext, switchKey = uiState.mode::class) {
             when (val mode = uiState.mode) {
                 SetsPerMuscleViewModel.Mode.List -> WeekList(uiState)
                 SetsPerMuscleViewModel.Mode.PickMuscle -> OptionPicker(
