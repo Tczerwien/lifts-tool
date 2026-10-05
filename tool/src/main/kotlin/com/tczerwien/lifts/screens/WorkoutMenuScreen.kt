@@ -44,6 +44,9 @@ import kotlinx.coroutines.flow.update
 
 /** What the lifter picked in the Active Workout "…" menu; Active Workout carries it out. */
 sealed interface WorkoutMenuResult {
+    /** A drop row under the set just ticked, on the exercise on screen. */
+    data object DropSet : WorkoutMenuResult
+
     data object RemoveSet : WorkoutMenuResult
 
     data object RemoveExercise : WorkoutMenuResult
@@ -85,6 +88,8 @@ sealed interface WorkoutMenuResult {
  */
 data class WorkoutMenuContent(
     val exerciseName: String? = null,
+    /** Where a drop would go, "AFTER SET 3"; null when none can (nothing but a warm-up ticked last, or no weight): no row. */
+    val dropSetAfter: String? = null,
     val exerciseNote: String? = null,
     /** This exercise's work rest as it stands (its own, else Settings' default). */
     val restSec: Int = 0,
@@ -169,7 +174,8 @@ class WorkoutMenuViewModel : LightViewModel<WorkoutMenuResult>() {
 }
 
 /**
- * The Active Workout "…" menu. For the exercise on screen: its note for this workout, its rest,
+ * The Active Workout "…" menu. For the exercise on screen: a drop after the set just ticked (first, and only
+ * when one can go in), its note for this workout, its rest,
  * whether it is a superset with the next exercise (one tap flips it, for this workout only),
  * plates for the weight the active row shows, its details, renaming it, and removing a set or the
  * exercise while nothing in them is logged (a null label greys the row out). For the workout: whether
@@ -222,6 +228,11 @@ class WorkoutMenuScreen(
             ) {
                 content.exerciseName?.let { exerciseName ->
                     SectionLabel(exerciseName)
+                    // First, so it never needs a scroll; there only when a drop can go in, so a plain set shows nothing new.
+                    content.dropSetAfter?.let { after ->
+                        MenuRow(title = "Drop Set", detail = after, onClick = { choose(WorkoutMenuResult.DropSet) })
+                        RowDivider()
+                    }
                     MenuRow(
                         title = "Note",
                         detail = content.exerciseNote?.oneLine() ?: "FOR THIS WORKOUT",

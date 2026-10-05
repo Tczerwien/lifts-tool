@@ -26,6 +26,7 @@ import com.tczerwien.lifts.session.activeRowAfterTick
 import com.tczerwien.lifts.session.afterTick
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
+import com.tczerwien.lifts.session.dropUnder
 import com.tczerwien.lifts.session.inSuperset
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.linkWithNext
@@ -943,6 +944,8 @@ class ActiveWorkoutViewModel(
         return MenuOptions(
             content = workout.copy(
                 exerciseName = block.name,
+                dropSetAfter = dropUnder(block.sets)?.takeIf { block.tracking.takesWeight }
+                    ?.let { "AFTER ${rowLabel(block.sets, it).uppercase()}" },
                 exerciseNote = block.slot.notes,
                 restSec = block.slot.restSecWork ?: state.defaultRestSec,
                 defaultRestSec = state.defaultRestSec,
@@ -1118,6 +1121,34 @@ class ActiveWorkoutViewModel(
     private fun overlayMeta(ticket: Long, state: UiState): UiState {
         pendingMeta.removeAll { meta -> meta.savedAt?.let { ticket > it } == true }
         return pendingMeta.fold(state) { acc, meta -> meta.apply(acc) }
+    }
+
+    /**
+     * Menu: "Drop Set" on exercise [slotId] (DR-3): a drop row under its latest tick ([ActiveSession.addDrop]),
+     * showing where a drop starts (last time's drop, else 20 % lighter), with the steppers on it, so its tick
+     * is the next tap. The running rest ends with the save, so no beep comes mid-drop, and a pending move on is
+     * cancelled ([beginAction]): the drop comes first. The rows shift as the save's reload lands, under his
+     * finger, so the rows and steppers ignore taps until then, and the rows for a moment after, as after a
+     * deload switch or a swap.
+     */
+    fun addDrop(slotId: Long) {
+        if (!beginAction()) return
+        val workoutId = resolvedWorkoutId ?: return
+        val perf = Perf.start()
+        rowsMovedUnderFinger()
+        rowsChanging.incrementAndGet()
+        LiftsIo.write({ session.addDrop(workoutId, slotId) }) { dropId ->
+            refresh()
+            if (dropId != null) {
+                _uiState.update { state ->
+                    val onScreen = state.exercises.getOrNull(state.currentIndex)?.sets?.any { it.id == dropId } == true
+                    if (onScreen) state.copy(activeSetId = dropId) else state
+                }
+            }
+            Perf.done("aw.drop", perf)
+            rowsMovedUnderFinger()
+            rowsChanging.decrementAndGet()
+        }
     }
 
     /** Menu: removes the set it offered, only while it is unticked (the session checks again). */

@@ -432,6 +432,7 @@ class ActiveWorkoutScreen(
         val options = viewModel.menuOptions(uiState)
         navigateTo({ WorkoutMenuScreen(it, options.content) }) { result ->
             when (result) {
+                WorkoutMenuResult.DropSet -> options.slotId?.let(viewModel::addDrop)
                 WorkoutMenuResult.RemoveSet -> options.removeSetId?.let(viewModel::removeSet)
                 WorkoutMenuResult.RemoveExercise -> options.removeSlotId?.let(viewModel::removeExercise)
                 WorkoutMenuResult.DiscardWorkout -> viewModel.discard()
