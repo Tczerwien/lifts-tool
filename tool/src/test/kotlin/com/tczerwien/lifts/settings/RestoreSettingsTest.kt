@@ -170,6 +170,14 @@ class RestoreSettingsTest {
     }
 
     @Test
+    fun `restoring a backup made with no targets takes the phone's out of DataStore`() = runBlocking {
+        settingsStore.replaceAll(his)
+        settingsStore.replaceAll(SettingsRows.decode(SettingsRows.encode(defaults), current = settingsStore.snapshot()))
+        assertEquals(emptyMap(), settingsStore.snapshot().muscleTargets)
+        assertNull(dataStore.data.first()[stringPreferencesKey(SettingsStore.KEY_MUSCLE_TARGETS)], "the key itself is gone")
+    }
+
+    @Test
     fun `forgetting the workout state clears the current slot and the rest, and nothing else`() = runBlocking {
         val session = ActiveSession(InMemoryLiftsStore(), settingsStore, dataStore)
         val rest = RestStore(dataStore)
