@@ -46,6 +46,22 @@ interface WorkoutDao {
     )
     fun recentExercises(limit: Int): List<RecentExercise>
 
+    /**
+     * Every ticked set of the finished workouts started in [from] (inclusive) to [until] (exclusive), with
+     * what its exercise counts for: what Sets per Muscle feeds the weekly rule. One query over those weeks
+     * only (the startedAt index), never the whole log; each slot's rows in position order. A slot whose
+     * exercise is gone from the log is left out, as the rule counts it for nothing.
+     */
+    @Query(
+        "SELECT w.startedAt AS startedAt, w.deload AS deload, we.id AS slotId, s.type AS type, " +
+            "e.primaryMuscles AS primaryMuscles, e.countsFor AS countsFor " +
+            "FROM workouts w JOIN workout_exercises we ON we.workoutId = w.id " +
+            "JOIN sets s ON s.workoutExerciseId = we.id JOIN exercises e ON e.id = we.exerciseId " +
+            "WHERE w.startedAt >= :from AND w.startedAt < :until AND w.endedAt IS NOT NULL AND s.completedAt IS NOT NULL " +
+            "ORDER BY we.id, s.position, s.id"
+    )
+    fun countedSets(from: Long, until: Long): List<CountedSetRow>
+
     @Query("SELECT * FROM workout_exercises")
     fun listAllWorkoutExercises(): List<WorkoutExerciseEntity>
 
@@ -300,6 +316,16 @@ data class FinishedWorkouts(
     val valueSum: Long = 0,
     /** The sum of the deloads' ids. */
     val deloadSum: Long = 0,
+)
+
+/** A ticked set as weekly sets read it ([WorkoutDao.countedSets]): its workout's start and mark, its slot, its type, its exercise's muscles. */
+data class CountedSetRow(
+    val startedAt: Long,
+    val deload: Boolean,
+    val slotId: Long,
+    val type: String,
+    val primaryMuscles: List<String>,
+    val countsFor: List<String>,
 )
 
 /** A set joined with the exercise and workout its slot belongs to, and that slot's position. */

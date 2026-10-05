@@ -1,5 +1,7 @@
 package com.tczerwien.lifts.data
 
+import com.tczerwien.lifts.analytics.CountedSlot
+import com.tczerwien.lifts.analytics.countsFor
 import com.tczerwien.lifts.library.Removal
 import com.tczerwien.lifts.library.removalFor
 import com.tczerwien.lifts.library.withoutExercise
@@ -166,6 +168,16 @@ class LiftsRepository private constructor(
 
     /** Up to [limit] exercises he has logged, most recently used first ([WorkoutDao.recentExercises]). */
     fun recentExerciseIds(limit: Int): List<String> = db.workoutDao.recentExercises(limit).map { it.exerciseId }
+
+    /**
+     * The exercises with a ticked set in the finished workouts started from [from] until [until] (epoch
+     * millis), as the weekly rule reads them ([CountedSlot]): one query, [WorkoutDao.countedSets].
+     */
+    fun countedSlots(from: Long, until: Long): List<CountedSlot> =
+        db.workoutDao.countedSets(from, until).groupBy { it.slotId }.values.map { rows ->
+            val slot = rows.first()
+            CountedSlot(slot.startedAt, countsFor(slot.countsFor, slot.primaryMuscles), rows.map { it.type }, slot.deload)
+        }
 
     // --- Workouts ---
 
