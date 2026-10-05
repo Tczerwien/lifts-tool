@@ -168,6 +168,11 @@ class DropSetsTest {
         val help = lastDrop.copy(weightKg = Format.lbToKg(-50.0))
         assertEquals(-50.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(-40.0), help, lb, 5.0).weightKg))
         assertEquals(-75.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(-60.0), help, lb, 5.0).weightKg), "60 ÷ 0.8")
+        // No weight above (review R2-2): bodyweight alone on a bodyweight lift; nothing to be lighter than on a barbell lift.
+        val belt = lastDrop.copy(weightKg = Format.lbToKg(10.0))
+        assertEquals(0.0, shownLb(dropStart(Tracking.WEIGHTED_BODYWEIGHT, above(null), belt, lb, 5.0).weightKg), "not 10 lb on")
+        assertEquals(-50.0, shownLb(dropStart(Tracking.ASSISTED_BODYWEIGHT, above(null), help, lb, 5.0).weightKg), "more help than none")
+        assertEquals(RowValues(null, 6), dropStart(Tracking.WEIGHT_REPS, above(null), lastDrop, lb, 5.0))
     }
 
     @Test

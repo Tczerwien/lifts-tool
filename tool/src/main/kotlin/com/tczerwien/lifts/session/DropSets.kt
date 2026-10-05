@@ -175,13 +175,14 @@ fun dropStart(tracking: Tracking, above: RowValues, lastDrop: SetEntity?, unit: 
 }
 
 /**
- * Whether [kg] is a lighter load than [aboveKg] as they show in [unit]: on an assisted lift, more help. True with
- * nothing above to compare with.
+ * Whether [kg] is a lighter load than [aboveKg] as they show in [unit]: on an assisted lift, more help. No weight
+ * above is bodyweight alone on a bodyweight lift (no load added, or no help), and on a weight × reps lift nothing
+ * to be lighter than (the drop starts with no weight, as [dropStart] says).
  */
 private fun lighter(tracking: Tracking, kg: Double, aboveKg: Double?, unit: WeightUnit): Boolean {
-    aboveKg ?: return true
     fun shown(value: Double) = Format.roundWeight(Format.kgToDisplay(tracking.shownWeight(value)!!, unit), unit)
-    return if (tracking == Tracking.ASSISTED_BODYWEIGHT) shown(kg) > shown(aboveKg) else shown(kg) < shown(aboveKg)
+    val above = aboveKg?.let(::shown) ?: if (tracking == Tracking.WEIGHT_REPS) return false else 0.0
+    return if (tracking == Tracking.ASSISTED_BODYWEIGHT) shown(kg) > above else shown(kg) < above
 }
 
 /** [dropStart]'s load from [aboveKg]; null for a lift that takes none, or a plain lift with none to drop from. */
