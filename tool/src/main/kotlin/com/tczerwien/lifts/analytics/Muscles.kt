@@ -8,6 +8,12 @@ package com.tczerwien.lifts.analytics
  * shown as [muscleLabel]s. Plain anatomy, nothing of any one program.
  */
 
+/**
+ * Runs of white space, built once: an export reads every exercise's muscles. First in the file, as [MUSCLES]
+ * below is built with [muscleLabel], which uses it, when the file loads.
+ */
+private val SPACES = Regex("\\s+")
+
 /** The catalog's 17 muscle groups, as its exercises name them. */
 val CATALOG_MUSCLES: List<String> = listOf(
     "abdominals", "abductors", "adductors", "biceps", "calves", "chest", "forearms", "glutes", "hamstrings",
@@ -25,7 +31,7 @@ val MUSCLES: List<String> = (CATALOG_MUSCLES + EXTRA_MUSCLES).sortedBy(::muscleL
  * empty for a blank one. A name from a hand-made file (a starter backup) then meets the same muscle Lifts
  * writes, rather than becoming a second row beside it.
  */
-fun muscleKey(muscle: String): String = muscle.trim().split(Regex("\\s+")).joinToString(" ").lowercase()
+fun muscleKey(muscle: String): String = muscle.trim().split(SPACES).joinToString(" ").lowercase()
 
 /** [muscles] as [muscleKey]s: each once, in their order, blanks dropped. */
 fun muscleKeys(muscles: List<String>): List<String> = muscles.map(::muscleKey).filter { it.isNotEmpty() }.distinct()
@@ -35,7 +41,7 @@ fun muscleKeys(muscles: List<String>): List<String> = muscles.map(::muscleKey).f
  * doesn't know (a newer catalog's, or a backup's) shows the same way rather than not at all.
  */
 fun muscleLabel(muscle: String): String =
-    muscle.trim().split(Regex("\\s+")).joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
+    muscle.trim().split(SPACES).joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
 
 /**
  * An exercise's Counts For after a tap on [muscle] in its list ([current] being what it holds now): a muscle
