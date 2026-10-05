@@ -105,18 +105,19 @@ fun nextRir(rir: Int?, target: Int? = null): Int? {
 }
 
 /**
- * Why a tick on a row of [kind] whose values as it shows them are [seed] would log nothing, as the screen says it, or
- * null when it can be ticked: nothing to log at all ("SET WEIGHT OR REPS FIRST", "SET REPS FIRST", "SET TIME FIRST",
- * as the exercise's [tracking] is measured), or a drop on a weight × reps lift with no weight ("SET WEIGHT FIRST": a
- * drop is a lighter load, and a weightless one would log, and star, as the lift's first set without weight; DR-2).
+ * What a tick on a row of [kind] whose values as it shows them are [seed] asks for first, as the screen says it, or
+ * null when it can be ticked: a drop on a weight × reps lift with no weight ("SET WEIGHT FIRST", reps or not: a drop
+ * is a lighter load, and a weightless one would log as a set without weight, which can star as a record; DR-2), or
+ * a row with nothing to log at all ("SET WEIGHT OR REPS FIRST", "SET REPS FIRST", "SET TIME FIRST", as the exercise's
+ * [tracking] is measured).
  */
 fun tickHint(tracking: Tracking, kind: RowKind, seed: RowValues): String? = when {
+    tracking == Tracking.WEIGHT_REPS && kind == RowKind.DROP && seed.weightKg == null -> "SET WEIGHT FIRST"
     seed.isEmpty -> when {
         tracking.takesDuration -> "SET TIME FIRST"
         tracking.takesWeight -> "SET WEIGHT OR REPS FIRST"
         else -> "SET REPS FIRST"
     }
-    tracking == Tracking.WEIGHT_REPS && kind == RowKind.DROP && seed.weightKg == null -> "SET WEIGHT FIRST"
     else -> null
 }
 

@@ -182,6 +182,10 @@ class SessionLogicTest {
         assertEquals("SET WEIGHT FIRST", tickHint(Tracking.WEIGHT_REPS, RowKind.DROP, RowValues(null, 12)))
         assertNull(tickHint(Tracking.WEIGHT_REPS, RowKind.DROP, RowValues(2.5, 12)))
         assertNull(tickHint(Tracking.WEIGHTED_BODYWEIGHT, RowKind.DROP, RowValues(null, 8)), "bodyweight alone is a drop there")
+        assertEquals("SET WEIGHT FIRST", tickHint(Tracking.WEIGHT_REPS, RowKind.DROP, RowValues(null, null)), "the same hint before and after reps (C1)")
+        for (bodyweight in listOf(Tracking.WEIGHTED_BODYWEIGHT, Tracking.ASSISTED_BODYWEIGHT)) {
+            assertEquals("SET WEIGHT OR REPS FIRST", tickHint(bodyweight, n, RowValues(null, null)), "$bodyweight (C5)")
+        }
     }
 
     @Test
