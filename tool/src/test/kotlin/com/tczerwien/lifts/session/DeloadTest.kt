@@ -97,10 +97,15 @@ class DeloadTest {
         assertEquals(listOf(n), PlannedSlot("row", listOf(n, n, n), targetSets = 3).deloadTrimmed(30).types)
         // A drop goes with its work set and never counts as one (review R2-8).
         assertEquals(listOf(n, d, n, d), PlannedSlot("curl", listOf(n, d, n, d, n, d), targetSets = 3).deloadTrimmed(50).types)
-        // A drop with no work set above it stays, as the switch leaves it (closing check C1-1).
-        assertEquals(listOf(d, n), PlannedSlot("curl", listOf(d, n, n), targetSets = 2).deloadTrimmed(50).types)
-        assertEquals(listOf(n, w, d), PlannedSlot("curl", listOf(n, n, w, d), targetSets = 2).deloadTrimmed(50).types)
-        assertEquals(listOf(d, n), deloadRows(rows(d, n, n), 2, 1, on = true).let { c -> listOf(d, n, n).filterIndexed { i, _ -> i + 1L !in c.deleteIds } })
+        // A drop with no work set above it is a set of its own since B16 (B14's closing check C1-1 kept it apart from
+        // the count; review R1-4, A13): it counts as one, in the switch and the copy alike.
+        assertEquals(listOf(d), PlannedSlot("curl", listOf(d, n, n), targetSets = 2).deloadTrimmed(50).types)
+        assertEquals(listOf(n, w), PlannedSlot("curl", listOf(n, n, w, d), targetSets = 2).deloadTrimmed(50).types)
+        assertEquals(listOf(d), deloadRows(rows(d, n, n), 2, 1, on = true).let { c -> listOf(d, n, n).filterIndexed { i, _ -> i + 1L !in c.deleteIds } })
+        assertEquals(2, deloadWorkSets(rows(d, n, d)), "the first a set, the second its drop")
+        assertEquals(DeloadChange(addRows = 1), deloadRows(rows("D", n, n), targetSets = 4, keep = 2, on = false), "three sets already")
+        // A chain goes with its set: keep one of three, the second and third go with their drops.
+        assertEquals(DeloadChange(deleteIds = listOf(4, 5, 6, 7)), deloadRows(rows("N", d, d, n, d, n, d), targetSets = 3, keep = 1, on = true))
     }
 
     // --- The RIR it shows (DL-3) ---

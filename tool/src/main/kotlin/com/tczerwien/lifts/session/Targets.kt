@@ -165,8 +165,8 @@ const val HINT_LESS_HELP = "LESS HELP"
 
 /**
  * Double progression's cue: [HINT_ADD_LOAD] when every work set of this slot last session ([lastTime],
- * its completed sets) reached [repMax], the top of the range. Warm-ups and drop sets don't count; a
- * set to failure does. Nothing when the slot has no top, last time had no work set, the exercise has
+ * its completed sets) reached [repMax], the top of the range. Warm-ups and drops don't count ([rowKinds]: a
+ * drop with no set above it is a set of its own); a set to failure does. Nothing when the slot has no top, last time had no work set, the exercise has
  * no load to add (reps only, a hold), or today's work rows ([todayWeightsKg], what each would log)
  * already start heavier than last time's heaviest: he has added the load. On an assisted exercise,
  * less help is the load ([HINT_LESS_HELP]); weights are stored signed, so "heavier" means that too.
@@ -184,7 +184,8 @@ fun progressionHint(
     if (deload) return null
     repMax ?: return null
     if (!tracking.takesWeight || !tracking.takesReps) return null
-    val work = lastTime.filter { it.completedAt != null && it.type != SET_TYPE_WARMUP && it.type != SET_TYPE_DROP }
+    val done = lastTime.filter { it.completedAt != null }
+    val work = done.zip(rowKinds(done)).filter { it.second == RowKind.WORK }.map { it.first }
     if (work.isEmpty() || work.any { (it.reps ?: 0) < repMax }) return null
     val lastHeaviest = work.maxOf { it.weightKg ?: 0.0 }
     if (tracking == Tracking.ASSISTED_BODYWEIGHT && lastHeaviest >= 0.0) return null

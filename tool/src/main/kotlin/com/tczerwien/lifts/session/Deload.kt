@@ -34,11 +34,11 @@ fun stepDeloadKeep(pct: Int, delta: Int): Int =
  */
 fun deloadKeep(targetSets: Int, pct: Int): Int = maxOf(1, (targetSets * pct + 99) / 100)
 
-/** A work set in a deload's count: normal or to failure. Warm-ups stay as they are; a drop is part of its parent. */
-private fun SetEntity.isWorkSet(): Boolean = type == SET_TYPE_NORMAL || type == SET_TYPE_FAILURE
-
-/** The work sets among one slot's [rows] in a deload's count: normal or to failure, ticked or not. */
-fun deloadWorkSets(rows: List<SetEntity>): Int = rows.count { it.isWorkSet() }
+/**
+ * The work sets among one slot's [rows] in a deload's count, ticked or not ([rowKinds]): normal, to failure, or a
+ * drop with no set above it (a set of its own). Warm-ups stay as they are; a drop is part of its set.
+ */
+fun deloadWorkSets(rows: List<SetEntity>): Int = rowKinds(rows).count { it == RowKind.WORK }
 
 /** What switching a deload on or off does to one slot: its rows to delete, and how many plain work rows to add at its end. */
 data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: Int = 0)
@@ -50,38 +50,40 @@ data class DeloadChange(val deleteIds: List<Long> = emptyList(), val addRows: In
  * it, is never deleted and counts toward the number (so a logged drop never loses the set above it); then
  * the others stay in order until the number is reached, and the rest are deleted, each with the drops after
  * it (none of them ticked, or the set would be done). Warm-ups stay, and a drop never counts as a kept work set: it goes
- * with the work set before it. Values typed into a deleted row go with it.
+ * with the work set before it ([rowKinds]; one with no set above it is a set of its own). Values typed into a
+ * deleted row go with it.
  *
  * Off: plain work rows are added until the slot has its [targetSets] work sets again (drops not counted);
  * nothing when it already has them.
  */
 fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): DeloadChange {
     if (!on) return DeloadChange(addRows = (targetSets - deloadWorkSets(rows)).coerceAtLeast(0))
+    val kinds = rowKinds(rows)
     // The work sets done: ticked, or with a ticked drop after them.
     val done = HashSet<Long>()
     var parent: SetEntity? = null
-    for (row in rows) {
-        when {
-            row.isWorkSet() -> parent = row.also { if (it.completedAt != null) done += it.id }
-            row.type == SET_TYPE_DROP -> if (row.completedAt != null) parent?.let { done += it.id }
-            else -> parent = null
+    rows.forEachIndexed { index, row ->
+        when (kinds[index]) {
+            RowKind.WORK -> parent = row.also { if (it.completedAt != null) done += it.id }
+            RowKind.DROP -> if (row.completedAt != null) parent?.let { done += it.id }
+            RowKind.WARMUP -> parent = null
         }
     }
     val delete = ArrayList<Long>()
     // The not-done work sets that may stay: what the done ones leave of the kept number.
     var notDoneLeft = keep - done.size
     var parentDeleted = false
-    for (row in rows) {
-        when {
-            row.isWorkSet() -> {
+    rows.forEachIndexed { index, row ->
+        when (kinds[index]) {
+            RowKind.WORK -> {
                 val isDone = row.id in done
                 parentDeleted = !isDone && notDoneLeft <= 0
                 if (!isDone) notDoneLeft--
                 if (parentDeleted) delete += row.id
             }
             // A ticked drop makes its set done, so it is never under a deleted one; the check is a safety net.
-            row.type == SET_TYPE_DROP -> if (parentDeleted && row.completedAt == null) delete += row.id
-            else -> parentDeleted = false
+            RowKind.DROP -> if (parentDeleted && row.completedAt == null) delete += row.id
+            RowKind.WARMUP -> parentDeleted = false
         }
     }
     return DeloadChange(deleteIds = delete)
@@ -89,20 +91,21 @@ fun deloadRows(rows: List<SetEntity>, targetSets: Int, keep: Int, on: Boolean): 
 
 /**
  * [this] slot as a deload's Start Again begins it: its work sets cut to the deload's number of its plan
- * ([deloadKeep] at [keepPct]), warm-ups kept, a drop with its work set ([deloadRows]' rule); as it is with no
- * plan, or already that short (a copy of a deload switched on that day). So a workout marked a deload after
- * its Finish, its full sets done, is copied as a deload too.
+ * ([deloadKeep] at [keepPct]), warm-ups kept, a drop with its work set ([deloadRows]' rule, by [rowKinds]; a plan
+ * holds none since B16, but one built by hand may); as it is with no plan, or already that short (a copy of a
+ * deload switched on that day). So a workout marked a deload after its Finish, its full sets done, is copied as
+ * a deload too.
  */
 fun PlannedSlot.deloadTrimmed(keepPct: Int): PlannedSlot {
     val planned = targetSets ?: return this
     var workLeft = deloadKeep(planned, keepPct)
-    // As in deloadRows: a drop with no work set above it (first, or after a warm-up) stays.
     var parentKept = true
-    val kept = types.filter { type ->
-        when (type) {
-            SET_TYPE_WARMUP -> true.also { parentKept = true }
-            SET_TYPE_DROP -> parentKept
-            else -> (workLeft > 0).also { keptOne -> parentKept = keptOne; if (keptOne) workLeft-- }
+    val kinds = rowKinds(types)
+    val kept = types.filterIndexed { index, _ ->
+        when (kinds[index]) {
+            RowKind.WARMUP -> true
+            RowKind.DROP -> parentKept
+            RowKind.WORK -> (workLeft > 0).also { keptOne -> parentKept = keptOne; if (keptOne) workLeft-- }
         }
     }
     return if (kept.size == types.size) this else copy(types = kept)

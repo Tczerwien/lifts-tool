@@ -128,6 +128,9 @@ class TargetsTest {
         )
         assertEquals(HINT_ADD_LOAD, progressionHint(Tracking.WEIGHT_REPS, 12, last))
         assertNull(progressionHint(Tracking.WEIGHT_REPS, 12, listOf(done(SET_TYPE_WARMUP, 40.0, 12))), "warm-ups alone are no work")
+        // A drop with no set above it (under a warm-up) is a set of its own (B16, review R1-4): short of the top, no cue.
+        val alone = listOf(done(SET_TYPE_WARMUP, 40.0, 5), done(SET_TYPE_DROP, 50.0, 8), done(SET_TYPE_NORMAL, 60.0, 12))
+        assertNull(progressionHint(Tracking.WEIGHT_REPS, 12, alone))
     }
 
     @Test
