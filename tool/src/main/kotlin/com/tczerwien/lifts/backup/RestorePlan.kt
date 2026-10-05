@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.backup
 
 import com.tczerwien.lifts.data.BarEntity
+import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRows
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.settings.SettingsStore
@@ -42,6 +43,32 @@ object RestorePlan {
      */
     fun refitsTypes(settingsRows: Map<String, String>): Boolean =
         settingsRows.isNotEmpty() && SettingsStore.KEY_WEIGHT_STEP_LB !in settingsRows
+
+    /**
+     * Whether a backup was made before Lifts had weekly targets (B17): its settings have no targets row (every v1
+     * backup, every one from 0.13.0 to 0.17.0), or it has no settings at all. Such a file can't hold what the
+     * lifts count for either, so the phone's Counts For stay ([keptCountsFor]), as its targets do
+     * ([com.tczerwien.lifts.settings.SettingsRows.decode]).
+     */
+    fun predatesTargets(settingsRows: Map<String, String>): Boolean = SettingsStore.KEY_MUSCLE_TARGETS !in settingsRows
+
+    /**
+     * The [restored] exercises with the phone's Counts For ([phone], by exercise id) where the backup has none,
+     * for a backup that [predatesTargets]: restoring his history from before B17 keeps the setup he made since.
+     * An exercise the backup doesn't have stays out.
+     */
+    fun keptCountsFor(restored: List<ExerciseEntity>, phone: Map<String, List<String>>): List<ExerciseEntity> =
+        restored.map { exercise ->
+            val his = phone[exercise.id]?.takeIf { it.isNotEmpty() && exercise.countsFor.isEmpty() }
+            if (his == null) exercise else exercise.copy(countsFor = his)
+        }
+
+    /** The Restore screen's line on a backup's settings ([settingsRows]): what comes back, and what stays. */
+    fun settingsLine(settingsRows: Map<String, String>): String = when {
+        settingsRows.isEmpty() -> "no settings in it: this phone's stay"
+        predatesTargets(settingsRows) -> "and its settings: units, rests, plates, beep (this phone's weekly targets and Counts For stay)"
+        else -> "and its settings: units, rests, plates, beep, deload, weekly targets"
+    }
 
     /**
      * The bars a restore changes, as the B9 upgrade changed the phone's: for a backup made before B9

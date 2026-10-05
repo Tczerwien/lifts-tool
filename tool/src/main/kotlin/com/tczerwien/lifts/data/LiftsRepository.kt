@@ -163,6 +163,9 @@ class LiftsRepository private constructor(
     fun setCountsFor(id: String, countsFor: List<String>): Boolean =
         db.exerciseDao.setCountsFor(id, Converters().fromStringList(countsFor)) > 0
 
+    /** Every exercise's Counts For that he chose, by id ([ExerciseDao.chosenCountsFor]). */
+    fun chosenCountsFor(): Map<String, List<String>> = db.exerciseDao.chosenCountsFor().associate { it.id to it.countsFor }
+
     /** Every exercise without its instructions, by name: the picker's catalog. */
     fun exerciseSummaries(): List<ExerciseSummary> = db.exerciseDao.listSummaries()
 

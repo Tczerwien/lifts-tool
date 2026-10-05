@@ -103,11 +103,7 @@ class RestoreViewModel(
                 prepared = ready
                 Phase.Ready(
                     backup = RestorePlan.lines(ready.summary),
-                    settings = if (ready.settingsRows.isEmpty()) {
-                        "no settings in it: this phone's stay"
-                    } else {
-                        "and its settings: units, rests, plates, beep"
-                    },
+                    settings = RestorePlan.settingsLine(ready.settingsRows),
                     phone = RestorePlan.lines(RestorePlan.summarize(share.repository.readAll())),
                 )
             } catch (e: Restorer.Refused) {

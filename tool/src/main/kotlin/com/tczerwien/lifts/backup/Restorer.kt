@@ -101,7 +101,8 @@ class Restorer(
     /**
      * Restores [prepared]. Call it on the write lane only (inside a LiftsIo block), so no save lands
      * halfway. The pre-restore backup comes first: if it can't be saved, nothing is replaced. Then the
-     * catalog version is forgotten, then every row goes in, in one transaction; only once they are in
+     * catalog version is forgotten, then every row goes in, in one transaction (with the phone's Counts For
+     * kept for a backup from before B17, [RestorePlan.keptCountsFor]); only once they are in
      * do the in-workout keys go (restored ids can repeat), so a restore that fails leaves a running
      * rest alone; then the settings. Last, the restored log is saved as the newest dated backup, so
      * lifts-latest.db holds it rather than what was replaced (on a new install, an empty log). Throws
@@ -127,7 +128,13 @@ class Restorer(
             throw NothingChanged("could not reset the exercise catalog's version (${e.message ?: e})")
         }
         try {
-            live.replaceAll(prepared.rows)
+            // A backup from before B17 can't hold what the lifts count for: the phone's Counts For stay, as its targets do.
+            val rows = if (RestorePlan.predatesTargets(prepared.settingsRows)) {
+                prepared.rows.copy(exercises = RestorePlan.keptCountsFor(prepared.rows.exercises, live.chosenCountsFor()))
+            } else {
+                prepared.rows
+            }
+            live.replaceAll(rows)
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")
         }

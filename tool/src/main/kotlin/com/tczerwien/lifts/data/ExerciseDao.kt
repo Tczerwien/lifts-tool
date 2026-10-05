@@ -66,7 +66,14 @@ interface ExerciseDao {
     @Query("UPDATE exercises SET perSide = :perSide WHERE id = :id AND perSide != :perSide")
     fun setPerSide(id: String, perSide: Boolean): Int
 
+    /** Every exercise he chose muscles for (Counts For), with them: what a restore of an older backup keeps. */
+    @Query("SELECT id, countsFor FROM exercises WHERE countsFor != '[]'")
+    fun chosenCountsFor(): List<ExerciseCountsFor>
+
     /** Sets what [id] counts for, as stored ([Converters.fromStringList]: a JSON list, "[]" for none); 0 rows when it already does. */
     @Query("UPDATE exercises SET countsFor = :countsFor WHERE id = :id AND countsFor != :countsFor")
     fun setCountsFor(id: String, countsFor: String): Int
 }
+
+/** An exercise's Counts For, for [ExerciseDao.chosenCountsFor]. */
+data class ExerciseCountsFor(val id: String, val countsFor: List<String>)
