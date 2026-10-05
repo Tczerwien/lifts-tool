@@ -605,10 +605,11 @@ private const val OPTION_ROW_HEIGHT_UNITS = 3f
  * Full-screen option list mode: uniform 3gu rows, selected rows carry a right checkmark.
  * Single-select closes on tap; [multiSelect] keeps the list open and adds a top-bar
  * checkmark as an explicit done affordance (back applies the selection either way).
- * [includeNone] prepends a null "None" option (used for equipment).
+ * [includeNone] prepends a null option, labelled [noneLabel] (equipment's "None"; Exercise Detail's
+ * Counts For names the catalog's muscles there). Options show as [label] gives them.
  */
 @Composable
-private fun OptionPicker(
+internal fun OptionPicker(
     title: String,
     options: List<String>,
     isSelected: (String?) -> Boolean,
@@ -616,6 +617,8 @@ private fun OptionPicker(
     onBack: () -> Unit,
     multiSelect: Boolean = false,
     includeNone: Boolean = false,
+    noneLabel: String = "None",
+    label: (String) -> String = ::titleCaseLabel,
 ) {
     val rows: List<String?> = if (includeNone) listOf(null) + options else options
     Column(
@@ -655,7 +658,7 @@ private fun OptionPicker(
                         onClick = { onSelect(option) },
                         left = {
                             LightText(
-                                text = option?.let(::titleCaseLabel) ?: "None",
+                                text = option?.let(label) ?: noneLabel,
                                 variant = LightTextVariant.Copy,
                                 lighten = option == null,
                                 maxLines = 1,
