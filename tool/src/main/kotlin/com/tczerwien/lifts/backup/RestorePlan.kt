@@ -1,5 +1,6 @@
 package com.tczerwien.lifts.backup
 
+import com.tczerwien.lifts.analytics.muscleKeys
 import com.tczerwien.lifts.data.BarEntity
 import com.tczerwien.lifts.data.ExerciseEntity
 import com.tczerwien.lifts.data.LiftsRows
@@ -46,9 +47,10 @@ object RestorePlan {
 
     /**
      * Whether a backup was made before Lifts had weekly targets (B17): its settings have no targets row (every v1
-     * backup, every one from 0.13.0 to 0.17.0), or it has no settings at all. Such a file can't hold what the
-     * lifts count for either, so the phone's Counts For stay ([keptCountsFor]), as its targets do
-     * ([com.tczerwien.lifts.settings.SettingsRows.decode]).
+     * backup, every one from 0.13.0 to 0.17.0). Such a file can't hold what the lifts count for either, so the
+     * phone's Counts For stay ([keptCountsFor]), as its targets do ([com.tczerwien.lifts.settings.SettingsRows.decode]).
+     * A file with no settings at all (a database pulled over adb) may be of any age; it is treated the same, which
+     * keeps its own Counts For where it has them, as [keptCountsFor] only fills exercises that have none.
      */
     fun predatesTargets(settingsRows: Map<String, String>): Boolean = SettingsStore.KEY_MUSCLE_TARGETS !in settingsRows
 
@@ -59,15 +61,21 @@ object RestorePlan {
      */
     fun keptCountsFor(restored: List<ExerciseEntity>, phone: Map<String, List<String>>): List<ExerciseEntity> =
         restored.map { exercise ->
-            val his = phone[exercise.id]?.takeIf { it.isNotEmpty() && exercise.countsFor.isEmpty() }
+            val his = phone[exercise.id]?.takeIf { it.isNotEmpty() && muscleKeys(exercise.countsFor).isEmpty() }
             if (his == null) exercise else exercise.copy(countsFor = his)
         }
 
-    /** The Restore screen's line on a backup's settings ([settingsRows]): what comes back, and what stays. */
-    fun settingsLine(settingsRows: Map<String, String>): String = when {
-        settingsRows.isEmpty() -> "no settings in it: this phone's stay"
-        predatesTargets(settingsRows) -> "and its settings: units, rests, plates, beep (this phone's weekly targets and Counts For stay)"
-        else -> "and its settings: units, rests, plates, beep, deload, weekly targets"
+    /**
+     * The Restore screen's line on a backup's settings ([settingsRows]): what comes back, and what of the phone's
+     * stays because the backup is older than it (deload settings before B14, weekly targets and Counts For before B17).
+     */
+    fun settingsLine(settingsRows: Map<String, String>): String {
+        if (settingsRows.isEmpty()) return "no settings in it: this phone's stay, and its Counts For where the file has none"
+        val hasDeload = SettingsStore.KEY_DELOAD_KEEP_PCT in settingsRows
+        val back = listOf("units", "rests", "plates", "beep") +
+            listOfNotNull("deload".takeIf { hasDeload }, "weekly targets".takeIf { !predatesTargets(settingsRows) })
+        val stay = listOfNotNull("deload".takeIf { !hasDeload }, "weekly targets and Counts For".takeIf { predatesTargets(settingsRows) })
+        return "and its settings: " + back.joinToString(", ") + if (stay.isEmpty()) "" else " (this phone's ${stay.joinToString(", ")} stay)"
     }
 
     /**

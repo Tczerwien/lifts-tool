@@ -127,13 +127,17 @@ class Restorer(
         } catch (e: Exception) {
             throw NothingChanged("could not reset the exercise catalog's version (${e.message ?: e})")
         }
-        try {
-            // A backup from before B17 can't hold what the lifts count for: the phone's Counts For stay, as its targets do.
-            val rows = if (RestorePlan.predatesTargets(prepared.settingsRows)) {
+        // A backup from before B17 can't hold what the lifts count for: the phone's Counts For stay, as its targets do.
+        val rows = try {
+            if (RestorePlan.predatesTargets(prepared.settingsRows)) {
                 prepared.rows.copy(exercises = RestorePlan.keptCountsFor(prepared.rows.exercises, live.chosenCountsFor()))
             } else {
                 prepared.rows
             }
+        } catch (e: Exception) {
+            throw NothingChanged("could not read this phone's Counts For (${e.message ?: e})")
+        }
+        try {
             live.replaceAll(rows)
         } catch (e: Exception) {
             throw NothingChanged("the backup's rows would not go in (${e.message ?: e})")

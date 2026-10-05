@@ -197,29 +197,39 @@ class RestorePlanTest {
         val older = mapOf(SettingsStore.KEY_UNITS to "LB", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0")
         val newer = older + (SettingsStore.KEY_MUSCLE_TARGETS to "{}")
         assertTrue(RestorePlan.predatesTargets(older))
-        assertTrue(RestorePlan.predatesTargets(emptyMap()), "a file with no settings can't hold them either")
+        assertTrue(RestorePlan.predatesTargets(emptyMap()), "a file with no settings is treated so too: its own Counts For stay, the phone's fill the rest")
         assertFalse(RestorePlan.predatesTargets(newer))
 
         val phone = mapOf("bench" to listOf("chest", "front delts"), "gone" to listOf("lats"), "squat" to listOf("quadriceps"))
-        val restored = listOf(exercise("bench"), exercise("squat").copy(countsFor = listOf("glutes")), exercise("custom-1", custom = true))
-        assertEquals(
-            listOf(listOf("chest", "front delts"), listOf("glutes"), emptyList()),
-            RestorePlan.keptCountsFor(restored, phone).map { it.countsFor },
-            "the phone's go where the backup has none; one the backup holds stays its; an exercise it lacks stays out",
+        val restored = listOf(
+            exercise("bench"), exercise("squat").copy(countsFor = listOf("glutes")), exercise("custom-1", custom = true),
+            exercise("pulldown").copy(countsFor = listOf("  ")),
         )
-        assertEquals(restored.map { it.id }, RestorePlan.keptCountsFor(restored, phone).map { it.id })
+        val phoneWithPulldown = phone + ("pulldown" to listOf("lats"))
+        assertEquals(
+            listOf(listOf("chest", "front delts"), listOf("glutes"), emptyList(), listOf("lats")),
+            RestorePlan.keptCountsFor(restored, phoneWithPulldown).map { it.countsFor },
+            "the phone's go where the backup has none (a blank one is none); one the backup holds stays its; an exercise it lacks stays out",
+        )
+        assertEquals(restored.map { it.id }, RestorePlan.keptCountsFor(restored, phoneWithPulldown).map { it.id })
     }
 
     @Test
     fun `the Restore screen says what of the settings comes back`() {
-        assertEquals("no settings in it: this phone's stay", RestorePlan.settingsLine(emptyMap()))
+        assertEquals("no settings in it: this phone's stay, and its Counts For where the file has none", RestorePlan.settingsLine(emptyMap()))
+        val beforeB14 = mapOf(SettingsStore.KEY_UNITS to "LB")
+        val b14to17 = beforeB14 + (SettingsStore.KEY_DELOAD_KEEP_PCT to "50")
         assertEquals(
-            "and its settings: units, rests, plates, beep (this phone's weekly targets and Counts For stay)",
-            RestorePlan.settingsLine(mapOf(SettingsStore.KEY_UNITS to "LB")),
+            "and its settings: units, rests, plates, beep (this phone's deload, weekly targets and Counts For stay)",
+            RestorePlan.settingsLine(beforeB14),
+        )
+        assertEquals(
+            "and its settings: units, rests, plates, beep, deload (this phone's weekly targets and Counts For stay)",
+            RestorePlan.settingsLine(b14to17),
         )
         assertEquals(
             "and its settings: units, rests, plates, beep, deload, weekly targets",
-            RestorePlan.settingsLine(mapOf(SettingsStore.KEY_UNITS to "LB", SettingsStore.KEY_MUSCLE_TARGETS to "{}")),
+            RestorePlan.settingsLine(b14to17 + (SettingsStore.KEY_MUSCLE_TARGETS to "{}")),
         )
     }
 }
