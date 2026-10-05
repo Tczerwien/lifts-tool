@@ -78,6 +78,27 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun aWeeklyTargetIsSetChangedAndTakenAwayOneMuscleAtATime() {
+        val data = FakeDataStore(emptyPreferences())
+        val store = SettingsStore(data)
+        assertEquals(emptyMap(), store.snapshot().muscleTargets, "none until he sets one")
+        runBlocking {
+            store.setMuscleTarget("chest", 13)
+            store.setMuscleTarget("front delts", 3)
+            store.setMuscleTarget("chest", 9)
+            store.setMuscleTarget("traps", 41)
+            store.setMuscleTarget(" ", 5)
+        }
+        assertEquals(mapOf("chest" to 9, "front delts" to 3), store.snapshot().muscleTargets, "41 isn't on offer, a blank name no muscle")
+        runBlocking {
+            store.setMuscleTarget("chest", 0)
+            store.setMuscleTarget("front delts", 0)
+        }
+        assertEquals(emptyMap(), store.snapshot().muscleTargets)
+        assertTrue(runBlocking { data.data.first() }.asMap().isEmpty(), "the last one taken away removes the key")
+    }
+
+    @Test
     fun writesReadBack() {
         val store = SettingsStore(FakeDataStore(preferencesOf(intPreferencesKey("unrelated_sdk_key") to 7)))
         runBlocking {

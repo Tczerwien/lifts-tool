@@ -119,3 +119,6 @@ fun mondayOf(date: LocalDate): LocalDate = date.minusDays((date.dayOfWeek.value 
 /** Weeks from [firstMonday] to the week [startedAt] falls in (in [zone]); negative before it. */
 private fun weekIndex(startedAt: Long, firstMonday: LocalDate, zone: ZoneId): Int =
     ChronoUnit.WEEKS.between(firstMonday, mondayOf(Instant.ofEpochMilli(startedAt).atZone(zone).toLocalDate())).toInt()
+
+/** The most sets a week a target can ask of one muscle: Sets per Muscle's stepper runs 0 (none) to this. */
+const val MAX_SET_TARGET = 40

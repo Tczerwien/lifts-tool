@@ -55,6 +55,7 @@ class RestoreSettingsTest {
         weightStepKg = 1.25,
         deloadKeepPct = 60,
         deloadRir = RirTarget(3, 4),
+        muscleTargets = mapOf("chest" to 13, "front delts" to 3),
     )
 
     @Test
@@ -82,6 +83,33 @@ class RestoreSettingsTest {
         val restored = SettingsRows.decode(older, current = his)
         assertEquals(listOf(60, RirTarget(3, 4)), listOf(restored.deloadKeepPct, restored.deloadRir))
         assertEquals(defaults.copy(deloadKeepPct = 60, deloadRir = RirTarget(3, 4)), restored, "everything else from the backup")
+    }
+
+    @Test
+    fun `a backup from before weekly targets keeps the phone's targets`() {
+        // Every v1 backup is one, and every 0.13.0 to 0.17.0 one: they have no targets row.
+        val older = SettingsRows.encode(defaults) - SettingsStore.KEY_MUSCLE_TARGETS
+        val restored = SettingsRows.decode(older, current = his)
+        assertEquals(his.muscleTargets, restored.muscleTargets)
+        assertEquals(defaults.copy(muscleTargets = his.muscleTargets), restored, "everything else from the backup")
+    }
+
+    @Test
+    fun `a backup made with no targets clears the phone's`() {
+        assertEquals("{}", SettingsRows.encode(defaults)[SettingsStore.KEY_MUSCLE_TARGETS])
+        assertEquals(emptyMap(), SettingsRows.decode(SettingsRows.encode(defaults), current = his).muscleTargets)
+    }
+
+    @Test
+    fun `targets are stored as one object, read entry by entry`() {
+        assertEquals("{\"chest\":13,\"front delts\":3}", SettingsStore.encodeTargets(mapOf("front delts" to 3, "chest" to 13)))
+        assertEquals(
+            mapOf("chest" to 12, "calves" to 7),
+            SettingsStore.parseTargets("{\"chest\":12,\"lats\":0,\"traps\":41,\"neck\":2.5,\"abdominals\":\"3\",\"calves\":7,\"\":4}"),
+            "0, past 40, a fraction, a string and a blank name are no targets",
+        )
+        assertEquals(emptyMap(), SettingsStore.parseTargets("{}"))
+        for (bad in listOf("", "[1]", "{oops", "12", "null")) assertNull(SettingsStore.parseTargets(bad), bad)
     }
 
     @Test
@@ -126,6 +154,7 @@ class RestoreSettingsTest {
             SettingsStore.KEY_WEIGHT_STEP_KG to "2.5.1",
             SettingsStore.KEY_DELOAD_KEEP_PCT to "55",
             SettingsStore.KEY_DELOAD_RIR to "4-9",
+            SettingsStore.KEY_MUSCLE_TARGETS to "{\"chest\": oops",
         )
         assertEquals(his, SettingsRows.decode(rows, current = his))
         for (pct in listOf("20", "80", "half")) {

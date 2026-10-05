@@ -24,6 +24,8 @@ object SettingsRows {
         SettingsStore.KEY_WEIGHT_STEP_KG to settings.weightStepKg.toString(),
         SettingsStore.KEY_DELOAD_KEEP_PCT to settings.deloadKeepPct.toString(),
         SettingsStore.KEY_DELOAD_RIR to SettingsStore.encodeRir(settings.deloadRir),
+        // Written even with none ("{}"), so restoring this backup clears targets set since.
+        SettingsStore.KEY_MUSCLE_TARGETS to SettingsStore.encodeTargets(settings.muscleTargets),
     )
 
     /**
@@ -52,6 +54,8 @@ object SettingsRows {
             // A backup from before B14 has neither: the phone's deload settings stay.
             deloadKeepPct = SettingsStore.validDeloadKeep(rows[SettingsStore.KEY_DELOAD_KEEP_PCT]?.toIntOrNull()) ?: current.deloadKeepPct,
             deloadRir = rows[SettingsStore.KEY_DELOAD_RIR]?.let(SettingsStore::parseRir) ?: current.deloadRir,
+            // A backup from before B17 (any v1 backup among them) has none: the phone's targets stay.
+            muscleTargets = rows[SettingsStore.KEY_MUSCLE_TARGETS]?.let(SettingsStore::parseTargets) ?: current.muscleTargets,
         )
 
     private fun String.restSec(): Int? = toIntOrNull()?.takeIf { it in SANE_REST_SEC }

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.tczerwien.lifts.analytics.MAX_SET_TARGET
 import com.tczerwien.lifts.session.DEFAULT_DELOAD_KEEP_PCT
 import com.tczerwien.lifts.session.DEFAULT_DELOAD_RIR
 import com.tczerwien.lifts.session.DELOAD_KEEP_STEP_PCT
@@ -24,6 +25,9 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 
 /**
  * Tool settings over the shared SDK DataStore (constructor-injected `lightContext.dataStore`).
@@ -53,6 +57,11 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         val deloadKeepPct: Int = DEFAULT_DELOAD_KEEP_PCT,
         /** The RIR a deload aims for, shown instead of the exercises' own targets ([shownRir]). */
         val deloadRir: RirTarget = DEFAULT_DELOAD_RIR,
+        /**
+         * Hard sets a week he aims for, by muscle (Sets per Muscle), each 1 to [MAX_SET_TARGET]; a muscle
+         * without one isn't in it. None until he sets one: no program's numbers are built in.
+         */
+        val muscleTargets: Map<String, Int> = emptyMap(),
     ) {
         /** The plates the calculator loads: his, else the standard set of [units]. */
         val plateInventoryKg: List<Double> get() = customPlatesKg ?: defaultPlatesKg(units)
@@ -84,6 +93,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             weightStepKg = validStep(prefs[WEIGHT_STEP_KG], WeightUnit.KG),
             deloadKeepPct = validDeloadKeep(prefs[DELOAD_KEEP_PCT]) ?: DEFAULT_DELOAD_KEEP_PCT,
             deloadRir = prefs[DELOAD_RIR]?.let(::parseRir) ?: DEFAULT_DELOAD_RIR,
+            muscleTargets = prefs[MUSCLE_TARGETS]?.let(::parseTargets).orEmpty(),
         )
     }
 
@@ -140,6 +150,19 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { prefs -> prefs[DELOAD_RIR] = stored }
     }
 
+    /**
+     * Sets [muscle]'s weekly target to [sets] (Sets per Muscle's SAVE); 0 takes it away, and a number past
+     * [MAX_SET_TARGET] is ignored. Read and written in one edit, so two saves can't lose each other's muscle.
+     */
+    suspend fun setMuscleTarget(muscle: String, sets: Int) {
+        if (sets !in 0..MAX_SET_TARGET || muscle.isBlank()) return
+        dataStore.edit { prefs ->
+            val current = prefs[MUSCLE_TARGETS]?.let(::parseTargets).orEmpty()
+            val next = if (sets == 0) current - muscle else current + (muscle to sets)
+            if (next.isEmpty()) prefs.remove(MUSCLE_TARGETS) else prefs[MUSCLE_TARGETS] = encodeTargets(next)
+        }
+    }
+
     suspend fun setPlateInventoryKg(platesKg: List<Double>) {
         dataStore.edit { prefs ->
             prefs[PLATE_INVENTORY_KG] = encodePlates(platesKg)
@@ -159,6 +182,8 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
             prefs[WEIGHT_STEP_KG] = validStep(settings.weightStepKg, WeightUnit.KG)
             prefs[DELOAD_KEEP_PCT] = validDeloadKeep(settings.deloadKeepPct) ?: DEFAULT_DELOAD_KEEP_PCT
             prefs[DELOAD_RIR] = encodeRir(settings.deloadRir).takeIf { parseRir(it) != null } ?: encodeRir(DEFAULT_DELOAD_RIR)
+            val targets = validTargets(settings.muscleTargets)
+            if (targets.isEmpty()) prefs.remove(MUSCLE_TARGETS) else prefs[MUSCLE_TARGETS] = encodeTargets(targets)
         }
     }
 
@@ -172,6 +197,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         const val KEY_WEIGHT_STEP_KG = "lifts_weight_step_kg"
         const val KEY_DELOAD_KEEP_PCT = "lifts_deload_keep_pct"
         const val KEY_DELOAD_RIR = "lifts_deload_rir"
+        const val KEY_MUSCLE_TARGETS = "lifts_muscle_targets"
 
         private val UNITS = stringPreferencesKey(KEY_UNITS)
         private val DEFAULT_REST_SEC = intPreferencesKey(KEY_DEFAULT_REST_SEC)
@@ -182,6 +208,7 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
         private val WEIGHT_STEP_KG = doublePreferencesKey(KEY_WEIGHT_STEP_KG)
         private val DELOAD_KEEP_PCT = intPreferencesKey(KEY_DELOAD_KEEP_PCT)
         private val DELOAD_RIR = stringPreferencesKey(KEY_DELOAD_RIR)
+        private val MUSCLE_TARGETS = stringPreferencesKey(KEY_MUSCLE_TARGETS)
 
         /** Not a setting (backups leave it out): the one-time fit of types to history has run. */
         private val TRACKING_FITTED = booleanPreferencesKey("lifts_tracking_fitted")
@@ -212,6 +239,23 @@ class SettingsStore(private val dataStore: DataStore<Preferences>) {
                 else -> null
             }
         }
+
+        /** The weekly targets as stored: a JSON object of muscle to sets, keys A to Z ({"chest":12}). */
+        fun encodeTargets(targets: Map<String, Int>): String =
+            JsonObject(validTargets(targets).toSortedMap().mapValues { JsonPrimitive(it.value) }).toString()
+
+        /**
+         * [encodeTargets] read back, entry by entry: a muscle whose number isn't a target (0, past
+         * [MAX_SET_TARGET], not a whole number) is left out. Null when it isn't a JSON object at all.
+         */
+        fun parseTargets(stored: String): Map<String, Int>? {
+            val entries = runCatching { json.parseToJsonElement(stored) as? JsonObject }.getOrNull() ?: return null
+            return validTargets(entries.mapNotNull { (muscle, value) -> (value as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull?.let { muscle to it } }.toMap())
+        }
+
+        /** The entries of [targets] that are targets: a named muscle and 1 to [MAX_SET_TARGET] sets. */
+        fun validTargets(targets: Map<String, Int>): Map<String, Int> =
+            targets.filter { (muscle, sets) -> muscle.isNotBlank() && sets in 1..MAX_SET_TARGET }
 
         private val json = Json
         private val PLATES_SERIALIZER = ListSerializer(Double.serializer())
