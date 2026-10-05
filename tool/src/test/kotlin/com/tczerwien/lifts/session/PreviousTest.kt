@@ -561,6 +561,24 @@ class PreviousTest {
     }
 
     @Test
+    fun `in a superset, a set with a drop still to do keeps NEXT on its drop, not the partner`() {
+        // Fly and row as a pair; fly's set 1 ticked with a drop under it to come (DR-6).
+        val slots = listOf(slot(1, "fly", 0).copy(supersetGroup = 1), slot(2, "row", 1).copy(supersetGroup = 1))
+        val sets = listOf(
+            set(11, slot = 1, position = 0, completedAt = 5L),
+            set(12, slot = 1, position = 1, type = d),
+            set(13, slot = 1, position = 2),
+            set(21, slot = 2, position = 0),
+        )
+        val next = restNextContext(slots, sets, currentSlotId = 1) as RestNext.Next
+        assertEquals(12L, next.rows[next.index].id)
+        assertEquals(1L, openingSlotId(slots, sets, rememberedSlotId = null), "reopened on the fly, its drop to do")
+        // The drop ticked: the turn is the row's.
+        val dropped = sets.map { if (it.id == 12L) it.copy(completedAt = 6L) else it }
+        assertEquals(21L, (restNextContext(slots, dropped, currentSlotId = 1) as RestNext.Next).let { it.rows[it.index].id })
+    }
+
+    @Test
     fun `NEXT moves on when the exercise on screen is done, and says so at the end`() {
         val slots = listOf(slot(1, "squat", 0), slot(2, "press", 1))
         val squatDone = listOf(set(11, slot = 1, position = 0, completedAt = 5L), set(21, slot = 2, position = 0))

@@ -211,6 +211,22 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `a set with a drop still to do after it starts no rest, and the drop's tick starts the work rest`() {
+        // A drop made ahead with the marker under set 1 (DR-6): no beep mid-drop.
+        val workoutId = session.startEmpty(now = 1_000)
+        val slot = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "fly", position = 0, restSecWork = 90))
+        val first = store.addSet(SetEntity(workoutExerciseId = slot, position = 0, type = n))
+        val drop = store.addSet(SetEntity(workoutExerciseId = slot, position = 1, type = SET_TYPE_DROP))
+        store.addSet(SetEntity(workoutExerciseId = slot, position = 2, type = n))
+        runBlocking { session.startRest(120, now = 1_000) }
+        val set1 = assertNotNull(session.completeSet(workoutId, store.setById(first)!!, 30.0, 12, n, now = 10_000))
+        assertEquals(0 to null, set1.restDurationSec to set1.restEndMillis)
+        assertNull(session.restStateSnapshot(), "the running rest ends too")
+        val dropped = assertNotNull(session.completeSet(workoutId, store.setById(drop)!!, 22.5, 8, SET_TYPE_DROP, now = 40_000))
+        assertEquals(90 to 130_000L, dropped.restDurationSec to dropped.restEndMillis, "the work rest, after the drop")
+    }
+
+    @Test
     fun `a rest counts as seen as it is saved, so power pressed right after the tick still flashes later`() {
         val workoutId = session.startEmpty(now = 1_000)
         val slotId = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "bench", position = 0))

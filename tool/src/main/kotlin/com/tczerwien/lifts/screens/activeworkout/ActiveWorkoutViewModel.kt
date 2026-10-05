@@ -442,7 +442,7 @@ class ActiveWorkoutViewModel(
         val state = _uiState.value
         val current = state.exercises.getOrNull(state.currentIndex) ?: return
         if (current.slot.id != pending.slotId) return
-        val target = afterTick(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id, pending.type).moveTo
+        val target = afterTick(state.exercises.map { it.slot }, state.exercises.flatMap { it.sets }, current.slot.id, pending.type, pending.setId).moveTo
             ?: return
         movedOnAt = System.currentTimeMillis()
         showExercise(target)
@@ -557,7 +557,7 @@ class ActiveWorkoutViewModel(
         // is over, or 2 s after it when it starts none (the partner's turn).
         val ticked = _uiState.value.exercises
         val pending = PendingAdvance(set.workoutExerciseId, setId, set.type, now)
-            .takeIf { afterTick(ticked.map { it.slot }, ticked.flatMap { it.sets }, set.workoutExerciseId, set.type).moveTo != null }
+            .takeIf { afterTick(ticked.map { it.slot }, ticked.flatMap { it.sets }, set.workoutExerciseId, set.type, setId).moveTo != null }
         pending?.let { pendingAdvance.value = it }
         val workoutId = _uiState.value.workoutId
         LiftsIo.write({ session.completeSet(workoutId, set, seed.weightKg, seed.reps, set.type, now, seed.durationSec) }) { logged ->

@@ -56,6 +56,19 @@ class DropSetsTest {
         assertEquals(listOf("W", "1", "2", "2"), setMarkers(rows("W", "N", "N", "D")), "ticked or not")
     }
 
+    // --- DR-6: no rest before a drop ---
+
+    @Test
+    fun `a drop follows a set when the next row of its slot is a drop still to do`() {
+        val slot = rows("N", d, n, "N", "D", n)
+        assertEquals(listOf(true, false, false, false, false, false), slot.map { dropFollows(slot, it.id) })
+        // Rows of other slots, out of order, don't count: by position within its own slot.
+        val other = SetEntity(id = 99, workoutExerciseId = 2, position = 1, type = d)
+        assertEquals(false, dropFollows(listOf(other) + slot.reversed(), 4))
+        assertEquals(true, dropFollows(listOf(other) + slot.reversed(), 1))
+        assertEquals(false, dropFollows(slot, 404), "not there")
+    }
+
     // --- DR-4: done/total ---
 
     @Test

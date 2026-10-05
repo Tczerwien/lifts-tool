@@ -72,6 +72,18 @@ fun setMarkers(rows: List<SetEntity>): List<String> {
 }
 
 /**
+ * Whether the row right after set [setId] in its slot ([sets]: the slot's rows, or any rows they are among) is
+ * a drop still to do: then ticking [setId] starts no rest and stays on the exercise, for the drop straight
+ * after it (DR-6, Hevy's rule: no timer before a drop).
+ */
+fun dropFollows(sets: List<SetEntity>, setId: Long): Boolean {
+    val set = sets.firstOrNull { it.id == setId } ?: return false
+    val rows = sets.filter { it.workoutExerciseId == set.workoutExerciseId }.sortedWith(compareBy({ it.position }, { it.id }))
+    val next = rows.getOrNull(rows.indexOf(set) + 1) ?: return false
+    return next.type == SET_TYPE_DROP && next.completedAt == null
+}
+
+/**
  * An exercise's progress as the NEXT row and the exercise list show it, "done/total": its work sets ticked,
  * of its work sets ([rowKinds]), as the Rest Timer's "Set 2 of 3" counts. Warm-ups and drops are left out, so
  * a drop added after the last set doesn't make a finished exercise read "3/4" (DR-4).

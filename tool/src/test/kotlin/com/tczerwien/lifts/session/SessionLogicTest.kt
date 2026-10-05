@@ -172,6 +172,15 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `no rest before a drop still to do`() {
+        // DR-6, Hevy's rule: the drop comes straight after its set, or after the drop before it.
+        assertEquals(0, restDurationSec(SET_TYPE_NORMAL, 240, 45, 180, 90, beforeDrop = true))
+        assertEquals(0, restDurationSec(SET_TYPE_FAILURE, null, null, 180, 90, beforeDrop = true))
+        assertEquals(0, restDurationSec(SET_TYPE_DROP, 240, 45, 180, 90, beforeDrop = true), "a chain")
+        assertEquals(45, restDurationSec(SET_TYPE_WARMUP, 240, 45, 180, 90, beforeDrop = true), "a warm-up keeps its rest")
+    }
+
+    @Test
     fun `volume ignores sets missing weight or reps`() {
         val sets = listOf(
             set(id = 1, weightKg = null, reps = 10, completedAt = 1L),

@@ -107,7 +107,8 @@ fun nextRir(rir: Int?, target: Int? = null): Int? {
 /**
  * Rest to start after completing a set: the exercise's per-slot override when present,
  * else the settings default. Warm-up sets use the warm-up pair; every other type
- * (normal/failure/drop) uses the work pair.
+ * (normal/failure/drop) uses the work pair, and none when the next row is a drop still to do
+ * ([beforeDrop], [dropFollows]): the drop comes straight after (DR-6).
  */
 fun restDurationSec(
     setType: String,
@@ -115,10 +116,11 @@ fun restDurationSec(
     restSecWarmup: Int?,
     defaultRestSec: Int,
     warmupRestSec: Int,
-): Int = if (setType == SET_TYPE_WARMUP) {
-    restSecWarmup ?: warmupRestSec
-} else {
-    restSecWork ?: defaultRestSec
+    beforeDrop: Boolean = false,
+): Int = when {
+    setType == SET_TYPE_WARMUP -> restSecWarmup ?: warmupRestSec
+    beforeDrop -> 0
+    else -> restSecWork ?: defaultRestSec
 }
 
 /**

@@ -474,9 +474,10 @@ class ActiveSession(
      * has it), selects the rest duration (exercise
      * override else settings default; warm-up pair for warm-up sets), and persists the rest
      * end timestamp — the DataStore keys are written on set completion, as the timer contract
-     * requires. In a superset a work tick that hands the turn to a later member starts no rest and
-     * ends any other ([afterTick]); only then are the workout's sets read, so a plain tick costs no
-     * more than before. PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
+     * requires. A work tick whose next row is a drop still to do starts no rest and ends any other
+     * ([dropFollows], DR-6), and so, in a superset, does one that hands the turn to a later member
+     * ([afterTick]); for these a work tick reads the workout's sets (one query; a warm-up's, only in a
+     * superset). PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
      * starting no rest, when the workout has closed (a tick queued behind a stale close) or the
      * set is gone.
      */
@@ -495,17 +496,19 @@ class ActiveSession(
         if (!updateSet(workoutId, completed)) return null
 
         val snapshot = settings.snapshot()
+        // The workout is open: the write above checked, and nothing else writes between (one lane).
+        val sets = if (type != SET_TYPE_WARMUP) repository.setsForWorkout(workoutId) else null
         val restSec = restDurationSec(
             setType = type,
             restSecWork = slot?.restSecWork,
             restSecWarmup = slot?.restSecWarmup,
             defaultRestSec = snapshot.defaultRestSec,
             warmupRestSec = snapshot.warmupRestSec,
+            beforeDrop = sets != null && dropFollows(sets, set.id),
         )
-        // The workout is open: the write above checked, and nothing else writes between (one lane).
-        // A slot that rests 0 s, or a superset's turn passing on, means no rest: the tick still ends any other.
+        // A slot that rests 0 s, a drop next, or a superset's turn passing on, means no rest: the tick still ends any other.
         val rests = restSec > 0 &&
-            (slot?.supersetGroup == null || afterTick(slots, repository.setsForWorkout(workoutId), slot.id, type).startsRest)
+            (slot?.supersetGroup == null || afterTick(slots, sets ?: repository.setsForWorkout(workoutId), slot.id, type, set.id).startsRest)
         runBlocking { if (rests) startRest(restSec, now) else clearRest() }
         return SetCompletion(
             set = completed,

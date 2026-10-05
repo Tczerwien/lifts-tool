@@ -442,6 +442,6 @@ private fun turnPassedFrom(slots: List<WorkoutExerciseEntity>, sets: List<SetEnt
     val latest = sets.filter { it.workoutExerciseId in memberIds && it.completedAt != null }
         .maxWithOrNull(compareBy({ it.completedAt }, { it.id }))
     if (latest?.workoutExerciseId != slotId) return null
-    val moveTo = afterTick(slots, sets, slotId, latest.type).moveTo
+    val moveTo = afterTick(slots, sets, slotId, latest.type, latest.id).moveTo
     return members.firstOrNull { it.id == moveTo && it.id != slotId }
 }

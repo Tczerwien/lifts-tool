@@ -94,6 +94,25 @@ class SupersetsTest {
     }
 
     @Test
+    fun `a tick with a drop still to do after it waits for the drop, which passes the turn`() {
+        // Fly's set 1 has a drop under it, made ahead with the marker: no rest, no move to Row (DR-6).
+        val drop = listOf(row(21, 2, done = true), row(22, 2, type = SET_TYPE_DROP), row(23, 2), row(24, 2))
+        val sets = rows(1, 3, done = 3) + drop + rows(3, 3) + rows(4, 3)
+        assertEquals(AfterTick(startsRest = false, moveTo = null), afterTick(pair, sets, 2, SET_TYPE_NORMAL, tickedSetId = 21))
+        assertEquals(AfterTick(startsRest = false, moveTo = 3), afterTick(pair, tick(sets, 22), 2, SET_TYPE_DROP, tickedSetId = 22))
+        // The closing member too: Row's tick waits, and its drop's tick closes the round with Row's rest.
+        val rowDrop = rows(1, 3, done = 3) + rows(2, 3, done = 1) + listOf(row(31, 3, done = true), row(32, 3, type = SET_TYPE_DROP)) + rows(4, 3)
+        assertEquals(AfterTick(startsRest = false, moveTo = null), afterTick(pair, rowDrop, 3, SET_TYPE_NORMAL, tickedSetId = 31))
+        assertEquals(AfterTick(startsRest = true, moveTo = 2), afterTick(pair, tick(rowDrop, 32), 3, SET_TYPE_DROP, tickedSetId = 32))
+        // A plain slot waits the same way; a warm-up tick rests as always (a drop under it is a set of its own).
+        val pairDone = rows(1, 3, done = 3) + rows(2, 3, done = 3) + rows(3, 3, done = 3)
+        val calf = listOf(row(41, 4, done = true), row(42, 4, type = SET_TYPE_DROP), row(43, 4))
+        assertEquals(AfterTick(startsRest = false, moveTo = null), afterTick(pair, pairDone + calf, 4, SET_TYPE_NORMAL, tickedSetId = 41))
+        val warm = listOf(row(41, 4, type = SET_TYPE_WARMUP, done = true), row(42, 4, type = SET_TYPE_DROP))
+        assertEquals(AfterTick(startsRest = true, moveTo = null), afterTick(pair, pairDone + warm, 4, SET_TYPE_WARMUP, tickedSetId = 41))
+    }
+
+    @Test
     fun `a member with no work left is skipped, and the turn wraps to the first that has some`() {
         // Three in a row: B finished early, so A hands to C, and C closes the round back to A.
         val tri = listOf(slot(1, 0, group = 2), slot(2, 1, group = 2), slot(3, 2, group = 2))

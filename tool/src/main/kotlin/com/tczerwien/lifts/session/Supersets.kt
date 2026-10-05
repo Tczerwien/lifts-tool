@@ -168,7 +168,9 @@ data class AfterTick(val startsRest: Boolean, val moveTo: Long?)
 
 /**
  * What a tick of a [tickedType] set on slot [tickedSlotId] leads to, [sets] having the tick applied
- * (SS-2). A plain slot: its rest, and once its every row is ticked, the next exercise with a row
+ * (SS-2). A work tick of set [tickedSetId] whose next row is a drop still to do ([dropFollows]) starts no
+ * rest and stays, plain or in a superset: the drop comes straight after, and the turn passes with its tick
+ * (DR-6). A plain slot: its rest, and once its every row is ticked, the next exercise with a row
  * unticked ([autoAdvanceSlotId]), as before supersets. A work tick (normal, failure or drop) in a
  * superset passes the turn ([supersetTurn]):
  * - to a member later in the group: no rest, and the move comes 2 s after the tick;
@@ -179,7 +181,16 @@ data class AfterTick(val startsRest: Boolean, val moveTo: Long?)
  *   other member doesn't hold it; one left on this exercise does, as it would on a plain one).
  * A warm-up tick rests and stays, as on a plain slot, unless it finishes the last of the group's work.
  */
-fun afterTick(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>, tickedSlotId: Long, tickedType: String): AfterTick {
+fun afterTick(
+    slots: List<WorkoutExerciseEntity>,
+    sets: List<SetEntity>,
+    tickedSlotId: Long,
+    tickedType: String,
+    tickedSetId: Long? = null,
+): AfterTick {
+    if (tickedType != SET_TYPE_WARMUP && tickedSetId != null && dropFollows(sets, tickedSetId)) {
+        return AfterTick(startsRest = false, moveTo = null)
+    }
     val members = supersetOf(slots, tickedSlotId)
     if (members.isEmpty()) return AfterTick(startsRest = true, moveTo = autoAdvanceSlotId(slots, sets, tickedSlotId))
     val turn = supersetTurn(members, sets, tickedSlotId)
