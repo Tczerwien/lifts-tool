@@ -134,8 +134,8 @@ data class RowValues(val weightKg: Double?, val reps: Int?, val durationSec: Int
  *    from set 3, never from the drop under it);
  * 5. nothing.
  * A drop ([rowKinds]) has its own rule (DR-2, [dropStart]): its own value, else last time's drop (its
- * PREVIOUS), else from the row above it as worked out here (its set, or the drop before it), lighter by
- * the weight step [weightStep] (in [unit]).
+ * PREVIOUS) while lighter than the row above it, else from the row above it as worked out here (its set, or the
+ * drop before it): 20 % lighter, snapped down to the weight step [weightStep] (in [unit]).
  * "Today's previous row" means its value as worked out here, so a change carries down the sets.
  * Weights compare as they show in [unit], so stepping up and back down again is no change.
  */

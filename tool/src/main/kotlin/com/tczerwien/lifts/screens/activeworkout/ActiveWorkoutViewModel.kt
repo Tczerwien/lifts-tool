@@ -112,7 +112,7 @@ class ActiveWorkoutViewModel(
         val deloadRir: RirTarget = DEFAULT_DELOAD_RIR,
         /** The slot's choices still in the picker, and the one it does: what the swap cycles through ([swapTarget]). */
         val choices: List<String> = emptyList(),
-        /** Settings' weight step in [unit]: a drop starts lighter by it ([seedRows]). */
+        /** Settings' weight step in [unit]: a drop's start, 20 % lighter, snaps down to it ([seedRows]). */
         val weightStep: Double = unit.defaultWeightStep,
     ) {
         /** PREVIOUS for each row, paired by kind ([alignPrevious]), parallel to [sets]. */

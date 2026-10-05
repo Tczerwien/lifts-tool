@@ -44,7 +44,7 @@ data class JumpEntry(
     val doneCount: Int,
     val setCount: Int,
     val bar: SupersetBar = SupersetBar.NONE,
-    val finished: Boolean = setCount > 0 && doneCount == setCount,
+    val finished: Boolean,
 )
 
 class ExerciseJumpViewModel : LightViewModel<Long>()

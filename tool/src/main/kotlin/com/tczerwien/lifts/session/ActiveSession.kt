@@ -493,8 +493,8 @@ class ActiveSession(
 
     /**
      * Result of logging a set. [restEndMillis] is the persisted wall-clock rest end, null (and
-     * [restDurationSec] 0) when no rest started: the slot rests 0 s, or a superset's turn passed to a
-     * later member. (A workout that has ended logs nothing: [completeSet] is null.)
+     * [restDurationSec] 0) when no rest started: the slot rests 0 s, a drop still to do comes next, or a
+     * superset's turn passed to a later member. (A workout that has ended logs nothing: [completeSet] is null.)
      */
     data class SetCompletion(
         val set: SetEntity,
@@ -509,8 +509,8 @@ class ActiveSession(
      * end timestamp — the DataStore keys are written on set completion, as the timer contract
      * requires. A work tick whose next row is a drop still to do starts no rest and ends any other
      * ([dropFollows], DR-6), and so, in a superset, does one that hands the turn to a later member
-     * ([afterTick]); for these a work tick reads the workout's sets (one query; a warm-up's, only in a
-     * superset). PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
+     * ([afterTick]). To see the next row every work tick reads the workout's sets (one query); a warm-up
+     * reads them only in a superset. PR stars are worked out by the screen from [prSetIds]. Null, writing nothing and
      * starting no rest, when the workout has closed (a tick queued behind a stale close) or the
      * set is gone.
      */
