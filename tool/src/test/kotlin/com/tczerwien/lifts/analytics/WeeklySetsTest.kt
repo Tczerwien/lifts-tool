@@ -166,7 +166,7 @@ class WeeklySetsTest {
             workout(local("2026-07-05T23:59"), slots = arrayOf("dips" to work(4)))
             workout(local("2026-07-20T00:00"), slots = arrayOf("dips" to work(8)))
             // A Sunday-night workout ticked after midnight counts on Sunday, where History lists it.
-            workout(local("2026-07-12T23:50"), slots = arrayOf("push-up" to work(1)))
+            workout(local("2026-07-12T23:59"), slots = arrayOf("push-up" to work(1)))
         }
         assertEquals(mapOf("chest" to listOf(1, 0), "triceps" to listOf(2 + 1, 1)), weekly(log))
         assertEquals(listOf(4, 2 + 1, 1), weekly(log, weeks = 3).getValue("triceps"))

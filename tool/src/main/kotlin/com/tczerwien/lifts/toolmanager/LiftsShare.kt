@@ -77,8 +77,8 @@ class LiftsShare private constructor(
     }
 
     /**
-     * Something else the export files show was saved: a weigh-in, an exercise's name or cue, a new
-     * custom exercise, a workout's notes or deload mark, a template, a bar, the weight unit, or a workout reopened
+     * Something else the export files show was saved: a weigh-in, an exercise's name, cue or Counts For, a new
+     * custom exercise, a workout's notes or deload mark, a template, a bar, the weight unit, a weekly target, or a workout reopened
      * (RESUME) or closed as stale. The exports catch up once his edits pause for a second
      * ([ExportWriter.request]). Call it once the save has landed.
      */
