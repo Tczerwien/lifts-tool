@@ -7,7 +7,8 @@ package com.tczerwien.lifts.backup
  * this Lifts doesn't know ([com.tczerwien.lifts.settings.SettingsRows.decode] reads only the keys it knows), so
  * they would be gone from every backup after it too. They describe the file, not a setting: nothing reads them
  * into DataStore. The two keys are for good: every later Lifts must keep writing them under these names, and raise
- * its versionCode before a build that adds a setting reaches a phone, or this one takes its backups for older ones.
+ * its versionCode before a build that adds a setting reaches a phone, or this one takes its backups for its own or
+ * older ones.
  * Pure, covered by MadeByTest.
  */
 object MadeBy {
@@ -27,16 +28,17 @@ object MadeBy {
      * one made it. Null when it may be: made by this Lifts or an older one, or with no version row at all, as every
      * backup from before 0.19.0 is (each older than any Lifts that reads this row), and a database pulled over adb.
      * A version that isn't a whole number counts as none: Lifts never writes one, and a hand-edited file shouldn't
-     * be turned away for a row that says nothing. The newer Lifts is named by its versionName, or by its number when
-     * the name is missing, longer than any Lifts writes, or this one's own (a build that kept the name).
+     * be turned away for a row that says nothing. Both Lifts are named by their versionNames, or both by their
+     * numbers when the backup's name is missing, longer than any Lifts writes, or this one's own (a build that kept
+     * the name), so the two always read alike.
      */
     fun refusal(settingsRows: Map<String, String>, appVersionCode: Int, appVersionName: String): String? {
         val code = settingsRows[KEY_VERSION_CODE]?.trim()?.toLongOrNull() ?: return null
         if (code <= appVersionCode) return null
         val name = settingsRows[KEY_VERSION_NAME]?.trim()
             ?.takeIf { it.isNotEmpty() && it.length <= MAX_NAME_CHARS && it != appVersionName }
-            ?: "version $code"
-        return "a newer Lifts made it ($name; this is $appVersionName); update Lifts first"
+        val versions = if (name != null) "$name; this is $appVersionName" else "version $code; this is version $appVersionCode"
+        return "a newer Lifts made it ($versions); update Lifts first"
     }
 
     /** Longer than any versionName Lifts writes ("0.19.0", "1.0.0"): such a name is a hand-made one. */

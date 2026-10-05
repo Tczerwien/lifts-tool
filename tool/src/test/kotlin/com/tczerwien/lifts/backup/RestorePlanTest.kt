@@ -157,12 +157,17 @@ class RestorePlanTest {
         listOf(
             mapOf("lifts_units" to "kg"),
             mapOf("lifts_units" to "kg", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0", SettingsStore.KEY_DELOAD_KEEP_PCT to "50"),
-            mapOf("lifts_units" to "kg", SettingsStore.KEY_WEIGHT_STEP_LB to "5.0", SettingsStore.KEY_MUSCLE_TARGETS to "{}"),
-        ).forEach { rows ->
-            assertEquals(RestorePlan.refitsTypes(rows), RestorePlan.refitsTypes(rows + made), "$rows")
-            assertEquals(RestorePlan.predatesTargets(rows), RestorePlan.predatesTargets(rows + made), "$rows")
-            assertEquals(RestorePlan.settingsLine(rows), RestorePlan.settingsLine(rows + made), "$rows")
-            assertEquals(RestorePlan.barsToFit(bars, rows, WeightUnit.KG), RestorePlan.barsToFit(bars, rows + made, WeightUnit.KG), "$rows")
+            mapOf(
+                "lifts_units" to "kg",
+                SettingsStore.KEY_WEIGHT_STEP_LB to "5.0",
+                SettingsStore.KEY_DELOAD_KEEP_PCT to "50",
+                SettingsStore.KEY_MUSCLE_TARGETS to "{}",
+            ),
+        ).forEach { stored ->
+            assertEquals(RestorePlan.refitsTypes(stored), RestorePlan.refitsTypes(stored + made), "$stored")
+            assertEquals(RestorePlan.predatesTargets(stored), RestorePlan.predatesTargets(stored + made), "$stored")
+            assertEquals(RestorePlan.settingsLine(stored), RestorePlan.settingsLine(stored + made), "$stored")
+            assertEquals(RestorePlan.barsToFit(bars, stored, WeightUnit.KG), RestorePlan.barsToFit(bars, stored + made, WeightUnit.KG), "$stored")
         }
     }
 

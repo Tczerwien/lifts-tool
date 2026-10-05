@@ -41,12 +41,12 @@ class MadeByTest {
             MadeBy.refusal(SettingsRows.encode(settings) + MadeBy.rows(20, "0.20.0"), 19, "0.19.0"),
         )
         assertEquals(
-            "a newer Lifts made it (version 20; this is 0.19.0); update Lifts first",
+            "a newer Lifts made it (version 20; this is version 19); update Lifts first",
             MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to " 20 ", MadeBy.KEY_VERSION_NAME to " "), 19, "0.19.0"),
             "no name to show: its number",
         )
         assertEquals(
-            "a newer Lifts made it (version 99999999999; this is 0.19.0); update Lifts first",
+            "a newer Lifts made it (version 99999999999; this is version 19); update Lifts first",
             MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to "99999999999"), 19, "0.19.0"),
             "a number past the Int range is still a number",
         )
@@ -58,12 +58,12 @@ class MadeByTest {
             MadeBy.refusal(mapOf(MadeBy.KEY_VERSION_CODE to "20", MadeBy.KEY_VERSION_NAME to name), 19, "0.19.0")
         assertEquals("a newer Lifts made it (0.20.0; this is 0.19.0); update Lifts first", named(" 0.20.0 "), "trimmed")
         assertEquals(
-            "a newer Lifts made it (version 20; this is 0.19.0); update Lifts first",
+            "a newer Lifts made it (version 20; this is version 19); update Lifts first",
             named("0.19.0"),
             "a build that kept this Lifts' name: its number",
         )
         assertEquals(
-            "a newer Lifts made it (version 20; this is 0.19.0); update Lifts first",
+            "a newer Lifts made it (version 20; this is version 19); update Lifts first",
             named("x".repeat(21)),
             "a hand-made name too long for the screen: its number",
         )
