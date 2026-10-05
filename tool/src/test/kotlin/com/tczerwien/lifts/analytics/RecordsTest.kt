@@ -36,6 +36,15 @@ class RecordsTest {
     }
 
     @Test
+    fun dropSetsStayEligibleAndWinOnlyOnMerit() {
+        // B16 (DR-7): a drop is part of its set when sets are counted, and still a real lift for records.
+        assertTrue(recordEligible(logged(80.0, 8, at = 1, type = "drop")))
+        val history = listOf(logged(100.0, 5, at = 1))
+        assertFalse(isPr(pending(80.0, 8, type = "drop"), history), "lighter, as a drop is: no record")
+        assertTrue(isPr(pending(105.0, 3, type = "drop"), history), "heavier: a record like any set")
+    }
+
+    @Test
     fun noEarlierE1RmMeansNoE1RmPr() {
         // All history is over 12 reps, so no e1RM exists; a lighter set is not a PR.
         val history = listOf(logged(60.0, 20, at = 1))

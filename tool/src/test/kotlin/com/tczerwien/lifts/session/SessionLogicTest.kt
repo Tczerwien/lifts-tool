@@ -181,6 +181,17 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `volume counts drop sets`() {
+        // B16 (DR-7): kg × reps of every ticked set but warm-ups, a drop's too.
+        val sets = listOf(
+            set(id = 1, weightKg = 100.0, reps = 5, completedAt = 1L),
+            set(id = 2, weightKg = 80.0, reps = 8, completedAt = 2L).copy(type = SET_TYPE_DROP),
+            set(id = 3, weightKg = 40.0, reps = 10, completedAt = 3L).copy(type = SET_TYPE_WARMUP),
+        )
+        assertEquals(500.0 + 640.0, totalVolumeKg(sets))
+    }
+
+    @Test
     fun `volume ignores sets missing weight or reps`() {
         val sets = listOf(
             set(id = 1, weightKg = null, reps = 10, completedAt = 1L),
