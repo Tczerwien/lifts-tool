@@ -116,6 +116,19 @@ class WeeklySetsTest {
     }
 
     @Test
+    fun `rows are read in position order, whatever their ids`() {
+        // Drop Set inserts its row under the set, so a drop can have a higher id than the rows below it; here the
+        // first row's id is the higher one. In position order the drop comes first: a set of its own, then the set.
+        val log = Log().apply { workout(local("2026-07-14T18:00"), slots = arrayOf("dips" to work(1))) }
+        val slotId = log.slots.single().id
+        val sets = listOf(
+            SetEntity(id = 2, workoutExerciseId = slotId, position = 0, type = "drop", reps = 8, completedAt = today - 1),
+            SetEntity(id = 1, workoutExerciseId = slotId, position = 1, type = "normal", reps = 8, completedAt = today - 1),
+        )
+        assertEquals(mapOf("triceps" to listOf(0, 2)), weeklySetsPerMuscle(listOf(dips), log.workouts, log.slots, sets, 2, today, zone))
+    }
+
+    @Test
     fun `unticked sets and unfinished workouts count nowhere`() {
         val log = Log().apply {
             workout(local("2026-07-13T18:00"), slots = arrayOf("dips" to listOf("normal" to true, "normal" to false, "normal" to false)))
