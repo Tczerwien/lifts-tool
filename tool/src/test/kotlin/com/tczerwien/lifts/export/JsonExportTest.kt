@@ -206,6 +206,20 @@ class JsonExportTest {
     }
 
     @Test
+    fun countsForFromAHandMadeFileIsWrittenAsLiftsWritesIt() {
+        val bench = ExportFixtures.bench.copy(countsFor = listOf("Front  Delts ", " ", "chest"))
+        // Only a blank: nothing chosen, so the squat (never done) stays out and counts for its primary.
+        val squat = ExportFixtures.squat.copy(countsFor = listOf("  "))
+        val document = Json.decodeFromString(
+            JsonExportDocument.serializer(),
+            JsonExport.render(ExportFixtures.snapshot(exercises = listOf(bench, squat))),
+        )
+        assertEquals(listOf("bench-press-barbell"), document.exercises.map { it.id })
+        assertEquals(listOf("front delts", "chest"), document.exercises.single().countsFor)
+        assertEquals(listOf("chest", "front delts"), document.summary.weeklySetsPerMuscle.keys.toList())
+    }
+
+    @Test
     fun weeklyTargetsAreWrittenAndATargetMuscleShowsAtZero() {
         assertNull(decoded.summary.weeklySetTargets, "absent without any")
         val document = Json.decodeFromString(JsonExportDocument.serializer(), full)
