@@ -34,6 +34,8 @@ America/Chicago):
     and the seated side lateral raise, and the Friday Upper A before last did the dumbbell one instead, at
     20 lb x 10 (a swap: its slot does it, with the three as its choices). A v1 file has no column for either, so that Friday
     did the cable raise.
+  - A drop set: the last Friday's Upper A did a drop under its third cable lateral raise set, 10 lb x 8,
+    ticked 40 s after it (any schema version: v1 has the set type).
 
 With --catalog-from SEEDED.db (a lifts.db pulled after the app seeded its catalog on first launch), the
 exercise catalog and bars are copied in (by the columns both files have, so a catalog seeded by either
@@ -348,6 +350,19 @@ def gym(conn, now):
         ).fetchone()
         conn.execute("UPDATE workout_exercises SET exerciseId = ?, choices = ? WHERE id = ?", (SIDE_LATERAL, json_list(choices), slot_id))
         conn.execute("UPDATE sets SET weightKg = ?, reps = 10 WHERE workoutExerciseId = ?", (kg(20), slot_id))
+    # Added in B16: a drop under the third cable lateral raise set of the last Friday's Upper A (week index 7), 10 lb × 8,
+    # ticked 40 s after that set, so a drop added there today lines up with it. Nothing random.
+    friday = dt.datetime.combine(first_monday + dt.timedelta(weeks=7, days=4), dt.time(0, 0), ZONE)
+    slot_id, last_position, last_done = conn.execute(
+        "SELECT we.id, s.position, s.completedAt FROM workout_exercises we JOIN workouts w ON w.id = we.workoutId "
+        "JOIN sets s ON s.workoutExerciseId = we.id WHERE w.name = 'Upper A' AND w.startedAt >= ? AND w.startedAt < ? "
+        "AND we.exerciseId = ? ORDER BY s.position DESC LIMIT 1",
+        (millis(friday), millis(friday + dt.timedelta(days=1)), LATERAL),
+    ).fetchone()
+    conn.execute(
+        "INSERT INTO sets (workoutExerciseId, position, type, weightKg, reps, completedAt) VALUES (?, ?, 'drop', ?, 8, ?)",
+        (slot_id, last_position + 1, kg(10), last_done + 40_000),
+    )
 
 
 # --- Scenario "long": years of four workouts a week ---
