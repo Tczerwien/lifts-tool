@@ -102,8 +102,13 @@ data class WorkoutMenuContent(
     val platesUnavailable: String? = null,
     /** "2 OF 5": where the exercise on screen is in the workout. */
     val position: String? = null,
-    /** The active unticked row as its marker names it ("Set 2", "Warm-up"), or null. */
+    /**
+     * The active row while it and its drops are unticked, named as its marker numbers it ("Set 2", "Warm-up",
+     * "Set 2 drop"), with "+ drop" when its drops go with it; or null.
+     */
     val removeSetLabel: String? = null,
+    /** Why the active unticked row can't go, when that is not plain: "ITS DROP IS LOGGED". */
+    val removeSetBlocked: String? = null,
     /** The current exercise's name while none of its sets is ticked, or null. */
     val removeExerciseLabel: String? = null,
     val workoutName: String = "",
@@ -268,7 +273,7 @@ class WorkoutMenuScreen(
                     RowDivider()
                     MenuRow(
                         title = "Remove set",
-                        detail = content.removeSetLabel ?: "UNTICKED SETS ONLY",
+                        detail = content.removeSetLabel ?: content.removeSetBlocked ?: "UNTICKED SETS ONLY",
                         onClick = { choose(WorkoutMenuResult.RemoveSet) }.takeIf { content.removeSetLabel != null },
                     )
                     RowDivider()

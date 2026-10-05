@@ -209,7 +209,7 @@ class ActiveWorkoutViewModel(
      */
     data class MenuOptions(
         val content: WorkoutMenuContent,
-        /** The active row while it is unticked. */
+        /** The active row while it and its drops are unticked ([setRemoval]). */
         val removeSetId: Long? = null,
         /** The current exercise while none of its sets is ticked. */
         val removeSlotId: Long? = null,
@@ -966,6 +966,7 @@ class ActiveWorkoutViewModel(
                         else -> " + $drops drops"
                     }
                 },
+                removeSetBlocked = "ITS DROP IS LOGGED".takeIf { activeSet != null && activeSet.completedAt == null && removal == null },
                 removeExerciseLabel = block.name.takeIf { exerciseRemovable },
             ),
             removeSetId = removableSet?.id,
@@ -1151,14 +1152,23 @@ class ActiveWorkoutViewModel(
         }
     }
 
-    /** Menu: removes the set it offered, only while it is unticked (the session checks again). */
+    /**
+     * Menu: removes the set it offered with its drops, only while they are unticked (the session checks again).
+     * Several rows can go, so the rows and steppers ignore taps until the save's reload lands and the rows for a
+     * moment after, as after a deload switch: a tick on a row about to go would show, then vanish.
+     */
     fun removeSet(setId: Long) {
         if (!beginAction()) return
         val workoutId = resolvedWorkoutId ?: return
         val located = locate(setId) ?: return
         if (located.block.sets[located.index].completedAt != null) return
         rowsMovedUnderFinger()
-        LiftsIo.write({ session.removeSet(workoutId, setId) }) { refresh() }
+        rowsChanging.incrementAndGet()
+        LiftsIo.write({ session.removeSet(workoutId, setId) }) {
+            refresh()
+            rowsMovedUnderFinger()
+            rowsChanging.decrementAndGet()
+        }
     }
 
     /** Menu: removes the exercise it offered, only while none of its sets is ticked. */
