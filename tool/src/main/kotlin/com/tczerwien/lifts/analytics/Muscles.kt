@@ -50,10 +50,13 @@ fun toggledCountsFor(current: List<String>, muscle: String?): List<String> = whe
     else -> (current + muscle).distinct().sortedBy(::muscleLabel)
 }
 
-/** About's Counts For row: "Chest, Front Delts" for his choice, "Catalog · Chest" while the catalog's primary muscles count. */
-fun countsForText(countsFor: List<String>, primaryMuscles: List<String>): String =
+/**
+ * About's Counts For row: "Chest, Front Delts" for his choice; while the primary muscles count, "Catalog · Chest"
+ * for a catalog lift, "Primary · Chest" for a [custom] one, whose primary muscle he picked himself.
+ */
+fun countsForText(countsFor: List<String>, primaryMuscles: List<String>, custom: Boolean = false): String =
     if (countsFor.isNotEmpty()) {
         countsFor.joinToString(", ", transform = ::muscleLabel)
     } else {
-        "Catalog · " + primaryMuscles.joinToString(", ", transform = ::muscleLabel).ifEmpty { "—" }
+        (if (custom) "Primary · " else "Catalog · ") + primaryMuscles.joinToString(", ", transform = ::muscleLabel).ifEmpty { "—" }
     }

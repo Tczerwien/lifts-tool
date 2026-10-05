@@ -653,7 +653,7 @@ class ExerciseDetailScreen(
                     onBack = viewModel::closeCountsFor,
                     multiSelect = true,
                     includeNone = true,
-                    noneLabel = countsForText(emptyList(), uiState.primaryMuscles),
+                    noneLabel = countsForText(emptyList(), uiState.primaryMuscles, uiState.isCustom),
                     label = ::muscleLabel,
                 )
             } else if (!renameOnly) {
@@ -718,7 +718,7 @@ class ExerciseDetailScreen(
             // Sets per Muscle counts each work set 1 for each of these; the catalog's primary muscles until he picks.
             LiftsFieldRow(
                 label = "Counts For",
-                value = countsForText(uiState.countsFor, uiState.primaryMuscles),
+                value = countsForText(uiState.countsFor, uiState.primaryMuscles, uiState.isCustom),
                 onClick = viewModel::openCountsFor,
                 chevron = true,
             )

@@ -64,5 +64,8 @@ class MusclesTest {
         assertEquals("Chest, Front Delts", countsForText(listOf("chest", "front delts"), listOf("triceps")))
         assertEquals("Catalog · Middle Back", countsForText(emptyList(), listOf("middle back")))
         assertEquals("Catalog · —", countsForText(emptyList(), emptyList()))
+        // His own exercise's primary muscle is his choice, not a catalog's.
+        assertEquals("Primary · Shoulders", countsForText(emptyList(), listOf("shoulders"), custom = true))
+        assertEquals("Rear Delts", countsForText(listOf("rear delts"), listOf("shoulders"), custom = true))
     }
 }
