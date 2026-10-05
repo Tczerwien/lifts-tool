@@ -286,21 +286,27 @@ class ActiveSession(
     }
 
     /**
-     * "…" › Drop Set (DR-3): a drop row in slot [slotId] of the open workout [workoutId], directly under the
-     * exercise's latest tick ([dropUnder]: a work set, or a drop of a chain), the rows below it moving down one
-     * place. It starts empty, so it shows where a drop starts ([dropStart]: last time's drop, else 20 % lighter
-     * than the row above), as any row shows its starting values. The running rest is cleared, so no beep comes
-     * mid-drop; the drop's tick starts the work rest. Returns the new row's id; null, changing nothing, once the
-     * workout has closed, the slot is gone, the lift takes no weight, or nothing but a warm-up is ticked last.
+     * "…" › Drop Set (DR-3): a drop row in slot [slotId] of the open workout [workoutId] under the exercise's
+     * latest tick ([dropPlace]: a work set, or a drop of a chain), after the drops already done under it, the
+     * rows below moving down one place; or, when a drop still to do already waits there, that one, with no new
+     * row. It starts empty, so it shows where a drop starts ([dropStart]: last time's drop, else 20 % lighter than
+     * the row above), as any row shows its starting values. The running rest is cleared, so no beep comes
+     * mid-drop; the drop's tick starts the work rest. Returns the drop's id; null, changing nothing, once the
+     * workout has closed, the slot is gone, the lift takes no weight, or nothing is ticked or a warm-up last.
      */
     fun addDrop(workoutId: Long, slotId: Long): Long? {
         val setId = repository.inTransaction {
             val slot = openSlot(workoutId, slotId) ?: return@inTransaction null
             if (repository.exerciseById(slot.exerciseId)?.tracking?.takesWeight != true) return@inTransaction null
             val rows = repository.setsForWorkout(workoutId).filter { it.workoutExerciseId == slotId }.sortedBy { it.position }
-            val under = dropUnder(rows)?.let(rows::get) ?: return@inTransaction null
-            val position = under.position + 1
-            repository.insertSetAt(slotId, position, SetEntity(workoutExerciseId = slotId, position = position, type = SET_TYPE_DROP))
+            when (val place = dropPlace(rows)) {
+                null -> null
+                is DropPlace.Waiting -> rows[place.index].id
+                is DropPlace.After -> {
+                    val position = rows[place.index].position + 1
+                    repository.insertSetAt(slotId, position, SetEntity(workoutExerciseId = slotId, position = position, type = SET_TYPE_DROP))
+                }
+            }
         } ?: return null
         runBlocking { clearRest() }
         return setId

@@ -92,15 +92,36 @@ fun setRemoval(rows: List<SetEntity>, index: Int): List<Long>? {
     return taken.takeIf { sets -> sets.none { it.completedAt != null } }?.map { it.id }
 }
 
+/** Where "…" › Drop Set goes in one slot's rows ([dropPlace]); [index] is a row of them. */
+sealed interface DropPlace {
+    val index: Int
+
+    /** A drop still to do already waits under the set: Drop Set goes to it, no new row. */
+    data class Waiting(override val index: Int) : DropPlace
+
+    /** A new drop goes in right after this row: the latest tick, or the last drop already done under it. */
+    data class After(override val index: Int) : DropPlace
+
+    /** The row the drop comes after, as the menu names it ("AFTER SET 3"). */
+    val after: Int get() = if (this is Waiting) index - 1 else index
+}
+
 /**
- * Where "…" › Drop Set puts a drop in one slot's [rows] (in position order), as an index of [rows]: directly
- * under its latest tick (by when it was ticked), when that is a work set or a drop, so a chain grows under
- * its set; null when nothing is ticked or the latest tick is a warm-up (DR-3). Whether the lift takes a
- * weight is the caller's to check.
+ * Where "…" › Drop Set puts a drop in one slot's [rows] (in position order), from its latest tick (by when it
+ * was ticked), when that is a work set or a drop (DR-3): to a drop still to do already under it (made ahead with
+ * the marker, or a Drop Set not yet ticked), else right after it and the drops already done under it, so a chain
+ * keeps the order he did them in (a set ticked again after its drop gets the next drop below that one). Null
+ * when nothing is ticked or the latest tick is a warm-up. Whether the lift takes a weight is the caller's to check.
  */
-fun dropUnder(rows: List<SetEntity>): Int? {
+fun dropPlace(rows: List<SetEntity>): DropPlace? {
     val latest = rows.filter { it.completedAt != null }.maxWithOrNull(compareBy({ it.completedAt }, { it.id })) ?: return null
-    return rows.indexOf(latest).takeIf { latest.type != SET_TYPE_WARMUP }
+    if (latest.type == SET_TYPE_WARMUP) return null
+    val at = rows.indexOf(latest)
+    val kinds = rowKinds(rows)
+    // The drops under it, down to the next set: the chain this drop joins.
+    val below = (at + 1 until rows.size).takeWhile { kinds[it] == RowKind.DROP }
+    below.firstOrNull { rows[it].completedAt == null }?.let { return DropPlace.Waiting(it) }
+    return DropPlace.After(below.lastOrNull() ?: at)
 }
 
 /**

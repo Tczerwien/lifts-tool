@@ -82,12 +82,24 @@ class DropSetsTest {
     fun `a drop goes under the latest tick, a work set or a drop`() {
         val slot = rows(w, n, n, n)
         fun ticked(vararg at: Pair<Int, Long>) = slot.mapIndexed { i, set -> at.firstOrNull { it.first == i }?.let { set.copy(completedAt = it.second) } ?: set }
-        assertEquals(3, dropUnder(ticked(1 to 10L, 2 to 20L, 3 to 30L)), "under set 3")
-        assertEquals(1, dropUnder(ticked(1 to 40L, 2 to 20L, 3 to 30L)), "set 1 ticked again last: under it")
-        assertEquals(3, dropUnder(rows("N", "N", "D", "D")), "a chain grows under its last drop")
-        assertNull(dropUnder(rows("W", n, n)), "only a warm-up ticked")
-        assertNull(dropUnder(ticked(0 to 50L, 1 to 10L)), "the latest tick a warm-up")
-        assertNull(dropUnder(slot), "nothing ticked")
+        assertEquals(DropPlace.After(3), dropPlace(ticked(1 to 10L, 2 to 20L, 3 to 30L)), "under set 3")
+        assertEquals(DropPlace.After(1), dropPlace(ticked(1 to 40L, 2 to 20L, 3 to 30L)), "set 1 ticked again last: under it")
+        assertEquals(DropPlace.After(3), dropPlace(rows("N", "N", "D", "D")), "a chain grows under its last drop")
+        assertNull(dropPlace(rows("W", n, n)), "only a warm-up ticked")
+        assertNull(dropPlace(ticked(0 to 50L, 1 to 10L)), "the latest tick a warm-up")
+        assertNull(dropPlace(slot), "nothing ticked")
+    }
+
+    @Test
+    fun `a drop still to do under the set is the one Drop Set goes to, and a new one goes after those done`() {
+        // Made ahead with the marker under set 2, then set 2 ticked: no second drop above it (review R1-2, A1).
+        assertEquals(DropPlace.Waiting(2), dropPlace(rows("N", "N", d, n)))
+        assertEquals(1, DropPlace.Waiting(2).after, "named after set 2")
+        // Set 2 ticked again after its drop was logged: the next drop goes below that one, in the order done.
+        val retick = rows("N", "N", "D", n).mapIndexed { i, set -> if (i == 1) set.copy(completedAt = 9_000L) else set }
+        assertEquals(DropPlace.After(2), dropPlace(retick))
+        // A chain with its second drop still to do: that one.
+        assertEquals(DropPlace.Waiting(3), dropPlace(rows("N", "N", "D", d, n)))
     }
 
     // --- DR-6: no rest before a drop ---

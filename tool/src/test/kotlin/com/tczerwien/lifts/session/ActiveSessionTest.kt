@@ -275,6 +275,23 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `Drop Set goes to a drop already waiting, and after a logged one when its set is ticked again`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slot = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "fly", position = 0))
+        val ids = listOf(n, SET_TYPE_DROP, n).mapIndexed { position, type -> store.addSet(SetEntity(workoutExerciseId = slot, position = position, type = type)) }
+        session.completeSet(workoutId, store.setById(ids[0])!!, 30.0, 12, n, now = 10_000)
+        // The drop made ahead with the marker: Drop Set goes to it, no second row (review R1-2, A1).
+        assertEquals(ids[1], session.addDrop(workoutId, slot))
+        assertEquals(3, store.setsForWorkout(workoutId).size)
+        // Logged, then set 1 ticked again: the new drop goes below the logged one.
+        session.completeSet(workoutId, store.setById(ids[1])!!, 22.5, 8, SET_TYPE_DROP, now = 20_000)
+        session.uncompleteSet(workoutId, store.setById(ids[0])!!)
+        session.completeSet(workoutId, store.setById(ids[0])!!, 30.0, 11, n, now = 30_000)
+        val second = assertNotNull(session.addDrop(workoutId, slot))
+        assertEquals(listOf(ids[0], ids[1], second, ids[2]), store.setsForWorkout(workoutId).map { it.id })
+    }
+
+    @Test
     fun `removing a set takes its drop, so it never ends up under the set above`() {
         val workoutId = session.startEmpty(now = 1_000)
         val slot = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "fly", position = 0))

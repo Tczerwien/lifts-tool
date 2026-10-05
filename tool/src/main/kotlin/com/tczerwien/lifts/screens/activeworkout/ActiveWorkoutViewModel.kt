@@ -26,7 +26,7 @@ import com.tczerwien.lifts.session.activeRowAfterTick
 import com.tczerwien.lifts.session.afterTick
 import com.tczerwien.lifts.session.alignPrevious
 import com.tczerwien.lifts.session.autoAdvanceAt
-import com.tczerwien.lifts.session.dropUnder
+import com.tczerwien.lifts.session.dropPlace
 import com.tczerwien.lifts.session.inSuperset
 import com.tczerwien.lifts.session.isDoubleTap
 import com.tczerwien.lifts.session.linkWithNext
@@ -944,8 +944,8 @@ class ActiveWorkoutViewModel(
         return MenuOptions(
             content = workout.copy(
                 exerciseName = block.name,
-                dropSetAfter = dropUnder(block.sets)?.takeIf { block.tracking.takesWeight }
-                    ?.let { "AFTER ${rowLabel(block.sets, it).uppercase()}" },
+                dropSetAfter = dropPlace(block.sets)?.takeIf { block.tracking.takesWeight }
+                    ?.let { "AFTER ${rowLabel(block.sets, it.after).uppercase()}" },
                 exerciseNote = block.slot.notes,
                 restSec = block.slot.restSecWork ?: state.defaultRestSec,
                 defaultRestSec = state.defaultRestSec,
