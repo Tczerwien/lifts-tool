@@ -26,3 +26,24 @@ val MUSCLES: List<String> = (CATALOG_MUSCLES + EXTRA_MUSCLES).sortedBy(::muscleL
  */
 fun muscleLabel(muscle: String): String =
     muscle.trim().split(Regex("\\s+")).joinToString(" ") { word -> word.replaceFirstChar { it.uppercaseChar() } }
+
+/**
+ * An exercise's Counts For after a tap on [muscle] in its list ([current] being what it holds now): a muscle
+ * in it leaves, one not in it joins, and the list stays in [muscleLabel] order; null (the "catalog" row)
+ * empties it, so the catalog's primary muscles count again, as they do once the last one leaves. Starting
+ * from an empty list, the first muscle tapped is the whole list: he picks what counts, the catalog's muscle
+ * included only if he taps it.
+ */
+fun toggledCountsFor(current: List<String>, muscle: String?): List<String> = when (muscle) {
+    null -> emptyList()
+    in current -> current - muscle
+    else -> (current + muscle).distinct().sortedBy(::muscleLabel)
+}
+
+/** About's Counts For row: "Chest, Front Delts" for his choice, "Catalog · Chest" while the catalog's primary muscles count. */
+fun countsForText(countsFor: List<String>, primaryMuscles: List<String>): String =
+    if (countsFor.isNotEmpty()) {
+        countsFor.joinToString(", ", transform = ::muscleLabel)
+    } else {
+        "Catalog · " + primaryMuscles.joinToString(", ", transform = ::muscleLabel).ifEmpty { "—" }
+    }
