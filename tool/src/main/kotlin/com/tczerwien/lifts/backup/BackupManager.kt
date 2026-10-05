@@ -1,6 +1,7 @@
 package com.tczerwien.lifts.backup
 
 import android.util.Log
+import com.tczerwien.lifts.BuildConfig
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.session.LiftsIo
 import com.tczerwien.lifts.session.QueuedOnce
@@ -20,9 +21,10 @@ import kotlinx.coroutines.launch
 /**
  * Backups of the whole log and the settings, in [dir] (files/shared/backups, which Tool Manager
  * serves read-only). Each is one SQLite file: a VACUUM INTO copy of lifts.db plus a lifts_settings
- * table. It is written under a hidden temp name, checked with integrity_check, flushed to disk, and
- * only then renamed into place, so a listed backup is always a whole one. Backups run on the write
- * lane, so each holds every save made before it and no save lands halfway through one.
+ * table: the settings, and which Lifts wrote them ([MadeBy]). It is written under a hidden temp
+ * name, checked with integrity_check, flushed to disk, and only then renamed into place, so a listed
+ * backup is always a whole one. Backups run on the write lane, so each holds every save made before
+ * it and no save lands halfway through one.
  */
 class BackupManager(
     private val dir: File,
@@ -141,7 +143,9 @@ class BackupManager(
         try {
             deleteWithSidecars(temp)
             repository.copyTo(temp.absolutePath)
-            BackupFile.writeSettings(temp, SettingsRows.encode(settings.snapshot()))
+            // The settings, and which Lifts wrote them ([MadeBy]).
+            val settingsRows = SettingsRows.encode(settings.snapshot()) + MadeBy.rows(BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME)
+            BackupFile.writeSettings(temp, settingsRows)
             BackupFile.integrityProblem(temp)?.let { throw IOException("the copy failed its check: $it") }
             sync(temp)
             val target = File(dir, BackupPolicy.uniqueName(kind, now, dir.list().orEmpty().toList()))
