@@ -4,6 +4,7 @@ import android.database.sqlite.SQLiteException
 import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import com.tczerwien.lifts.BuildConfig
 import com.tczerwien.lifts.data.LiftsDatabase
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.LiftsRows
@@ -79,6 +80,8 @@ class Restorer(
                 // SQLite can't even read it: typically a copy that was cut short.
                 throw Refused("the file is damaged or incomplete")
             }
+            // Same tables, newer Lifts: its rows would come back, the settings it added would go without a word.
+            MadeBy.refusal(settingsRows, BuildConfig.VERSION_CODE, BuildConfig.VERSION_NAME)?.let { throw Refused(it) }
             val rows = try {
                 val db = openStaged(staged)
                 try {
