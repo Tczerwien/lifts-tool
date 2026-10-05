@@ -29,6 +29,7 @@ import com.tczerwien.lifts.analytics.weeklySetsPerMuscle
 import com.tczerwien.lifts.data.LiftsRepository
 import com.tczerwien.lifts.data.liftsRepository
 import com.tczerwien.lifts.session.LiftsIo
+import com.tczerwien.lifts.session.ReloadFloor
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.toolmanager.liftsShare
@@ -124,6 +125,7 @@ class SetsPerMuscleViewModel(
      * between the weeks reads nothing more.
      */
     private fun refresh() {
+        val ticket = targetsFloor.reloadStarted()
         val zone = ZoneId.systemDefault()
         val now = System.currentTimeMillis()
         val first = firstMonday(now, SETS_PER_MUSCLE_WEEKS, zone)
@@ -139,10 +141,17 @@ class SetsPerMuscleViewModel(
                 deloads = deloadWeeks(slots, SETS_PER_MUSCLE_WEEKS, now, zone),
                 firstMonday = first,
                 today = LocalDate.now(zone),
-                targets = targets,
+                // A SAVE made while this read stands until it is read back.
+                targets = if (targetsFloor.keepsShown(ticket)) state.targets else targets,
             )
         }
     }
+
+    /**
+     * Reloads run beside the write lane (one after a resume can overlap a SAVE): one that read the targets
+     * before a save landed keeps the targets on screen ([ReloadFloor], as Exercise Detail does).
+     */
+    private val targetsFloor = ReloadFloor()
 
     /** ‹ (−1) shows the week before, › (+1) the week after, between this week and [SETS_PER_MUSCLE_WEEKS] - 1 back. */
     fun stepWeek(delta: Int) {
@@ -181,11 +190,15 @@ class SetsPerMuscleViewModel(
      */
     fun saveTarget() {
         val edit = _uiState.value.mode as? Mode.Edit ?: return
+        targetsFloor.saveQueued()
         _uiState.update { state ->
             val targets = if (edit.sets == 0) state.targets - edit.muscle else state.targets + (edit.muscle to edit.sets)
             state.copy(targets = targets, mode = Mode.List)
         }
-        LiftsIo.write({ settings.setMuscleTarget(edit.muscle, edit.sets) }) { changed -> if (changed) share.logChanged() }
+        LiftsIo.write({ settings.setMuscleTarget(edit.muscle, edit.sets) }) { changed ->
+            targetsFloor.saveLanded()
+            if (changed) share.logChanged()
+        }
     }
 
     /** Back from the list of muscles or a target's stepper goes to the week's list, saving nothing. */
