@@ -216,11 +216,11 @@ class RestorePlanTest {
 
     @Test
     fun `the Restore screen says what of the settings comes back`() {
-        assertEquals("no settings in it: this phone's stay, and its Counts For where the file has none", RestorePlan.settingsLine(emptyMap()))
+        assertEquals("no settings in it: this phone's settings stay, and its Counts For where the file has none", RestorePlan.settingsLine(emptyMap()))
         val beforeB14 = mapOf(SettingsStore.KEY_UNITS to "LB")
         val b14to17 = beforeB14 + (SettingsStore.KEY_DELOAD_KEEP_PCT to "50")
         assertEquals(
-            "and its settings: units, rests, plates, beep (this phone's deload, weekly targets and Counts For stay)",
+            "and its settings: units, rests, plates, beep (this phone's deload settings, weekly targets and Counts For stay)",
             RestorePlan.settingsLine(beforeB14),
         )
         assertEquals(
@@ -230,6 +230,11 @@ class RestorePlanTest {
         assertEquals(
             "and its settings: units, rests, plates, beep, deload, weekly targets",
             RestorePlan.settingsLine(b14to17 + (SettingsStore.KEY_MUSCLE_TARGETS to "{}")),
+        )
+        // Only a hand-made file has targets without deload rows (Lifts writes both since 0.18.0).
+        assertEquals(
+            "and its settings: units, rests, plates, beep, weekly targets (this phone's deload settings stay)",
+            RestorePlan.settingsLine(beforeB14 + (SettingsStore.KEY_MUSCLE_TARGETS to "{}")),
         )
     }
 }

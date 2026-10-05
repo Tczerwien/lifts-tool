@@ -70,11 +70,11 @@ object RestorePlan {
      * stays because the backup is older than it (deload settings before B14, weekly targets and Counts For before B17).
      */
     fun settingsLine(settingsRows: Map<String, String>): String {
-        if (settingsRows.isEmpty()) return "no settings in it: this phone's stay, and its Counts For where the file has none"
+        if (settingsRows.isEmpty()) return "no settings in it: this phone's settings stay, and its Counts For where the file has none"
         val hasDeload = SettingsStore.KEY_DELOAD_KEEP_PCT in settingsRows
         val back = listOf("units", "rests", "plates", "beep") +
             listOfNotNull("deload".takeIf { hasDeload }, "weekly targets".takeIf { !predatesTargets(settingsRows) })
-        val stay = listOfNotNull("deload".takeIf { !hasDeload }, "weekly targets and Counts For".takeIf { predatesTargets(settingsRows) })
+        val stay = listOfNotNull("deload settings".takeIf { !hasDeload }, "weekly targets and Counts For".takeIf { predatesTargets(settingsRows) })
         return "and its settings: " + back.joinToString(", ") + if (stay.isEmpty()) "" else " (this phone's ${stay.joinToString(", ")} stay)"
     }
 

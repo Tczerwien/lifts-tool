@@ -245,7 +245,7 @@ class RestoreScreen(
                             SectionLabel("This phone holds")
                             Lines(phase.phone)
                             Note(
-                                "Restore replaces everything on this phone with the backup. " +
+                                "Restore replaces this phone's log with the backup's. " +
                                     "What is here now is saved first, as a pre-restore backup.",
                             )
                         }
