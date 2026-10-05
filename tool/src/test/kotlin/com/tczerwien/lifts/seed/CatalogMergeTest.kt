@@ -37,6 +37,7 @@ class CatalogMergeTest {
             trackingType = "weighted_bodyweight",
             perSide = true,
             hidden = true,
+            countsFor = listOf("chest", "front delts"),
             primaryMuscles = listOf("chest"),
             secondaryMuscles = emptyList(),
             instructions = listOf("old words"),
@@ -46,6 +47,18 @@ class CatalogMergeTest {
         assertEquals(bench.secondaryMuscles, updated.secondaryMuscles)
         assertEquals(bench.instructions, updated.instructions)
         assertEquals(his.copy(secondaryMuscles = bench.secondaryMuscles, instructions = bench.instructions), updated)
+    }
+
+    @Test
+    fun `what a lift counts for stays his when the catalog moves its muscles`() {
+        val his = bench.copy(countsFor = listOf("chest", "front delts"))
+        val phone = bundled.map { if (it.id == bench.id) his else it }
+        val moved = bundled.map { if (it.id == bench.id) it.copy(primaryMuscles = listOf("triceps")) else it }
+        val updated = mergeCatalog(phone, moved).updates.single()
+        assertEquals(listOf("triceps"), updated.primaryMuscles, "the catalog's fact")
+        assertEquals(listOf("chest", "front delts"), updated.countsFor, "his choice")
+        // His Counts For is no difference from the catalog: the same catalog again writes nothing.
+        assertTrue(mergeCatalog(phone, bundled).isEmpty)
     }
 
     @Test
