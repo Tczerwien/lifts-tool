@@ -64,8 +64,8 @@ data class ExportSnapshot(
     val bodyweightTrend: SnapshotBodyweightTrend?,
     /**
      * Every exercise with something of his in it, sorted by name: done in an exported workout, in a
-     * template, a custom one (used or not), or one with a pinned cue. Names are the ones Lifts shows
-     * ([displayName]).
+     * template, a custom one (used or not), one with a pinned cue, or one he chose muscles for (Counts
+     * For). Names are the ones Lifts shows ([displayName]).
      */
     val exercises: List<SnapshotExercise>,
     /** In the order the Templates screen lists them. */
@@ -113,6 +113,8 @@ data class SnapshotExercise(
     val pinnedNote: String?,
     /** Done one side at a time: its reps (or seconds) count one side. */
     val perSide: Boolean = false,
+    /** The muscles he chose for its sets to count for in weekly sets; empty: its [primaryMuscles] count. */
+    val countsFor: List<String> = emptyList(),
 )
 
 data class SnapshotTemplate(val name: String, val exercises: List<SnapshotTemplateExercise>)
@@ -403,7 +405,7 @@ fun buildSnapshot(
     val usedIds = snapshotWorkouts.flatMapTo(HashSet()) { workout -> workout.exercises.flatMap { listOfNotNull(it.exerciseId, it.planned?.exerciseId) } } +
         rows.templateExercises.flatMap { listOf(it.exerciseId) + it.alternatives }
     val snapshotExercises = exercises
-        .filter { it.id in usedIds || it.isCustom || it.pinnedNote != null }
+        .filter { it.id in usedIds || it.isCustom || it.pinnedNote != null || it.countsFor.isNotEmpty() }
         .map {
             SnapshotExercise(
                 id = it.id,
@@ -416,6 +418,7 @@ fun buildSnapshot(
                 hidden = it.hidden,
                 pinnedNote = it.pinnedNote,
                 perSide = it.perSide,
+                countsFor = it.countsFor,
             )
         }
         .sortedWith(compareBy({ it.name }, { it.id }))

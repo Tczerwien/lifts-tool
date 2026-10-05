@@ -63,12 +63,12 @@ class JsonExportTest {
 
     /**
      * Every optional field filled somewhere: a timed set, a template, a hidden custom exercise with a cue, a
-     * superset, an RIR range, a deload, an alternative and a swap.
+     * superset, an RIR range, a deload, an alternative and a swap, and a lift's Counts For (3.0).
      */
     private val full = JsonExport.render(
         ExportFixtures.snapshot(
             workouts = listOf(ExportFixtures.workout1, ExportFixtures.workout2.copy(deload = true)),
-            exercises = listOf(ExportFixtures.bench, ExportFixtures.squat, customRow),
+            exercises = listOf(ExportFixtures.bench.copy(countsFor = listOf("chest", "front delts")), ExportFixtures.squat, customRow),
             templates = listOf(template),
             templateExercises = templateSlots,
             slots = pairedSlots,
@@ -86,7 +86,7 @@ class JsonExportTest {
     fun theKeyPathsAreTheSchema() {
         // The whole 2.0 contract (#123): a renamed field fails here even though the file still decodes.
         val expected = listOf(
-            "exercises", "exercises[].equipment", "exercises[].hidden", "exercises[].id", "exercises[].is_custom",
+            "exercises", "exercises[].counts_for", "exercises[].equipment", "exercises[].hidden", "exercises[].id", "exercises[].is_custom",
             "exercises[].name", "exercises[].pinned_note", "exercises[].primary_muscles", "exercises[].secondary_muscles",
             "exercises[].type",
             "exported_at",
@@ -186,6 +186,22 @@ class JsonExportTest {
         assertEquals(true, custom.isCustom)
         assertEquals(true, custom.hidden)
         assertEquals("Thumbs up", custom.pinnedNote)
+    }
+
+    @Test
+    fun countsForIsWrittenWhenHeChoseItAndDecidesTheWeeklySets() {
+        assertNull(decoded.exercises.single().countsFor, "absent while the primary muscles count")
+        val hisSquat = ExportFixtures.squat.copy(countsFor = listOf("quadriceps", "adductors"))
+        val bench = ExportFixtures.bench.copy(countsFor = listOf("chest", "front delts"))
+        val document = Json.decodeFromString(
+            JsonExportDocument.serializer(),
+            JsonExport.render(ExportFixtures.snapshot(exercises = listOf(bench, hisSquat))),
+        )
+        // The squat was never done, but his choice for it is his: it is in the file.
+        assertEquals(listOf("bench-press-barbell", "squat-barbell"), document.exercises.map { it.id })
+        assertEquals(listOf(listOf("chest", "front delts"), listOf("quadriceps", "adductors")), document.exercises.map { it.countsFor })
+        val zeros = List(6) { 0 }
+        assertEquals(mapOf("chest" to zeros + listOf(2, 2), "front delts" to zeros + listOf(2, 2)), document.summary.weeklySetsPerMuscle)
     }
 
     @Test

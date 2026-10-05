@@ -120,9 +120,16 @@ object MarkdownExport {
             append("\n### Weekly sets per muscle (last ").append(snapshot.weekStarts.size).append(" weeks, oldest → newest)\n\n")
             appendWeeks(snapshot)
             append("Counting: hard sets, as Lifts' Sets per Muscle screen counts them. Each ticked working set adds 1 to")
-            append(" each muscle its exercise counts for, its primary muscles; a warm-up adds 0, and so does a drop set (`D`),")
-            append(" part of the set before it. Secondary muscles add nothing, and a deload's sets count. The muscles are")
-            append(" free-exercise-db's 17 groups: shoulders = front, side and rear delts; most rows count as middle back.\n\n")
+            append(" each muscle its exercise counts for: the muscles he chose for it (Counts For), else its primary muscles.")
+            append(" A warm-up adds 0, and so does a drop set (`D`), part of the set before it; secondary muscles add nothing,")
+            append(" and a deload's sets count. The muscles are free-exercise-db's 17 groups (shoulders = front, side and rear")
+            append(" delts; most rows count as middle back) plus front delts, side delts, rear delts and upper chest.\n\n")
+            val chosen = snapshot.exercises.filter { it.countsFor.isNotEmpty() }
+            if (chosen.isNotEmpty()) {
+                append("Counts For he chose: ")
+                append(chosen.joinToString("; ") { "${it.name} → ${it.countsFor.joinToString(", ")}" })
+                append(".\n\n")
+            }
             for ((muscle, values) in snapshot.weeklySetsPerMuscle) {
                 append("- ").append(muscle).append(": ")
                 append(values.joinToString(", "))

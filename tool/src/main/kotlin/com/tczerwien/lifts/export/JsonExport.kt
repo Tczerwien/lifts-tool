@@ -48,9 +48,11 @@ import kotlinx.serialization.json.Json
  * workout started again from one keeps that template's plan; absent otherwise). Every id named is in exercises[].
  *
  * 3.0 (B17) counts summary.weekly_sets_per_muscle directly, as Lifts' Sets per Muscle screen does: each ticked
- * work set adds 1 to each muscle its exercise counts for (its primary muscles), secondary muscles nothing, and a
- * drop set nothing (it is part of the set above it); whole numbers now. Before, a set added 1 to each primary
- * muscle and 0.5 to each secondary one, a drop as much as any set.
+ * work set adds 1 to each muscle its exercise counts for (exercises[].counts_for, else its primary muscles),
+ * secondary muscles nothing, and a drop set nothing (it is part of the set above it); whole numbers now. Before,
+ * a set added 1 to each primary muscle and 0.5 to each secondary one, a drop as much as any set. Added
+ * exercises[].counts_for (the muscles he chose; absent while the primary muscles count), and an exercise with it
+ * is in exercises[] even if unused.
  */
 object JsonExport {
 
@@ -82,6 +84,7 @@ object JsonExport {
                     hidden = it.hidden.takeIf { hidden -> hidden },
                     pinnedNote = it.pinnedNote,
                     perSide = it.perSide.takeIf { perSide -> perSide },
+                    countsFor = it.countsFor.takeIf { countsFor -> countsFor.isNotEmpty() },
                 )
             },
             templates = snapshot.templates.map { template ->
@@ -247,6 +250,11 @@ data class JsonExercise(
     @SerialName("pinned_note") val pinnedNote: String? = null,
     /** Only written (true) for one done a side at a time: its sets' reps and seconds count one side. */
     @SerialName("per_side") val perSide: Boolean? = null,
+    /**
+     * The muscles each of its work sets counts 1 for in weekly_sets_per_muscle, as he chose them (Lifts' 17
+     * catalog muscles plus front delts, side delts, rear delts and upper chest); absent: its primary muscles.
+     */
+    @SerialName("counts_for") val countsFor: List<String>? = null,
 )
 
 @Serializable
@@ -343,7 +351,7 @@ data class JsonSummary(
     @SerialName("week_starts") val weekStarts: List<String>,
     /**
      * One count per [weekStarts] week, oldest first: hard sets, 1 per ticked work set for each muscle its
-     * exercise counts for (its primary muscles); warm-ups, drop sets and secondary muscles add nothing.
+     * exercise counts for (counts_for, else its primary muscles); warm-ups, drop sets and secondary muscles add nothing.
      */
     @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Int>>,
     val bodyweight: JsonBodyweightSummary? = null,

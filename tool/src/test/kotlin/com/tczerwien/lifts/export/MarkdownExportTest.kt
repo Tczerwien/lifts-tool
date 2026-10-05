@@ -59,6 +59,15 @@ class MarkdownExportTest {
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
         // Direct counting: the bench's secondary muscles get no line.
         assertTrue(lines.none { it.startsWith("- triceps:") || it.startsWith("- shoulders:") })
+        assertTrue(lines.none { it.startsWith("Counts For he chose") }, "none chosen")
+    }
+
+    @Test
+    fun theLiftsHeChoseMusclesForAreNamedWithThem() {
+        val bench = ExportFixtures.bench.copy(countsFor = listOf("chest", "front delts"))
+        val chosen = MarkdownExport.render(ExportFixtures.snapshot(exercises = listOf(bench, ExportFixtures.squat))).split("\n")
+        assertContains(chosen, "Counts For he chose: Bench Press (Barbell) → chest, front delts.")
+        assertContains(chosen, "- front delts: 0, 0, 0, 0, 0, 0, 2, 2")
     }
 
     @Test
