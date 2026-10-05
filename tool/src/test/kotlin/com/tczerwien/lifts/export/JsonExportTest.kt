@@ -118,7 +118,7 @@ class JsonExportTest {
             "workouts[].exercises", "workouts[].exercises[].exercise_id", "workouts[].exercises[].name",
             "workouts[].exercises[].notes", "workouts[].exercises[].planned_exercise_id", "workouts[].exercises[].superset_id",
             "workouts[].exercises[].target_rir", "workouts[].exercises[].target_rir_max",
-            "workouts[].exercises[].sets", "workouts[].exercises[].sets[].completed_at",
+            "workouts[].exercises[].sets", "workouts[].exercises[].sets[].completed_at", "workouts[].exercises[].sets[].drop_of",
             "workouts[].exercises[].sets[].duration_seconds", "workouts[].exercises[].sets[].index",
             "workouts[].exercises[].sets[].is_pr", "workouts[].exercises[].sets[].reps",
             "workouts[].exercises[].sets[].seconds_since_previous_set", "workouts[].exercises[].sets[].rpe",
@@ -361,6 +361,30 @@ class JsonExportTest {
         val drop = document.workouts.first().exercises.first().sets.last()
         assertEquals("dropset", drop.type)
         assertEquals(40, drop.durationSeconds)
+    }
+
+    @Test
+    fun aDropNamesTheSetItBelongsTo() {
+        val slot = ExportFixtures.workoutExercise2
+        fun set(id: Long, position: Int, type: String, ticked: Boolean = true) = SetEntity(
+            id = id, workoutExerciseId = slot.id, position = position, type = type, weightKg = 50.0, reps = 8,
+            completedAt = if (ticked) ExportFixtures.millis("2026-07-13T10:30:00Z") + position * 1000L else null,
+        )
+        // w, 1, 1 D, 1 D (a chain), 2 (unticked), its drop (ticked: read from the ticked rows, it goes with set 1), then
+        // a drop under a warm-up: a set of its own.
+        val sets = listOf(
+            set(11, 0, "warmup"), set(12, 1, "normal"), set(13, 2, "drop"), set(14, 3, "drop"),
+            set(15, 4, "normal", ticked = false), set(16, 5, "drop"), set(17, 6, "warmup"), set(18, 7, "drop"),
+        )
+        val document = Json.decodeFromString(
+            JsonExportDocument.serializer(),
+            JsonExport.render(ExportFixtures.snapshot(workouts = listOf(ExportFixtures.workout2), slots = listOf(slot), sets = sets)),
+        )
+        val exported = document.workouts.single().exercises.single().sets
+        assertEquals(listOf(1, 2, 3, 4, 5, 6, 7), exported.map { it.index }, "a drop is still a row of its own")
+        assertEquals(listOf(null, null, 2, 2, 2, null, null), exported.map { it.dropOf })
+        // Weekly sets agree: set 1 with its three drops is one, the lone drop under the warm-up another.
+        assertEquals(2, document.summary.weeklySetsPerMuscle.getValue("chest").last())
     }
 
     @Test

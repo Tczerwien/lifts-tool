@@ -16,6 +16,7 @@ import com.tczerwien.lifts.data.Tracking
 import com.tczerwien.lifts.data.WorkoutEntity
 import com.tczerwien.lifts.data.tracking
 import com.tczerwien.lifts.session.SET_TYPE_WARMUP
+import com.tczerwien.lifts.session.dropParent
 import com.tczerwien.lifts.session.rirTarget
 import com.tczerwien.lifts.session.supersetNumbers
 import com.tczerwien.lifts.ui.Format
@@ -216,6 +217,11 @@ data class SnapshotSet(
     /** When it was ticked, local ISO-8601 with its offset. */
     val completedAtIso: String,
     val isPr: Boolean,
+    /**
+     * A drop's set: the [index] of the work set it belongs to ([dropParent], over the ticked sets, as Start
+     * Again and the weekly counts read them); null for any other set, and for a drop with no set above it.
+     */
+    val dropOf: Int? = null,
 )
 
 data class SnapshotE1RmTrend(
@@ -361,6 +367,7 @@ fun buildSnapshot(
                                 restSec = restGaps[set.id],
                                 completedAtIso = format.dateTime(set.completedAt ?: workout.startedAt),
                                 isPr = set.id in prSetIds,
+                                dropOf = dropParent(orderedSets, i)?.let { it + 1 },
                             )
                         },
                     )

@@ -53,7 +53,9 @@ import kotlinx.serialization.json.Json
  * a set added 1 to each primary muscle and 0.5 to each secondary one, a drop as much as any set. Added
  * exercises[].counts_for (the muscles he chose; absent while the primary muscles count), and an exercise with it
  * is in exercises[] even if unused; summary.weekly_set_targets (his targets now, hard sets a week by muscle; absent
- * without any), and a muscle with a target is in weekly_sets_per_muscle even at 0.
+ * without any), and a muscle with a target is in weekly_sets_per_muscle even at 0; and sets[].drop_of on a drop set,
+ * the index of the set it belongs to (a dropset's index still counts it as a row of its own; absent on a drop with
+ * no set above it, which is a set of its own).
  */
 object JsonExport {
 
@@ -142,6 +144,7 @@ object JsonExport {
                                     secondsSincePreviousSet = set.restSec,
                                     completedAt = set.completedAtIso,
                                     isPr = set.isPr,
+                                    dropOf = set.dropOf,
                                 )
                             },
                         )
@@ -342,6 +345,11 @@ data class JsonSet(
     @SerialName("seconds_since_previous_set") val secondsSincePreviousSet: Int? = null,
     @SerialName("completed_at") val completedAt: String,
     @SerialName("is_pr") val isPr: Boolean,
+    /**
+     * On a dropset: the [index] of the set it belongs to (the drops after a set are part of it, one hard set
+     * with it). Absent otherwise, and on a dropset with no set above it, which counts as a set of its own.
+     */
+    @SerialName("drop_of") val dropOf: Int? = null,
 )
 
 @Serializable
