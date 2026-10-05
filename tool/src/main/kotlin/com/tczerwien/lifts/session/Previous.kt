@@ -309,11 +309,11 @@ fun planTemplate(
  * reads the same plan, so a set with a drop is one set there too.
  */
 fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): List<PlannedSlot> {
-    val bySlot = sets.groupBy { it.workoutExerciseId }
+    val ticked = sets.filter { it.completedAt != null }.groupBy { it.workoutExerciseId }
     return slots.sortedBy { it.position }.mapNotNull { slot ->
-        // Kinds from all of the slot's rows: a drop belongs to the set above it, ticked or not.
-        val rows = bySlot[slot.id].orEmpty().sortedBy { it.position }
-        val done = rows.zip(rowKinds(rows)).filter { (set, _) -> set.completedAt != null }.map { it.second }
+        // Kinds from the ticked rows alone, as PREVIOUS reads last session: what was logged decides, so an
+        // unticked set never makes a logged drop a part of it (a drop done without its set is a set of its own).
+        val done = rowKinds(ticked[slot.id].orEmpty().sortedBy { it.position })
             .takeIf { kinds -> RowKind.WORK in kinds } ?: return@mapNotNull null
         val types = plannedTypes(done)
         PlannedSlot(

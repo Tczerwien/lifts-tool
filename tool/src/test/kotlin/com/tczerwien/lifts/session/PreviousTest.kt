@@ -513,9 +513,13 @@ class PreviousTest {
         )
         val plan = planFromWorkout(slots, sets).single()
         assertEquals(listOf(n, n, n, n) to 4, plan.types to plan.targetSets)
-        // A ticked drop under an unticked set belongs to that set: it doesn't make the set before it two.
+        // As logged, as PREVIOUS reads it: a drop whose set was left unticked is a set of its own (review R1-1, A4).
         val skipped = listOf(set(21, position = 0, completedAt = 1L), set(22, position = 1), set(23, position = 2, type = d, completedAt = 2L))
-        assertEquals(listOf(n), planFromWorkout(slots, skipped.map { it.copy(workoutExerciseId = 1) }).single().types)
+        assertEquals(listOf(n), planFromWorkout(slots, skipped).single().types, "set 1 and its drop: one set")
+        val dropOnly = listOf(set(31, position = 0), set(32, position = 1, type = d, completedAt = 1L))
+        assertEquals(listOf(n), planFromWorkout(slots, dropOnly).single().types, "only the drop done: kept, as one set")
+        assertEquals(listOf(n), prefillTypes(dropOnly.filter { it.completedAt != null }), "as a hand-added exercise plans it")
+        assertEquals(dropOnly[1], alignPrevious(rows(n), dropOnly.filter { it.completedAt != null }).single(), "and as PREVIOUS reads it")
     }
 
     @Test
