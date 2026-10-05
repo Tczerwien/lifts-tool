@@ -35,8 +35,8 @@ import java.util.Locale
  * its day. Tests pass a fixed zone.
  */
 
-/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (2.5: B14). */
-const val EXPORT_SCHEMA_VERSION = "2.6"
+/** Bumped when the export shape changes: minor for additive changes, major for breaking ones (3.0: B17's weekly counting). */
+const val EXPORT_SCHEMA_VERSION = "3.0"
 
 /** Number of ISO weeks in the precomputed weekly-sets-per-muscle summary. */
 const val WEEKLY_SUMMARY_WEEKS = 8
@@ -78,8 +78,8 @@ data class ExportSnapshot(
     val e1RmTrend: SnapshotE1RmTrend,
     /** The Mondays (yyyy-MM-dd) of the [WEEKLY_SUMMARY_WEEKS] summary weeks, oldest first; the last is this week. */
     val weekStarts: List<String>,
-    /** Muscle -> per-week set counts, one per [weekStarts] entry, newest week last. */
-    val weeklySetsPerMuscle: Map<String, List<Double>>,
+    /** Muscle -> per-week hard sets ([weeklySetsPerMuscle]'s rule), one per [weekStarts] entry, newest week last. */
+    val weeklySetsPerMuscle: Map<String, List<Int>>,
 )
 
 data class BodyweightPoint(val dateIso: String, val weightKg: Double)

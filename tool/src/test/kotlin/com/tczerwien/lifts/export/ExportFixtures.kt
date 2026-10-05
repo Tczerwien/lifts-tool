@@ -24,8 +24,8 @@ import java.time.ZoneOffset
  * - Workout 2 (2026-07-13, 98m = "1h 38m"): w60x8; 102.5x5 @8 (PR — heavier); 95x5.
  * - Bench PR: max weight 102.5 (2026-07-13), best e1RM 102.5*(1+5/30) = 119.583… (2026-07-13).
  * - Squat is in the catalog but never performed, so exports must omit it.
- * - Weekly buckets (8 weeks ending 2026-07-14): chest 2.0 in weeks 7 and 8 (1-based),
- *   triceps/shoulders 1.0 each (2 sets x 0.5).
+ * - Weekly buckets (8 weeks ending 2026-07-14): chest 2 in weeks 7 and 8 (1-based); the
+ *   secondary muscles (triceps, shoulders) none.
  * - Bodyweight: six weigh-ins across four ISO weeks with one gap week (2026-06-29..07-05).
  *   8-week averages, oldest first: —, —, —, 81.9, 81.6, —, 81.1, 80.5. The last-28-days
  *   window (2026-06-17..07-14) holds five entries (06-15 falls outside); least-squares

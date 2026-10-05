@@ -73,6 +73,6 @@ class TimeZoneExportTest {
     @Test
     fun theWeeklyCountLandsInSundaysWeek() {
         // Eight weeks ending Tuesday 2026-07-14: Sunday 07-12 is in the seventh (week of 07-06), not the last.
-        assertEquals(listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0), snapshot.weeklySetsPerMuscle.getValue("chest"))
+        assertEquals(listOf(0, 0, 0, 0, 0, 0, 1, 0), snapshot.weeklySetsPerMuscle.getValue("chest"))
     }
 }

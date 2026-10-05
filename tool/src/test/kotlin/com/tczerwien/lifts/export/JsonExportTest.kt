@@ -144,7 +144,7 @@ class JsonExportTest {
 
     @Test
     fun topLevelFields() {
-        assertEquals("2.6", decoded.schemaVersion)
+        assertEquals("3.0", decoded.schemaVersion)
         assertEquals(ExportFixtures.EXPORTED_AT, decoded.exportedAt)
         assertEquals(JsonUnits(weight = "kg", display = "kg"), decoded.units)
         assertEquals(ExportFixtures.GOALS, decoded.profile.goals)
@@ -357,7 +357,9 @@ class JsonExportTest {
         assertEquals("2026-07-13", decoded.summary.weekStarts.last())
         assertEquals(8, decoded.summary.weekStarts.size)
         val chest = decoded.summary.weeklySetsPerMuscle.getValue("chest")
-        assertEquals(listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 2.0), chest)
+        assertEquals(listOf(0, 0, 0, 0, 0, 0, 2, 2), chest)
+        // Direct counting (3.0): the bench's secondary muscles get nothing.
+        assertEquals(setOf("chest"), decoded.summary.weeklySetsPerMuscle.keys)
     }
 
     @Test

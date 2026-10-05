@@ -119,12 +119,13 @@ object MarkdownExport {
         if (snapshot.weeklySetsPerMuscle.isNotEmpty()) {
             append("\n### Weekly sets per muscle (last ").append(snapshot.weekStarts.size).append(" weeks, oldest → newest)\n\n")
             appendWeeks(snapshot)
-            append("Counting: each working set (warm-ups excluded) adds 1 to its exercise's primary muscles and 0.5")
-            append(" to each secondary muscle. The muscles are free-exercise-db's 17 groups: shoulders = front, side")
-            append(" and rear delts; most rows count as middle back, with half credit to lats.\n\n")
+            append("Counting: hard sets, as Lifts' Sets per Muscle screen counts them. Each ticked working set adds 1 to")
+            append(" each muscle its exercise counts for, its primary muscles; a warm-up adds 0, and so does a drop set (`D`),")
+            append(" part of the set before it. Secondary muscles add nothing, and a deload's sets count. The muscles are")
+            append(" free-exercise-db's 17 groups: shoulders = front, side and rear delts; most rows count as middle back.\n\n")
             for ((muscle, values) in snapshot.weeklySetsPerMuscle) {
                 append("- ").append(muscle).append(": ")
-                append(values.joinToString(", ") { ExportFormat.number(it) })
+                append(values.joinToString(", "))
                 append('\n')
             }
         }

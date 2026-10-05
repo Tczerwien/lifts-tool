@@ -46,6 +46,11 @@ import kotlinx.serialization.json.Json
  * stand in for it at the gym, swapped in for one workout; absent without any) and planned_exercise_id on
  * workout exercises (the exercise its template planned, its main, when an alternative was done instead; a
  * workout started again from one keeps that template's plan; absent otherwise). Every id named is in exercises[].
+ *
+ * 3.0 (B17) counts summary.weekly_sets_per_muscle directly, as Lifts' Sets per Muscle screen does: each ticked
+ * work set adds 1 to each muscle its exercise counts for (its primary muscles), secondary muscles nothing, and a
+ * drop set nothing (it is part of the set above it); whole numbers now. Before, a set added 1 to each primary
+ * muscle and 0.5 to each secondary one, a drop as much as any set.
  */
 object JsonExport {
 
@@ -336,8 +341,11 @@ data class JsonSummary(
     @SerialName("e1rm_trend") val e1RmTrend: JsonE1RmTrend,
     /** The Mondays of the summary weeks, oldest first; the last is the current week, still in progress. */
     @SerialName("week_starts") val weekStarts: List<String>,
-    /** One count per [weekStarts] week, oldest first: 1 per working set for primary muscles, 0.5 for secondary. */
-    @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Double>>,
+    /**
+     * One count per [weekStarts] week, oldest first: hard sets, 1 per ticked work set for each muscle its
+     * exercise counts for (its primary muscles); warm-ups, drop sets and secondary muscles add nothing.
+     */
+    @SerialName("weekly_sets_per_muscle") val weeklySetsPerMuscle: Map<String, List<Int>>,
     val bodyweight: JsonBodyweightSummary? = null,
 )
 

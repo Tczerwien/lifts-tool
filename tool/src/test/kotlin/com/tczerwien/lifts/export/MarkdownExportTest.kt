@@ -17,7 +17,7 @@ class MarkdownExportTest {
     @Test
     fun frontMatterIsFirstAndComplete() {
         assertTrue(markdown.startsWith("---\n"), "front matter must open the file")
-        assertContains(lines, "schema_version: \"2.6\"")
+        assertContains(lines, "schema_version: \"3.0\"")
         assertContains(lines, "exported_at: ${ExportFixtures.EXPORTED_AT}")
         assertContains(lines, "units:")
         assertContains(lines, "  weight: kg")
@@ -53,11 +53,12 @@ class MarkdownExportTest {
         // Labelled: which way the series runs, which weeks, and that the last one is partial (#069).
         assertContains(lines, "### Weekly sets per muscle (last 8 weeks, oldest → newest)")
         assertContains(lines, "Weeks start Monday 2026-05-25 … 2026-07-13; the last is this week, still in progress.")
-        val counting = lines.indexOfFirst { it.startsWith("Counting: each working set (warm-ups excluded) adds 1") }
+        val counting = lines.indexOfFirst { it.startsWith("Counting: hard sets, as Lifts' Sets per Muscle screen counts them.") }
         assertTrue(counting > 0, "the counting rule (#126)")
         assertEquals("", lines[counting - 1], "its own paragraph, not run into the week line")
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
-        assertContains(lines, "- triceps: 0, 0, 0, 0, 0, 0, 1, 1")
+        // Direct counting: the bench's secondary muscles get no line.
+        assertTrue(lines.none { it.startsWith("- triceps:") || it.startsWith("- shoulders:") })
     }
 
     @Test
