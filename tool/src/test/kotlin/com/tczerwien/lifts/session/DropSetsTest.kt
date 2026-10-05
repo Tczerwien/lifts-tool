@@ -142,7 +142,6 @@ class DropSetsTest {
         assertEquals(10.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(15.0), null, lb, 5.0).weightKg), "12 snaps down to 10")
         assertEquals(7.5, shownLb(dropStart(Tracking.WEIGHT_REPS, above(10.0), null, lb, 2.5).weightKg), "on a 2.5 lb step")
         assertEquals(80.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(102.5), null, lb, 5.0).weightKg), "off the grid above")
-        assertEquals(0.0, shownLb(dropStart(Tracking.WEIGHT_REPS, above(5.0), null, lb, 5.0).weightKg), "one step: down to none")
         // In kg: 60 → 48 → 47.5 on a 2.5 kg step.
         assertEquals(47.5, dropStart(Tracking.WEIGHT_REPS, RowValues(60.0, 8), null, WeightUnit.KG, 2.5).weightKg)
     }
@@ -182,7 +181,9 @@ class DropSetsTest {
 
     @Test
     fun `nothing to drop from, or nothing the lift records`() {
-        assertNull(dropStart(Tracking.WEIGHT_REPS, above(null), null, lb, 5.0).weightKg)
+        // A weight lift with no lighter load: empty, so the tick asks for a weight, not a weightless set that stars (review A3).
+        assertEquals(RowValues(null, null), dropStart(Tracking.WEIGHT_REPS, above(5.0), null, lb, 5.0), "one step: nothing lighter")
+        assertEquals(RowValues(null, null), dropStart(Tracking.WEIGHT_REPS, above(null), null, lb, 5.0))
         val reps = dropStart(Tracking.REPS_ONLY, above(100.0), null, lb, 5.0)
         assertEquals(RowValues(null, 10), reps)
     }
