@@ -42,6 +42,7 @@ import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.progressionHint
 import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.rirTarget
+import com.tczerwien.lifts.session.rowKinds
 import com.tczerwien.lifts.session.rowLabel
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
@@ -50,6 +51,7 @@ import com.tczerwien.lifts.session.shownRir
 import com.tczerwien.lifts.session.swapTarget
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
 import com.tczerwien.lifts.session.targetLine
+import com.tczerwien.lifts.session.tickHint
 import com.tczerwien.lifts.settings.SettingsStore
 import com.tczerwien.lifts.toolmanager.LiftsShare
 import com.tczerwien.lifts.ui.ArmedAction
@@ -539,8 +541,8 @@ class ActiveWorkoutViewModel(
             return
         }
         val seed = located.block.seeds[located.index]
-        if (seed.isEmpty) {
-            showEmptyTickHint(located.block.tracking)
+        tickHint(located.block.tracking, rowKinds(located.block.sets)[located.index], seed)?.let { hint ->
+            showTickHint(hint)
             return
         }
         val now = System.currentTimeMillis()
@@ -579,17 +581,9 @@ class ActiveWorkoutViewModel(
         }
     }
 
-    /**
-     * "SET WEIGHT OR REPS FIRST" ("SET REPS FIRST", "SET TIME FIRST", as the exercise is measured) for
-     * a couple of seconds, instead of a tick that does nothing.
-     */
-    private fun showEmptyTickHint(tracking: Tracking) {
+    /** [hint] ([tickHint]: "SET WEIGHT OR REPS FIRST", "SET WEIGHT FIRST", …) for a couple of seconds, instead of a tick that would log nothing. */
+    private fun showTickHint(hint: String) {
         emptyTickHintJob?.cancel()
-        val hint = when {
-            tracking.takesDuration -> "SET TIME FIRST"
-            tracking.takesWeight -> "SET WEIGHT OR REPS FIRST"
-            else -> "SET REPS FIRST"
-        }
         _uiState.update { it.copy(emptyTickHint = hint) }
         emptyTickHintJob = viewModelScope.launch {
             delay(EMPTY_TICK_HINT_MILLIS)

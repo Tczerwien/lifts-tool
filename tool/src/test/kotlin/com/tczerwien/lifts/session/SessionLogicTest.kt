@@ -172,6 +172,19 @@ class SessionLogicTest {
     }
 
     @Test
+    fun `a tick that would log nothing says what to set first`() {
+        val n = RowKind.WORK
+        assertEquals("SET WEIGHT OR REPS FIRST", tickHint(Tracking.WEIGHT_REPS, n, RowValues(null, null)))
+        assertEquals("SET REPS FIRST", tickHint(Tracking.REPS_ONLY, n, RowValues(null, null)))
+        assertEquals("SET TIME FIRST", tickHint(Tracking.DURATION, n, RowValues(null, null)))
+        assertNull(tickHint(Tracking.WEIGHT_REPS, n, RowValues(null, 12)), "a set of reps alone, as before")
+        // A drop on a weight × reps lift needs its weight: reps alone would log, and star, a weightless set (review R2-1).
+        assertEquals("SET WEIGHT FIRST", tickHint(Tracking.WEIGHT_REPS, RowKind.DROP, RowValues(null, 12)))
+        assertNull(tickHint(Tracking.WEIGHT_REPS, RowKind.DROP, RowValues(2.5, 12)))
+        assertNull(tickHint(Tracking.WEIGHTED_BODYWEIGHT, RowKind.DROP, RowValues(null, 8)), "bodyweight alone is a drop there")
+    }
+
+    @Test
     fun `no rest before a drop still to do`() {
         // DR-6, Hevy's rule: the drop comes straight after its set, or after the drop before it.
         assertEquals(0, restDurationSec(SET_TYPE_NORMAL, 240, 45, 180, 90, beforeDrop = true))

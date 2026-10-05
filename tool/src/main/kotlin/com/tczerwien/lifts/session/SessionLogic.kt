@@ -105,6 +105,22 @@ fun nextRir(rir: Int?, target: Int? = null): Int? {
 }
 
 /**
+ * Why a tick on a row of [kind] whose values as it shows them are [seed] would log nothing, as the screen says it, or
+ * null when it can be ticked: nothing to log at all ("SET WEIGHT OR REPS FIRST", "SET REPS FIRST", "SET TIME FIRST",
+ * as the exercise's [tracking] is measured), or a drop on a weight × reps lift with no weight ("SET WEIGHT FIRST": a
+ * drop is a lighter load, and a weightless one would log, and star, as the lift's first set without weight; DR-2).
+ */
+fun tickHint(tracking: Tracking, kind: RowKind, seed: RowValues): String? = when {
+    seed.isEmpty -> when {
+        tracking.takesDuration -> "SET TIME FIRST"
+        tracking.takesWeight -> "SET WEIGHT OR REPS FIRST"
+        else -> "SET REPS FIRST"
+    }
+    tracking == Tracking.WEIGHT_REPS && kind == RowKind.DROP && seed.weightKg == null -> "SET WEIGHT FIRST"
+    else -> null
+}
+
+/**
  * Rest to start after completing a set: the exercise's per-slot override when present,
  * else the settings default. Warm-up sets use the warm-up pair; every other type
  * (normal/failure/drop) uses the work pair, and none when the next row is a drop still to do

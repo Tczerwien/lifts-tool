@@ -183,9 +183,9 @@ class DropSetsTest {
 
     @Test
     fun `nothing to drop from, or nothing the lift records`() {
-        // A weight lift with no lighter load: empty, so the tick asks for a weight, not a weightless set that stars (review A3).
-        assertEquals(RowValues(null, null), dropStart(Tracking.WEIGHT_REPS, above(5.0), null, lb, 5.0), "one step: nothing lighter")
-        assertEquals(RowValues(null, null), dropStart(Tracking.WEIGHT_REPS, above(null), null, lb, 5.0))
+        // A weight lift with no lighter load: no weight, its reps kept; the tick asks for a weight (review A3, R2-1).
+        assertEquals(RowValues(null, 10), dropStart(Tracking.WEIGHT_REPS, above(5.0), null, lb, 5.0), "one step: nothing lighter")
+        assertEquals(RowValues(null, 10), dropStart(Tracking.WEIGHT_REPS, above(null), null, lb, 5.0))
         val reps = dropStart(Tracking.REPS_ONLY, above(100.0), null, lb, 5.0)
         assertEquals(RowValues(null, 10), reps)
     }

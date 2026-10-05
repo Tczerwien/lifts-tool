@@ -161,13 +161,12 @@ const val DROP_LOAD_FRACTION = 0.8
  * Snapped down, it is always at least one step lighter. On a weighted bodyweight lift that is the load added,
  * down to none (bodyweight alone); on an assisted one the help grows instead (less load): divided by the share,
  * snapped up, at least one step more. A weight × reps lift with no lighter load to go to (none above, or one
- * step or less) starts empty: the tick asks for a weight rather than logging a weightless set. Weights are
- * stored kg (help negative, [Tracking.storedWeight]). Only what [tracking] records.
+ * step or less) starts with no weight, its reps kept: the tick asks for a weight ([tickHint]) rather than logging
+ * a weightless set. Weights are stored kg (help negative, [Tracking.storedWeight]). Only what [tracking] records.
  */
 fun dropStart(tracking: Tracking, above: RowValues, lastDrop: SetEntity?, unit: WeightUnit, step: Double): RowValues {
     val weightKg = (lastDrop?.weightKg?.takeIf { lighter(tracking, it, above.weightKg, unit) } ?: lighterKg(tracking, above.weightKg, unit, step))
         ?.takeIf { tracking.takesWeight }?.let(tracking::asLogged)
-    if (tracking == Tracking.WEIGHT_REPS && weightKg == null) return RowValues(null, null)
     return RowValues(
         weightKg = weightKg,
         reps = (lastDrop?.reps ?: above.reps)?.takeIf { tracking.takesReps },
