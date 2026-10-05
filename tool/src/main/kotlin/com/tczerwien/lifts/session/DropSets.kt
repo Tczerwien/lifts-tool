@@ -71,6 +71,27 @@ fun setMarkers(rows: List<SetEntity>): List<String> {
     }
 }
 
+/** Row [index] of one slot's [rows] as the "…" menu and the Rest Timer name it: "Warm-up", "Set 3", or "Set 3 drop". */
+fun rowLabel(rows: List<SetEntity>, index: Int): String = when (rowKinds(rows)[index]) {
+    RowKind.WARMUP -> "Warm-up"
+    RowKind.WORK -> "Set ${setMarkers(rows)[index]}"
+    RowKind.DROP -> "Set ${setMarkers(rows)[index]} drop"
+}
+
+/**
+ * The rows "…" › Remove set takes with row [index] of one slot's [rows] (in position order), as ids: it and, for a
+ * work set, the drops that belong to it, so none is left under the set above to be taken for its drop. Null,
+ * removing nothing, when any of them is ticked: a logged set is never removed, and a logged drop never loses
+ * its set.
+ */
+fun setRemoval(rows: List<SetEntity>, index: Int): List<Long>? {
+    val kinds = rowKinds(rows)
+    if (index !in rows.indices) return null
+    val drops = if (kinds[index] == RowKind.WORK) (index + 1 until rows.size).takeWhile { kinds[it] == RowKind.DROP } else emptyList()
+    val taken = (listOf(index) + drops).map(rows::get)
+    return taken.takeIf { sets -> sets.none { it.completedAt != null } }?.map { it.id }
+}
+
 /**
  * Where "…" › Drop Set puts a drop in one slot's [rows] (in position order), as an index of [rows]: directly
  * under its latest tick (by when it was ticked), when that is a work set or a drop, so a chain grows under

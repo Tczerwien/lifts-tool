@@ -319,13 +319,17 @@ class ActiveSession(
     private fun isOpen(workoutId: Long): Boolean = repository.workoutById(workoutId)?.let { it.endedAt == null } == true
 
     /**
-     * Removes a set that hasn't been logged; a logged set is left alone, and so is a workout that has
-     * ended (a removal queued behind a stale close must not take rows RESUME would bring back).
+     * Removes a set that hasn't been logged, with the drops that belong to it ([setRemoval]): none is left
+     * under the set above, to be taken for its drop. A logged set is left alone, so is a set with a logged
+     * drop, and so is a workout that has ended (a removal queued behind a stale close must not take rows
+     * RESUME would bring back).
      */
     fun removeSet(workoutId: Long, setId: Long): Boolean = repository.inTransaction {
         if (!isOpen(workoutId)) return@inTransaction false
         val set = repository.setById(setId) ?: return@inTransaction false
-        set.completedAt == null && repository.deleteSet(setId)
+        val rows = repository.setsForWorkout(workoutId).filter { it.workoutExerciseId == set.workoutExerciseId }.sortedBy { it.position }
+        val ids = setRemoval(rows, rows.indexOfFirst { it.id == setId }) ?: return@inTransaction false
+        repository.deleteSets(ids) > 0
     }
 
     /**

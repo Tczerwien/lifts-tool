@@ -56,6 +56,26 @@ class DropSetsTest {
         assertEquals(listOf("W", "1", "2", "2"), setMarkers(rows("W", "N", "N", "D")), "ticked or not")
     }
 
+    // --- Naming and removing a row ---
+
+    @Test
+    fun `rows are named as their markers number them`() {
+        val slot = rows(w, n, n, d, n)
+        assertEquals(listOf("Warm-up", "Set 1", "Set 2", "Set 2 drop", "Set 3"), slot.indices.map { rowLabel(slot, it) })
+    }
+
+    @Test
+    fun `removing a set takes its drops, never a ticked one`() {
+        val slot = rows(n, n, d, d, n)
+        assertEquals(listOf(2L, 3L, 4L), setRemoval(slot, 1), "set 2 with its two drops")
+        assertEquals(listOf(3L), setRemoval(slot, 2), "a drop alone; the next one then belongs to set 2")
+        assertEquals(listOf(5L), setRemoval(slot, 4))
+        assertNull(setRemoval(rows("N", d), 0), "a logged set stays")
+        assertNull(setRemoval(rows(n, "D"), 0), "a set with a logged drop stays")
+        assertEquals(listOf(1L), setRemoval(rows(w, d), 0), "a warm-up alone")
+        assertNull(setRemoval(slot, 9))
+    }
+
     // --- DR-3: where "… › Drop Set" puts it ---
 
     @Test

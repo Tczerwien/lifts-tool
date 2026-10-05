@@ -41,9 +41,10 @@ import com.tczerwien.lifts.session.previousForSlots
 import com.tczerwien.lifts.session.progressionHint
 import com.tczerwien.lifts.session.rirOf
 import com.tczerwien.lifts.session.rirTarget
+import com.tczerwien.lifts.session.rowLabel
 import com.tczerwien.lifts.session.rpeOf
 import com.tczerwien.lifts.session.seedRows
-import com.tczerwien.lifts.session.setMarkers
+import com.tczerwien.lifts.session.setRemoval
 import com.tczerwien.lifts.session.shownRir
 import com.tczerwien.lifts.session.swapTarget
 import com.tczerwien.lifts.session.tapTooSoonAfterMove
@@ -930,7 +931,9 @@ class ActiveWorkoutViewModel(
         val block = state.exercises.getOrNull(state.currentIndex) ?: return MenuOptions(workout)
         val activeIndex = block.sets.indexOfFirst { it.id == state.activeSetId }
         val activeSet = block.sets.getOrNull(activeIndex)
-        val removableSet = activeSet?.takeIf { it.completedAt == null }
+        // The active row while it is unticked, with its drops while none of them is ticked ([setRemoval]).
+        val removal = activeSet?.let { setRemoval(block.sets, activeIndex) }
+        val removableSet = activeSet?.takeIf { removal != null }
         val exerciseRemovable = block.sets.none { it.completedAt != null }
         // Plates for the weight the active row shows, its own or its starting value; once every set is
         // ticked, for the last one lifted (what to strip, or load again).
@@ -953,8 +956,12 @@ class ActiveWorkoutViewModel(
                     else -> "SET A WEIGHT FIRST"
                 },
                 position = "${state.currentIndex + 1} OF ${state.exercises.size}",
-                removeSetLabel = removableSet?.let {
-                    if (it.type == SET_TYPE_WARMUP) "Warm-up" else "Set ${setMarkers(block.sets)[activeIndex]}"
+                removeSetLabel = removal?.let { ids ->
+                    rowLabel(block.sets, activeIndex) + when (val drops = ids.size - 1) {
+                        0 -> ""
+                        1 -> " + drop"
+                        else -> " + $drops drops"
+                    }
                 },
                 removeExerciseLabel = block.name.takeIf { exerciseRemovable },
             ),

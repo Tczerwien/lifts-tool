@@ -338,7 +338,7 @@ fun planFromWorkout(slots: List<WorkoutExerciseEntity>, sets: List<SetEntity>): 
  */
 fun nextSetLabel(rows: List<SetEntity>, index: Int): String {
     val kinds = rowKinds(rows)
-    if (kinds[index] == RowKind.DROP) return "Set ${setMarkers(rows)[index]} drop"
+    if (kinds[index] == RowKind.DROP) return rowLabel(rows, index)
     val number = kinds.take(index + 1).count { it == kinds[index] }
     val count = kinds.count { it == kinds[index] }
     return if (kinds[index] == RowKind.WARMUP) "Warm-up $number of $count" else "Set $number of $count"

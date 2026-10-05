@@ -275,6 +275,21 @@ class ActiveSessionTest {
     }
 
     @Test
+    fun `removing a set takes its drop, so it never ends up under the set above`() {
+        val workoutId = session.startEmpty(now = 1_000)
+        val slot = store.addWorkoutExercise(WorkoutExerciseEntity(workoutId = workoutId, exerciseId = "fly", position = 0))
+        val types = listOf(n, n, SET_TYPE_DROP, n)
+        val ids = types.mapIndexed { position, type -> store.addSet(SetEntity(workoutExerciseId = slot, position = position, type = type)) }
+        assertTrue(session.removeSet(workoutId, ids[1]))
+        assertEquals(listOf(ids[0] to 0, ids[3] to 1), store.setsForWorkout(workoutId).map { it.id to it.position })
+        // A set whose drop is logged stays, with it.
+        val more = listOf(n, SET_TYPE_DROP).mapIndexed { index, type -> store.addSet(SetEntity(workoutExerciseId = slot, position = 2 + index, type = type)) }
+        session.completeSet(workoutId, store.setById(more[1])!!, 20.0, 8, SET_TYPE_DROP, now = 10_000)
+        assertFalse(session.removeSet(workoutId, more[0]))
+        assertEquals(4, store.setsForWorkout(workoutId).size)
+    }
+
+    @Test
     fun `a deload keeps a drop with its set`() {
         // Set 1 done with a drop, then the deload switched on: set 1 and its drop stay, with one more set.
         val template = store.addTemplate("Chest", "fly" to 4)
