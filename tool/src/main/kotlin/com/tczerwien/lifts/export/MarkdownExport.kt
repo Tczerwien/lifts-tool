@@ -76,7 +76,7 @@ object MarkdownExport {
         append(" rest after the round.")
         append(" `(instead of Leg Curl)` after an exercise means it was done in place of the one its template planned,")
         append(" an alternative (a workout started again from another keeps that one's plan).")
-        append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are his")
+        append(" `— **PR**` marks a set that was a personal record when it was lifted. Quoted lines (`>`) are")
         append(" notes. Weights are in ").append(unit).append("; dates and times are local (").append(snapshot.zone.id).append(").\n")
     }
 
@@ -121,19 +121,19 @@ object MarkdownExport {
             append("\n### Weekly sets per muscle (last ").append(snapshot.weekStarts.size).append(" weeks, oldest → newest)\n\n")
             appendWeeks(snapshot)
             append("Counting: hard sets, as Lifts' Sets per Muscle screen counts them. Each ticked working set adds 1 to")
-            append(" each muscle its exercise counts for: the muscles he chose for it (Counts For), else its primary muscles.")
+            append(" each muscle its exercise counts for: the muscles chosen for it (Counts For), else its primary muscles.")
             append(" A warm-up adds 0, and so does a drop set (`D`) after its working set, as part of it (a drop with no working")
             append(" set before it, such as one right after a warm-up, counts as a set); secondary muscles add nothing, and a deload's sets count. The muscles are free-exercise-db's 17 groups (shoulders = front, side and rear")
             append(" delts; most rows count as middle back) plus front delts, side delts, rear delts and upper chest.\n\n")
             val chosen = snapshot.exercises.filter { it.countsFor.isNotEmpty() }
             if (chosen.isNotEmpty()) {
-                append("Counts For he chose: ")
+                append("Counts For chosen: ")
                 append(chosen.joinToString("; ") { "${it.name} → ${it.countsFor.joinToString(", ")}" })
                 append(".\n\n")
             }
             val targets = snapshot.weeklySetTargets
             if (targets.isNotEmpty()) {
-                append("Targets (his, as set now, the same each week): `9/12` is 9 sets against a target of 12. Muscles with")
+                append("Targets (as set now, the same each week): `9/12` is 9 sets against a target of 12. Muscles with")
                 append(" a target come first.\n\n")
             }
             // As Sets per Muscle lists them: targets first, then the rest.

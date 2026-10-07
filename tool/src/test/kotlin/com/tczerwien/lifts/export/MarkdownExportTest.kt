@@ -63,7 +63,7 @@ class MarkdownExportTest {
         assertContains(lines, "- chest: 0, 0, 0, 0, 0, 0, 2, 2")
         // Direct counting: the bench's secondary muscles get no line.
         assertTrue(lines.none { it.startsWith("- triceps:") || it.startsWith("- shoulders:") })
-        assertTrue(lines.none { it.startsWith("Counts For he chose") }, "none chosen")
+        assertTrue(lines.none { it.startsWith("Counts For chosen") }, "none chosen")
     }
 
     @Test
@@ -72,7 +72,7 @@ class MarkdownExportTest {
         val first = withTargets.indexOfFirst { it.startsWith("- abdominals:") }
         assertEquals("- abdominals: 0/6, 0/6, 0/6, 0/6, 0/6, 0/6, 0/6, 0/6", withTargets[first])
         assertEquals("- chest: 0/13, 0/13, 0/13, 0/13, 0/13, 0/13, 2/13, 2/13", withTargets[first + 1])
-        assertTrue(withTargets.any { it.startsWith("Targets (his, as set now, the same each week): `9/12` is 9 sets") })
+        assertTrue(withTargets.any { it.startsWith("Targets (as set now, the same each week): `9/12` is 9 sets") })
         assertTrue(lines.none { it.startsWith("Targets (") }, "no targets, no line")
         // A layoff with a target still lists it: no sets is the news.
         val layoff = MarkdownExport.render(ExportFixtures.snapshot(workouts = emptyList(), muscleTargets = mapOf("calves" to 6))).split("\n")
@@ -80,10 +80,10 @@ class MarkdownExportTest {
     }
 
     @Test
-    fun theLiftsHeChoseMusclesForAreNamedWithThem() {
+    fun theLiftsWithChosenMusclesAreNamedWithThem() {
         val bench = ExportFixtures.bench.copy(countsFor = listOf("chest", "front delts"))
         val chosen = MarkdownExport.render(ExportFixtures.snapshot(exercises = listOf(bench, ExportFixtures.squat))).split("\n")
-        assertContains(chosen, "Counts For he chose: Bench Press (Barbell) → chest, front delts.")
+        assertContains(chosen, "Counts For chosen: Bench Press (Barbell) → chest, front delts.")
         assertContains(chosen, "- front delts: 0, 0, 0, 0, 0, 0, 2, 2")
     }
 
@@ -194,7 +194,7 @@ class MarkdownExportTest {
         val legend = lines.single { it.startsWith("How to read this:") }
         for (term in listOf(
             "`100x5` is 100 kg for 5 reps", "`w`", "`F`", "`D`", "`@8` is RPE", "`r150`", "**PR**", "(Z)", "`(superset 1)`",
-            "`deload`", "RIR 1–2", "`(instead of",
+            "`deload`", "RIR 1–2", "`(instead of", "Quoted lines (`>`) are notes.",
         )) {
             assertTrue(term in legend, "legend lacks $term: $legend")
         }
