@@ -129,11 +129,11 @@ class ExerciseSearchTest {
         assertEquals("preacher-curl", search("curl", recent = listOf("preacher-curl", "hammer-curls")).first())
         assertEquals("hammer-curls", search("curl", recent = listOf("preacher-curl", "hammer-curls"))[1])
         // Two words too: his lift before the phrases that fit closer ("Incline DB Press").
-        assertEquals("dumbbell-shoulder-press", search("db press", recent = listOf("dumbbell-shoulder-press")).first())
-        // A name match beats a recent lift that matches only through its equipment (Leg Press is a machine).
+        assertEquals("dumbbell-bench-press", search("db press", recent = listOf("dumbbell-bench-press")).first())
+        // A name match beats a recent lift that matches only through its equipment (Lying Leg Curl is a machine).
         assertEquals(
-            "machine-shoulder-military-press",
-            search("machine press", recent = listOf("leg-press", "machine-shoulder-military-press")).first(),
+            "machine-bicep-curl",
+            search("machine curl", recent = listOf("lying-leg-curls", "machine-bicep-curl")).first(),
         )
         // But the name typed exactly still wins.
         assertEquals("barbell-bench-press-medium-grip", search("bench press", recent = listOf("dumbbell-bench-press")).first())
@@ -154,11 +154,11 @@ class ExerciseSearchTest {
 
     @Test
     fun `a long query nothing answers offers the names that miss one word`() {
-        assertEquals("dumbbell-shoulder-press", search("seated db shoulder press").first())
+        assertEquals("dumbbell-bench-press", search("flat db bench press").first())
         // A near miss by term too, so multi-word shorthand still bridges: neutral grip is the V-bar.
         assertEquals("v-bar-pulldown", search("seated neutral-grip lat pulldown").firstOrNull())
         // A typed word keeps its shorthand in a near miss: db is also dumbbell.
-        assertTrue("seated-dumbbell-press" in search("seated db shoulder press"))
+        assertTrue("decline-dumbbell-bench-press" in search("flat db bench press"))
         assertEquals("hanging-leg-raise", search("hanging knee raise").first())
         // Three typed words, though shorthand makes them two terms ("cable fly").
         val reverseCableFly = search("reverse cable fly")

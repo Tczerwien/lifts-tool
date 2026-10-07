@@ -326,12 +326,12 @@ private fun wordTerms(raw: String): List<Term> {
 /**
  * The entries that answer [raw], best first: lifts before stretches and jumps ("split squat" is a lift
  * before it is the "Split Squats" jump); then a name he typed exactly; then names that match, before
- * lifts that match only through their equipment ("machine press": Machine Shoulder Press before Leg
- * Press); within each, what he has done before, most recent first ([recentIds]), so "db press" finds
- * his DB Shoulder Press before closer phrases; then by [rank]; then shorter shown names, the plain lift
+ * lifts that match only through their equipment ("machine curl": Machine Bicep Curl before Lying Leg
+ * Curl); within each, what he has done before, most recent first ([recentIds]), so "db press" finds a
+ * recent DB Bench Press before closer phrases; then by [rank]; then shorter shown names, the plain lift
  * before its variants ("Overhead Press" before "Seated Barbell Military Press"); then by name. When
  * nothing answers, the names that miss exactly one of three or more terms, or one of three or more
- * typed words, are offered instead ("seated db shoulder press" finds "DB Shoulder Press").
+ * typed words, are offered instead ("flat db bench press" finds "DB Bench Press").
  */
 fun searchExercises(
     entries: List<CatalogEntry>,
