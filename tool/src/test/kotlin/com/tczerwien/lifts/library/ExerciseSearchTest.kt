@@ -170,45 +170,44 @@ class ExerciseSearchTest {
     }
 
     /**
-     * Everyday lifts, in plain gym words: 28 exercises, each
-     * alternative ("hack squat or leg press") searched on its own. Every one is found first, or second
-     * where the catalog has two right answers.
+     * Everyday lifts typed in plain gym words, 34 of them: 32 are found first, and the other two in the
+     * top two.
      */
     @Test
     fun `everyday lifts are found in plain gym words`() {
         val first = mapOf(
-            "romanian deadlift" to "romanian-deadlift",
+            "assisted pull-up" to "band-assisted-pull-up",
+            "back extension" to "hyperextensions-back-extensions",
             "barbell hip thrust" to "barbell-hip-thrust",
-            "seated leg curl" to "seated-leg-curl",
-            "standing calf raise" to "standing-calf-raises",
-            "dumbbell shrug" to "dumbbell-shrug",
+            "bulgarian split squat" to "split-squat-with-dumbbells",
             "cable lateral raise" to "standing-low-pulley-deltoid-raise",
+            "cable pushdown" to "triceps-pushdown",
+            "db lateral raise" to "side-lateral-raise",
+            "db shrug" to "dumbbell-shrug",
             "dead bug" to "dead-bug",
-            "incline db press" to "incline-dumbbell-press",
-            "lat pulldown" to "wide-grip-lat-pulldown",
-            "incline cable fly" to "incline-cable-flye",
-            "incline db curl" to "incline-dumbbell-curl",
+            "dumbbell shrug" to "dumbbell-shrug",
             "face pull" to "face-pull",
             "hack squat" to "hack-squat",
-            "leg press" to "leg-press",
-            "walking lunge" to "bodyweight-walking-lunge",
-            "bulgarian split squat" to "split-squat-with-dumbbells",
-            "leg extension" to "leg-extensions",
-            "back extension" to "hyperextensions-back-extensions",
-            "seated calf raise" to "seated-calf-raise",
+            "hammer curl" to "hammer-curls",
             "incline barbell press" to "barbell-incline-bench-press-medium-grip",
-            "smith incline press" to "smith-machine-incline-bench-press",
-            "seated db shoulder press" to "dumbbell-shoulder-press",
+            "incline cable fly" to "incline-cable-flye",
+            "incline db curl" to "incline-dumbbell-curl",
+            "incline db press" to "incline-dumbbell-press",
+            "lat pulldown" to "wide-grip-lat-pulldown",
+            "leg extension" to "leg-extensions",
+            "leg press" to "leg-press",
             "machine shoulder press" to "machine-shoulder-military-press",
             "neutral-grip lat pulldown" to "v-bar-pulldown",
-            "assisted pull-up" to "band-assisted-pull-up",
-            "single-arm cable row" to "seated-one-arm-cable-pulley-rows",
-            "db lateral raise" to "side-lateral-raise",
-            "reverse pec-deck" to "reverse-machine-flyes",
-            "cable pushdown" to "triceps-pushdown",
             "preacher curl" to "preacher-curl",
-            "hammer curl" to "hammer-curls",
-            "db shrug" to "dumbbell-shrug",
+            "reverse pec-deck" to "reverse-machine-flyes",
+            "romanian deadlift" to "romanian-deadlift",
+            "seated calf raise" to "seated-calf-raise",
+            "seated db shoulder press" to "dumbbell-shoulder-press",
+            "seated leg curl" to "seated-leg-curl",
+            "single-arm cable row" to "seated-one-arm-cable-pulley-rows",
+            "smith incline press" to "smith-machine-incline-bench-press",
+            "standing calf raise" to "standing-calf-raises",
+            "walking lunge" to "bodyweight-walking-lunge",
         )
         first.forEach { (query, id) -> assertEquals(id, search(query).firstOrNull(), query) }
         val topTwo = mapOf(
